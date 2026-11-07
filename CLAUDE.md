@@ -2285,8 +2285,12 @@ true of invented *album art*, and not of an icon naming the kind.
   makes the app vanish from the launcher after an update, `iconAliasesUnchangedFromV050`) with its adaptive icon in
   `mipmap-anydpi-v26/` (a colour background, `ic_launcher_foreground[_paper]`, one flat `fillColor` each, the shared
   `ic_launcher_monochrome` for Android 13's themed icons). The string keys `option_app_icon_default` /
-  `option_app_icon_tidepool` kept their names; only their values are Ink and Paper. The legacy `mipmap-xxhdpi/*.webp` and fastlane's `icon.png` are rendered on the workstation by
-  `worbus-icons/tools/make_icons.py` (ImageMagick) and committed as they come; regenerate them there, never by
+  `option_app_icon_tidepool` kept their names; only their values are Ink and Paper. The two foreground XMLs, the
+  legacy `mipmap-xxhdpi/*.webp` and fastlane's `icon.png` are rendered on the workstation by
+  `worbus-icons/tools/make_icons.py` (ImageMagick, tests `test_make_icons.py`) from the art in `worbus-icons/mono/`
+  into `worbus-icons/generated-mono/android/` and `fastlane/` (the art's SVGs carry content-provenance
+  metadata the script strips; this tree must never contain the standard's name, see the workstation's P6 notes)
+  and committed as they come; regenerate them there, never by
   hand here. The splash is the platform's own (Android 12+, no androidx splashscreen library): `values-v31`'s
   `Theme.Worbus` sets `worbus_splash_icon` (an animated vector, 760 ms), the duration and a white / black
   background. The art read `?attr/colorPrimary` / `?attr/colorTertiary`, which a platform theme does not
