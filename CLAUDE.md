@@ -345,16 +345,20 @@ While working here:
 The Worbus release key (alias `worbus`) was made by the owner **on the workstation** and **never
 comes to the sandbox VM** or into any repository; its passwords live in an env file beside it there
 (design §6.6). Its certificate's SHA-256, 64 lower-case hex characters on one line, is
-`androidApp/release-cert.sha256`; it reads `unset` until the owner records it (`WorbusReleaseTest`
-holds the format). The workstation's local release builds source the env file. Anywhere else a
+`androidApp/release-cert.sha256` = `0fe4af344c6d766f7f98796de8cb234906d181fe48d41ecbabf93eaee9401d03`
+(recorded 2026-11-07; `WorbusReleaseTest` holds the format, which also accepts `unset`). The key, its
+env file and a copy of that digest are in `~/.config/worbus-signing/` on the workstation (700; the
+store, the env file 600), and the owner keeps two backups of the store. The workstation's local release builds source the env file. Anywhere else a
 release build falls back to the debug key, and Gradle says so in one warning line: `Worbus release
 APK signed with the DEBUG key (SIGNING_* unset): not for distribution`. The VM's APKs are therefore
-debug-signed. What the workstation's receiver does with such an APK is lane K's K2 change (planned,
-not on this branch, not verified from the VM): it is meant to re-sign a new-ID (`app.worbus.android`)
-APK with the release key only by a deliberate `vmfetch.py apk release`, checking the result against
-the recorded fingerprint, with its 30-second watcher never reading the release key, and to go on
-re-signing an old-ID (`paige.navic`) APK from an old branch with the debug key, so it updates the
-old Navic on the phone. Until K2 lands, treat the receiver's behaviour as whatever it does today.
+debug-signed. The workstation's receiver (`backlog-ui/sandbox/vmfetch.py`, backlog-ui `4864ac0`)
+picks the key by the APK's own package, read with `aapt2`: an `app.worbus.android` APK is re-signed
+with the release key only by a deliberate `vmfetch.py apk release`, the result refused unless its
+certificate equals `~/.config/worbus-signing/release-cert.sha256` (and while that is missing or
+`unset`); its 30-second watcher never reads the release key and only announces such an APK as
+waiting. Everything else (`paige.navic` from an old branch, `app.worbus.android.debug`) keeps the debug
+key, so the old Navic on the phone still updates in place. Worbus installs **beside** Navic (a new app
+ID), never over it.
 The warning line is written by `assembleRelease`'s first action (`doFirst`, from a Boolean captured
 while the script configures), so it is in the log of every such build, including one that reuses the
 configuration cache (`WorbusReleaseTest.releaseWithoutKeyWarns` holds the shape). CI (`build.yml`, §8) refuses to draft a release while the file says `unset` or when the built
