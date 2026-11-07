@@ -7,7 +7,7 @@ package app.worbus.domain.manager
  * and Room so they can be run in a test (`LibraryMatchesTest`). The sentences the rows say are
  * where they were, in `LbBotData.kt` and `MatchesToCheck.kt`.
  *
- * Feishin's Library Matches page is the twin: the same four sections under the same names.
+ * Worbus for desktop's Library Matches page is the twin: the same four sections under the same names.
  */
 
 /** The page's sections, in the order they are offered. */

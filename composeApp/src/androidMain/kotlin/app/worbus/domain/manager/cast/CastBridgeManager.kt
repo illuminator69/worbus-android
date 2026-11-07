@@ -35,7 +35,7 @@ private const val TAG = "CastBridgeManager"
 /**
  * How long to stay out of the way after the hub supersedes one of our bridges.
  *
- * Long on purpose. Being superseded means another client (Feishin) claimed the same `cast-<id>`,
+ * Long on purpose. Being superseded means another client (Worbus for desktop) claimed the same `cast-<id>`,
  * and a quick retry is how you get two clients kicking each other off forever.
  */
 private const val STAND_DOWN_MS = 5 * 60 * 1_000L
@@ -67,9 +67,9 @@ private const val DISCOVERY_GATE_MS = 5_000L
 /**
  * Owns Chromecast discovery and decides which speakers *this* device bridges into the hub.
  *
- * Feishin does the same job (`cast/index.ts`'s module-level `bridges` map), with one difference
- * that matters: on a desktop there is only ever one bridging process, whereas now both Navic and
- * Feishin can see the same speaker. They would register the same `cast-<id>` and the hub would
+ * Worbus for desktop does the same job (`cast/index.ts`'s module-level `bridges` map), with one difference
+ * that matters: on a desktop there is only ever one bridging process, whereas now both Worbus and
+ * Worbus for desktop can see the same speaker. They would register the same `cast-<id>` and the hub would
  * close the older socket with 4003 (`hub.py:1354`) — then the loser reconnects and kicks the
  * winner, forever. Everything about arbitration here exists to make that impossible.
  */
@@ -188,7 +188,7 @@ class CastBridgeManager(
 		followDiscoveryPermission()
 		scope.launch {
 			// Re-evaluate whenever the world changes: a new speaker appears, a speaker moves,
-			// or the hub's device list shifts (which is how "Feishin just quit" reaches us).
+			// or the hub's device list shifts (which is how "Worbus for desktop just quit" reaches us).
 			// bridgeStateChanged is in the combine deliberately: a bridge whose hub socket just
 			// dropped is a state change nothing else reports, and it is precisely the state the
 			// picker must show honestly. Without it the manager reported BRIDGING off the mere
@@ -411,7 +411,7 @@ class CastBridgeManager(
 	/**
 	 * Wait a random moment, re-check, then register.
 	 *
-	 * The delay is the cheap half of arbitration: if Navic and Feishin start within the same
+	 * The delay is the cheap half of arbitration: if Worbus for Android and Worbus for desktop start within the same
 	 * second, whoever draws the shorter wait registers first and the other sees them in the
 	 * device list and stands down — no frames exchanged, nobody kicked.
 	 */
@@ -452,7 +452,7 @@ class CastBridgeManager(
 	 *
 	 * Deliberately cheaper than [onSuperseded]: nobody was evicted, so there is no war to break.
 	 * Dropping the bridge with no stand-down lets the next reconcile pick the speaker back up the
-	 * moment the other client lets go — Feishin's `reevaluate` handover, seen from this side.
+	 * moment the other client lets go — Worbus for desktop's `reevaluate` handover, seen from this side.
 	 */
 	private fun onClaimedElsewhere(deviceId: String) {
 		scope.launch {

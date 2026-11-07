@@ -369,7 +369,7 @@ class HubAuth(
 	/**
 	 * Whether this device has a credential for the Worbus Server at all: the ONE "is the hub set up"
 	 * question (with the address and the switch, [httpBase]). Never "a token is typed": a signed-in
-	 * device holds no token (Feishin's review C1: such checks cost a signed-in device its moods, its
+	 * device holds no token (Worbus for desktop's review C1: such checks cost a signed-in device its moods, its
 	 * lb-bot index mirror and AudioMuse; `HubBearerGuardTest` keeps them out).
 	 */
 	val hasCredential: Boolean get() = helloCredential() != null
@@ -631,7 +631,7 @@ class HubAuth(
 	private var verdictUrl: String? = null
 
 	/**
-	 * R33 (as Feishin's R29): a sign-in verdict belongs to the address that gave it. Once the address
+	 * R33 (as Worbus for desktop's R29): a sign-in verdict belongs to the address that gave it. Once the address
 	 * changes it is dropped: the status no longer says another server's "Too many attempts", and the
 	 * new address gets its own sign-in.
 	 */

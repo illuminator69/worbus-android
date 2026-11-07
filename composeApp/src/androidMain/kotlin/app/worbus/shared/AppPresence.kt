@@ -19,7 +19,7 @@ import app.worbus.domain.manager.volumeKeysGoRemote
 import app.worbus.util.Logger
 
 /**
- * Whether Navic is on screen and whether the phone is locked: the two facts that decide who
+ * Whether Worbus is on screen and whether the phone is locked: the two facts that decide who
  * the volume buttons belong to during remote playback (`volumeKeysGoRemote`, `VolumeKeys.kt`).
  *
  * Created with the process, before the first Activity, so that the count of started
@@ -91,7 +91,7 @@ class AppPresence(app: Application) {
 		})
 		// Screen off, screen on (the lock screen may be what it shows) and unlocked. Exported:
 		// "unlocked" is sent by the system UI's own uid, which a receiver that is not exported
-		// never hears, and the phone then stayed "locked" until Navic was next opened. All three
+		// never hears, and the phone then stayed "locked" until Worbus was next opened. All three
 		// are protected broadcasts, so nothing but the system can send them.
 		ContextCompat.registerReceiver(
 			app,

@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /*
  * Worbus P3, lane N3 (design §6.5): per-server values follow the server's id, not its address. The
- * values are the ones Navic keeps per server: the device id a sign-in bound (R32), lb-bot's downloads
+ * values are the ones Worbus keeps per server: the device id a sign-in bound (R32), lb-bot's downloads
  * mode (P1), the sign-in verdict (R33) and the route signature the pages re-read on.
  */
 class HubServerKeyTest {

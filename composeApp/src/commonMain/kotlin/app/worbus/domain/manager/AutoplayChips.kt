@@ -4,7 +4,7 @@ import app.worbus.domain.models.settings.StationCharacter
 
 /*
  * The queue sheet's autoplay chips (I-041), every decision as a pure function
- * (`AutoplayChipsTest`). The same spec as Feishin's `station-chips.ts`:
+ * (`AutoplayChipsTest`). The same spec as Worbus for desktop's `station-chips.ts`:
  *
  * - With the hub's station engine: Off, Close, Balanced, Explore. Without it: Off, Auto DJ.
  * - The selected chip: for a queue a station is bound to, Off iff the station is stopped, else its

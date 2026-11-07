@@ -5,8 +5,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /*
- * B-026 (Navic half): what the snackbar and the notification say about a fill that just settled,
- * and where "Open in lb-bot" goes. Mirrors Feishin's `announcementKindFor` /
+ * B-026 (Android half): what the snackbar and the notification say about a fill that just settled,
+ * and where "Open in lb-bot" goes. Mirrors Worbus for desktop's `announcementKindFor` /
  * `announcementLinkPathFor` (fill-announce-logic.ts) and its harness case for case, so the two
  * clients agree.
  *

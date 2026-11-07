@@ -529,7 +529,7 @@ internal fun unownedRowAction(
 	else (unownedTarget(row, knownArtistIds) as? ListeningTarget.ExternalAlbum)?.copy(findSources = true)
 
 // ----- the page, in tabs (I-026) -------------------------------------------------------------------
-// The listening history is four tabs, the same four under the same names as Feishin's page: what
+// The listening history is four tabs, the same four under the same names as Worbus for desktop's page: what
 // it shows did not change, only where. Since I-039 they are Stats' tabs. These are the rules the
 // layout follows.
 

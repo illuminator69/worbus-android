@@ -17,7 +17,7 @@ import kotlinx.serialization.serializer
  * save a chosen Cover Art Archive image as the album's cover. The state is lb-bot's and is
  * shared by every client; nothing about it is stored on the device.
  *
- * Feishin's `album-override.ts` is this file's twin. There is no shared build, so the rules
+ * Worbus for desktop's `album-override.ts` is this file's twin. There is no shared build, so the rules
  * below — what ends a poll, what a refusal means, what is counted — are mirrored by hand.
  */
 
@@ -1086,7 +1086,7 @@ sealed interface AlbumLeave {
 
 /**
  * Where a screen showing album [shownAlbumId] goes when [job] has ended ("" for a screen that
- * shows no album). Feishin's `decideLeave`.
+ * shows no album). Worbus for desktop's `decideLeave`.
  *
  * **Decided from the job and the id on screen, never from the sheet**: the sheet may be long
  * closed, and a page left showing a dead id is exactly what this exists to prevent. Only a

@@ -12,7 +12,7 @@ import app.worbus.util.logsFileText
 
 /**
  * Worbus P4 N4: lb-bot's failed imports in Needs attention, the link to lb-bot's page, and the
- * server's version on the Server screen. The seven cases are the contract lane F (Feishin) tests too.
+ * server's version on the Server screen. The seven cases are the contract lane F (Worbus for desktop) tests too.
  */
 class LbPageLinkTest {
 	private fun answer(counts: String) =

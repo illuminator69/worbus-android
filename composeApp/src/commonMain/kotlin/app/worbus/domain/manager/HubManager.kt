@@ -168,8 +168,8 @@ const val HUB_FEATURE_VOLUME_TARGET = "volumeTarget"
 const val HUB_FEATURE_SLEEP_TIMER = "sleepTimer"
 
 /**
- * navi-connect hub client: makes Navic a Spotify-Connect-style device against
- * the relay hub (see navi-connect PROTOCOL.md). Navic is both a receiver
+ * navi-connect hub client: makes Worbus a Spotify-Connect-style device against
+ * the relay hub (see navi-connect PROTOCOL.md). Worbus is both a receiver
  * (obeys `do` directives, reports position ~1 Hz while it is the active
  * device) and a controller (can transfer playback to other devices).
  *
@@ -540,7 +540,7 @@ class HubManager(
 	private var connectJob: Job? = null
 	private var wsSession: DefaultClientWebSocketSession? = null
 
-	// Mirrors of the Feishin client's guards:
+	// Mirrors of the desktop client's guards:
 	private var lastQueueSig = ""        // dedupe for publishing our queue
 	// Have we ever put a non-empty queue on the wire? Gates the clear-propagation below, so the empty
 	// queue that exists for a moment during startup hydration can't wipe another device's session.
@@ -1186,7 +1186,7 @@ class HubManager(
 			// local DB) so the mirrored queue length + order MATCH the hub's —
 			// otherwise dropping un-synced songs shifts the index, so the shown
 			// "current song" is wrong and a jump sends the wrong index (which
-			// made Feishin restart the queue).
+			// made Worbus for desktop restart the queue).
 			val resolved = resolveRemoteTracks(session.tracks)
 			val idx = session.index.coerceIn(0, (resolved.size - 1).coerceAtLeast(0))
 			remoteUiBase = PlayerUiState(
@@ -1751,7 +1751,7 @@ class HubManager(
 				currentSongId = songs.getOrNull(idx)?.id,
 				currentSongName = songs.getOrNull(idx)?.title,
 				// Art is the RESUME track's (B-046, PROTOCOL.md §8.3), derived from the record's own
-				// cursor, as Feishin does — so one shared record still looks the same on each client.
+				// cursor, as Worbus for desktop does — so one shared record still looks the same on each client.
 				// The record's own `coverImageUrl` stays ignored: it's the other client's authed URL
 				// against its own server, which is exactly why those covers wouldn't load.
 				coverArtId = songs.getOrNull(idx)?.coverArtId ?: songs.firstOrNull()?.coverArtId,
@@ -1822,7 +1822,7 @@ class HubManager(
 	 * The hub-adopt test is deliberately **set overlap**, not the ordered prefix it used to be: a
 	 * reorder, a removal, a play-next or a shuffle all fail a prefix test, so every one of them forked
 	 * a brand-new record for a queue the user never stopped playing. Half the queue in common is
-	 * enough — the same threshold Feishin uses.
+	 * enough — the same threshold Worbus for desktop uses.
 	 */
 	private fun hubSavedQueueIdFor(state: PlayerUiState): String {
 		state.savedQueueId?.let { return it }
@@ -2598,7 +2598,7 @@ class HubManager(
 	 * hub's order AND length 1:1 — songs missing from the local DB become
 	 * placeholders synthesized from the hub track metadata. This is critical for
 	 * transfer/queueChanged: dropping a missing song would shift every later
-	 * index, so the hub's index would point to the wrong track (and Navic would
+	 * index, so the hub's index would point to the wrong track (and Worbus would
 	 * play one song off). Placeholders still play + show art because Navidrome
 	 * serves both stream and cover by song id (same server).
 	 */
@@ -3045,7 +3045,7 @@ class HubManager(
 		/**
 		 * Share of the hub session's tracks our queue must contain for it to count as the same
 		 * listening session (so we refresh the hub's record instead of forking one). Half, matching
-		 * Feishin — a shuffle or a heavy edit still leaves that much in common.
+		 * Worbus for desktop — a shuffle or a heavy edit still leaves that much in common.
 		 */
 		const val HUB_QUEUE_ADOPT_OVERLAP = 0.5
 	}

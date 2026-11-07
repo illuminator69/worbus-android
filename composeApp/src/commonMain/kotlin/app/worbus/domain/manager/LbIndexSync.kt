@@ -80,7 +80,7 @@ class LbIndexSync(
 	 * the mirror, and every `index` frame, 15-minute tick and retry would otherwise ask again and
 	 * get the same 404. Cleared by a fresh start ([backoffReset] — a new `welcome` or lb-bot
 	 * coming back, the only ways a hub gets newer) and by an `index` frame ([lbProvenAlive]),
-	 * which only a hub and lb-bot that speak the feed can send. As Feishin's `feedMissing`.
+	 * which only a hub and lb-bot that speak the feed can send. As Worbus for desktop's `feedMissing`.
 	 */
 	private var feedMissing = false
 
@@ -165,7 +165,7 @@ class LbIndexSync(
 	 * [freshStart] is the exception: a new hub connection (`welcome`), or the hub announcing
 	 * lb-bot has just come back (`lb` frame, R18). Either invalidates the reason for the wait —
 	 * the backoff was measured against a socket or an lb-bot that no longer exists — so it cancels
-	 * the pending retry, resets the ladder and pulls now, as Feishin does on a welcome.
+	 * the pending retry, resets the ladder and pulls now, as Worbus for desktop does on a welcome.
 	 */
 	fun requestSync(why: String, lbAlive: Boolean = false, freshStart: Boolean = false) {
 		if (lbAlive) lbProvenAlive = true
@@ -185,7 +185,7 @@ class LbIndexSync(
 			consecutiveFailures = 0
 			return
 		}
-		// Jittered ±25 %, as Feishin does: two devices bounced off the hub's single `sync` slot at
+		// Jittered ±25 %, as Worbus for desktop does: two devices bounced off the hub's single `sync` slot at
 		// the same moment would otherwise come back in lockstep and collide again, rung after rung.
 		val step = (RETRY_BASE_MS shl (consecutiveFailures - 1)).coerceAtMost(RETRY_MAX_MS)
 		val wait = (step * (0.75 + Random.nextDouble() * 0.5)).toLong()

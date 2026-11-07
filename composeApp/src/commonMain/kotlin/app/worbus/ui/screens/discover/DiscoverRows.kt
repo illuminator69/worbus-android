@@ -3,18 +3,18 @@ package app.worbus.ui.screens.discover
 /**
  * The Discover row catalogue.
  *
- * **This table is duplicated in Feishin, on purpose, and the ids are the
+ * **This table is duplicated in Worbus for desktop, on purpose, and the ids are the
  * contract.** There is no shared build between the two repos and no codegen, so
  * "shared catalogue" can only ever mean "written twice and kept in sync". The
  * precedent was `MoodCharacter` (now `StationCharacter`), and it is a
- * cautionary one: the same three presets live here and in Feishin's
+ * cautionary one: the same three presets live here and in Worbus for desktop's
  * `audio-muse-source.ts` with matching numbers but different ids and labels, and
- * the two have already drifted — Feishin's auto-DJ escalates temperature per
+ * the two have already drifted — Worbus for desktop's auto-DJ escalates temperature per
  * pass and this client's `topUp` does not. Writing the ids down in one place
  * (`navi-connect/CLAUDE.md` §6) is the only thing standing between this table
  * and the same fate.
  *
- * Feishin's copy is `renderer/features/discover/discover-rows.ts`.
+ * Worbus for desktop's copy is `renderer/features/discover/discover-rows.ts`.
  */
 enum class DiscoverRowId(val wireId: String) {
 	MIXES("mixes"),

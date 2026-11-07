@@ -485,7 +485,7 @@ class ArtistDetailViewModel(
 	 *
 	 * Navidrome's native `artist_id` is a participation filter, so one query returns both kinds
 	 * and subtracting the album-artist rows leaves exactly the guest credits — which is how
-	 * Feishin does it. Subsonic cannot express this: `getArtist` is album-artist only.
+	 * Worbus for desktop does it. Subsonic cannot express this: `getArtist` is album-artist only.
 	 *
 	 * Ids come from the server; the albums themselves come from Room, so the tiles are the same
 	 * cached rows as everywhere else and nothing has to parse Navidrome's album shape here.

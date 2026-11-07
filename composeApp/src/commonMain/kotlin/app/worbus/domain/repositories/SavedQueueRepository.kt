@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.firstOrNull
  * A record's identity is a **listening session**, not a track list: `sourceName` is stamped when the
  * queue is born and never rewritten (`coverArtId` follows the resume track, B-046), and [findMatching] recognises a queue we already
  * have a record for so replaying an album refreshes its card instead of cloning it. Both rules mirror
- * Feishin and the hub (`hub.py._upsert_saved_queue`), which is the point — all three render one shared
+ * Worbus for desktop and the hub (`hub.py._upsert_saved_queue`), which is the point — all three render one shared
  * history.
  */
 @OptIn(ExperimentalTime::class)
@@ -189,7 +189,7 @@ class SavedQueueRepository(
 	 * (see HubManager.syncLocalSavedQueuesUp).
 	 */
 	suspend fun replaceFromHub(records: List<RemoteSavedQueue>) {
-		// Cap before anything else, matching Feishin's mergeFromHub: the hub force-includes the live
+		// Cap before anything else, matching Worbus for desktop's mergeFromHub: the hub force-includes the live
 		// record even when the cap would push it out, so its list can be one longer than MAX_QUEUES.
 		val capped = records.sortedByDescending { it.updatedAt }.take(MAX_QUEUES)
 		if (capped.isEmpty()) {

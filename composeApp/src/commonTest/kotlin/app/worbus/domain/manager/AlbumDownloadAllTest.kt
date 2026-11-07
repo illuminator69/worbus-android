@@ -15,7 +15,7 @@ import kotlin.test.assertNull
  * `GET /lb/album/sources`, the `allFiles` echo on the answer of `POST /lb/album/download`,
  * `leftOut` on the fill view. Nothing is worked out here from `files` or `fileCount`, except M,
  * the number in the button's label. Absent is not zero: a row without `extraFiles` (an older
- * lb-bot, an unknown tracklist, every gap-fill row) has nothing to say. Mirrors Feishin's
+ * lb-bot, an unknown tracklist, every gap-fill row) has nothing to say. Mirrors Worbus for desktop's
  * `album-download.harness.ts` case for case.
  */
 class AlbumDownloadAllTest {

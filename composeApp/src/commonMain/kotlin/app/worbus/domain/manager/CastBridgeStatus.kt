@@ -20,7 +20,7 @@ enum class CastBridgeState {
 	/** This device is presenting it to the hub. */
 	BRIDGING,
 
-	/** Another client — normally Feishin — already registered it, so we stay out of the way. */
+	/** Another client — normally Worbus for desktop — already registered it, so we stay out of the way. */
 	BRIDGED_ELSEWHERE,
 
 	/** Found, but there's no hub to publish it to. */
@@ -39,8 +39,8 @@ data class CastSpeaker(
  *
  * There is no longer a second, Play-Services path alongside this one: MediaRouter never reported
  * a single Cast route on the target device, and the framework's own local-network device-consent
- * dialog reappeared on a loop without ever granting anything. Navic speaks mDNS and castv2
- * directly instead (`domain.manager.cast`), which is also what Feishin does.
+ * dialog reappeared on a loop without ever granting anything. Worbus speaks mDNS and castv2
+ * directly instead (`domain.manager.cast`), which is also what Worbus for desktop does.
  *
  * Implemented on Android by `CastBridgeManager`.
  */

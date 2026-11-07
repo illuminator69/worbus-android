@@ -138,7 +138,7 @@ fun requestStage(input: RequestInput): RequestStage {
 }
 
 /**
- * The five steps a request walks through, for a fill in [state]. The captions are Navic's own
+ * The five steps a request walks through, for a fill in [state]. The captions are Worbus's own
  * (PROTOCOL §15.2 names states, not steps); a state that is not a step of a running request gives
  * no steps at all.
  */

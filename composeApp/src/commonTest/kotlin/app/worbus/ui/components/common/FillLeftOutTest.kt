@@ -14,7 +14,7 @@ import kotlin.test.assertNull
  * line for an album download already exists, it says so: the Download Center's row and the
  * missing-album sheet's progress block, while the album downloads and once it is in the library.
  * 0 (and so every gap fill, and every lb-bot older than the field) adds nothing, and the line is
- * then exactly what it was. Mirrors `leftOutText` and its two uses in Feishin's
+ * then exactly what it was. Mirrors `leftOutText` and its two uses in Worbus for desktop's
  * `fill-vocabulary.ts`.
  */
 class FillLeftOutTest {

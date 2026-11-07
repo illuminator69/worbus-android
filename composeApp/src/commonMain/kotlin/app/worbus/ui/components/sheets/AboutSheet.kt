@@ -24,7 +24,7 @@ import app.worbus.ui.util.stripHtml
 /**
  * The full "About" text for an artist or an album.
  *
- * This is the section Navic has never had. The artist page showed 200 raw
+ * This is the section Worbus has never had. The artist page showed 200 raw
  * characters of Navidrome's Last.fm bio in the photo header and nothing else;
  * the album page showed no description at all, even though `getAlbumInfo2.notes`
  * was already being loaded and read by nothing.

@@ -68,7 +68,7 @@ class SyncManager(
 		 */
 		val LB_BOT_NEWEST_DEBOUNCE_PLACED = 20.seconds
 
-		/** Feishin showed the real cover about ten seconds after landing; allow for slower. */
+		/** Worbus for desktop showed the real cover about ten seconds after landing; allow for slower. */
 		val ARTWORK_RESYNC_DELAYS = listOf(15.seconds, 45.seconds)
 
 		/** How often to ask Navidrome whether a scan ran. One tiny request. */
@@ -180,7 +180,7 @@ class SyncManager(
 	 * Notice Navidrome scans that nobody told us about.
 	 *
 	 * Every way music reaches the library ends in a Navidrome scan, whether or not lb-bot
-	 * or the hub announced it: lb-bot's own page, a fill started from Feishin, a folder
+	 * or the hub announced it: lb-bot's own page, a fill started from Worbus for desktop, a folder
 	 * matched by hand, a scheduled scan. Watching `getScanStatus` catches all of them. A
 	 * scan short enough to fall between two polls still changes `count`, which is why
 	 * either signal triggers the sweep.

@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /**
  * Worbus P4 N3: the redaction rule every "send logs" path applies. The vectors are the controller's
- * shared contract (`redaction-vectors.json`, ruling R2; v2 by ruling R14), copied verbatim; Feishin
+ * shared contract (`redaction-vectors.json`, ruling R2; v2 by ruling R14), copied verbatim; Worbus for desktop
  * tests the same file.
  */
 class LogRedactionTest {

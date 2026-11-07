@@ -55,7 +55,7 @@ import app.worbus.ui.screens.savedqueues.trackDuration
 
 /**
  * "Preview queue": what's actually in a saved queue, and where resuming it would land, without
- * committing to replacing what's playing. Matches Feishin's preview modal — the track list with the
+ * committing to replacing what's playing. Matches Worbus for desktop's preview modal — the track list with the
  * resume row marked, the total runtime, and Resume / Close.
  *
  * Nothing is fetched: the record already carries its songs, so this only has to decode the blob.

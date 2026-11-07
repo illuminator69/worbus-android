@@ -27,7 +27,7 @@ private const val SERVICE_TYPE = "_googlecast._tcp."
 
 // A Chromecast announces itself only every couple of minutes, so a single lost query — the Wi-Fi
 // interface not up yet, a switch dropping the first multicast — used to cost ~90s before the
-// speaker appeared. (Feishin hit exactly this; see its REQUERY_* constants.) Re-query fast while
+// speaker appeared. (Worbus for desktop hit exactly this; see its REQUERY_* constants.) Re-query fast while
 // we are likely still missing devices, then slowly, which also picks up anything powered on later.
 private const val REQUERY_FAST_MS = 3_000L
 private const val REQUERY_FAST_TRIES = 10
@@ -292,7 +292,7 @@ class CastDiscovery(private val context: Context) {
 
 /**
  * Reads the TXT fields the bridge needs: `id` (stable device id) and `fn` (friendly name) —
- * the same pair Feishin's `serviceToDevice()` uses, so both clients derive the same `cast-<id>`
+ * the same pair Worbus for desktop's `serviceToDevice()` uses, so both clients derive the same `cast-<id>`
  * and can recognise each other's registrations — and `ca`, the capability bits that say whether
  * this is a speaker, a TV or a group.
  */

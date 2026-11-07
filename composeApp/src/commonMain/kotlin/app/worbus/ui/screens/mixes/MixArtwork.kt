@@ -49,7 +49,7 @@ import app.worbus.ui.components.common.CoverArt
  *   varies so two fingerprint mixes can be told apart at a glance. It says "this is
  *   a fingerprint mix", never "this is what will play".
  *
- * Feishin's `mixes-row.tsx` declines to generate anything, on the grounds that a
+ * Worbus for desktop's `mixes-row.tsx` declines to generate anything, on the grounds that a
  * generated cover "would be a lie about what is inside". That objection is right
  * about invented *album art* and does not reach an icon; recorded as a deliberate
  * divergence rather than a drift.
@@ -131,7 +131,7 @@ enum class MixGlyph { Person, Note, Genre, Artist, Radio, Unknown }
  *
  * **Your mix is a person** (B-149): the seedless station, from what you play most, and the old
  * `fingerprint` / `adaptive` kinds that play as it now. Not the clock (it is not a history), not
- * the account circle (the profile button wears it), not the sparkle (Fresh's). Feishin's Your
+ * the account circle (the profile button wears it), not the sparkle (Fresh's). Worbus for desktop's Your
  * mix wears the same glyph.
  */
 fun mixGlyph(kind: String, seedId: String): MixGlyph = when (kind) {

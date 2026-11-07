@@ -188,7 +188,7 @@ fun ServerScreen() {
 	val serverVersion by hubManager.serverVersion.collectAsState()
 	val authState by hubManager.auth.collectAsState()
 	val linkedByToken by hubManager.linkedByToken.collectAsState()
-	// B-108: the status is then "Android is blocking Navic from your local network.", and the
+	// B-108: the status is then "Android is blocking Worbus from your local network.", and the
 	// page offers the app's settings page, where the permission is.
 	val localNetworkBlocked by hubManager.hubLocalNetworkBlocked.collectAsState()
 	// Back from Open settings with the permission granted: dial now, not at the end of the backoff.

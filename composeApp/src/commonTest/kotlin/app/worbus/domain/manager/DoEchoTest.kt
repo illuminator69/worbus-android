@@ -74,7 +74,7 @@ class DoEchoTest {
 		val clear = expect("clear")
 		val emptied = EchoPlayerState(isPaused = true, index = 0, positionMs = 0, queueEmpty = true)
 		assertTrue(clear.settledBy(emptied, t0))
-		// Emptied and still "playing": what Navic reported after every do:clear.
+		// Emptied and still "playing": what Worbus reported after every do:clear.
 		assertFalse(clear.settledBy(emptied.copy(isPaused = false), t0))
 		assertFalse(clear.settledBy(playing.copy(isPaused = true), t0))
 	}

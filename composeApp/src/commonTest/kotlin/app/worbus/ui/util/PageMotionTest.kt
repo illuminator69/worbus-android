@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The Quick animation style (I-042): the old two styles keep the timing Navic always had, and
+ * The Quick animation style (I-042): the old two styles keep the timing Worbus always had, and
  * Quick is shorter everywhere.
  */
 class PageMotionTest {

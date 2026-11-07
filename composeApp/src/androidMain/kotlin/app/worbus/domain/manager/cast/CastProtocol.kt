@@ -9,8 +9,8 @@ import kotlinx.coroutines.flow.update
 /**
  * Google Cast v2 wire protocol — framing and namespaces.
  *
- * navi-connect's Chromecast support does NOT go through the Play Services Cast SDK. Feishin's
- * bridge talks castv2 directly (`castv2-client`), and Navic does the same for two reasons: the
+ * navi-connect's Chromecast support does NOT go through the Play Services Cast SDK. Worbus for desktop's
+ * bridge talks castv2 directly (`castv2-client`), and Worbus does the same for two reasons: the
  * MediaRouter/CastContext path finds no routes on the target device for reasons we could never
  * pin down, and speaking the protocol ourselves is the only way to get behavioural parity with
  * the bridge that already works — in particular joining a *running* receiver session, which the

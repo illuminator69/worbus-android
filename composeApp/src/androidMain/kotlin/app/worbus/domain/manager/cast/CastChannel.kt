@@ -232,7 +232,7 @@ internal class CastChannel(
 	 * Take over the Default Media Receiver: join it if it is already running, launch it otherwise.
 	 *
 	 * Joining rather than always launching is what makes adoption possible — relaunching would
-	 * stop whatever the speaker is playing, which is the exact opposite of the goal when Navic
+	 * stop whatever the speaker is playing, which is the exact opposite of the goal when Worbus
 	 * restarts while music is still going.
 	 *
 	 * @return the running application, or null if it could be neither joined nor launched.

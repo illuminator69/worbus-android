@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
 /*
- * Mixed for You in step with Feishin (B-149, B-150, 2026-10-17): "mixed for you in navic has the
+ * Mixed for You in step with Worbus for desktop (B-149, B-150, 2026-10-17): "mixed for you in navic has the
  * same icon for your mix and it does not really make sense for it to be that icon. mix choices are
  * different from those in feishin when they should be the same."
  *
@@ -100,7 +100,7 @@ class MixRecipesTest {
 
 	@Test
 	fun anOlderRecipeHoldingTheGenresIdFallsBackToItsName() {
-		// Feishin's form wrote Navidrome's genre id as the seed before B-150.
+		// Worbus for desktop's form wrote Navidrome's genre id as the seed before B-150.
 		assertEquals(
 			listOf("9b1f0c3e-genre-id", "Shoegaze"),
 			genreSeedNames(Mix(id = "m", name = "x", kind = MixKind.GENRE, seedId = "9b1f0c3e-genre-id", seedName = "Shoegaze"))

@@ -247,7 +247,7 @@ private val HEATMAP_CELL_MAX = 24.dp
  * Rows link out and never download: what the library holds opens its library page, what it does
  * not opens the external album or artist page, where the reviewed acquire flow already lives.
  *
- * **Four tabs** (I-026), the same four under the same names as Feishin's page: **Overview** (the
+ * **Four tabs** (I-026), the same four under the same names as Worbus for desktop's page: **Overview** (the
  * numbers as Stats' cards, top artists as Stats' ranking, albums and tracks as its carousels, the
  * genres ranked the same way), **Activity** (the heat map, then the period's plays per day and by
  * hour), **History** (recent plays as queue-like rows with covers) and **Not in library** (cover

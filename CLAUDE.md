@@ -1,9 +1,10 @@
-# navic-gaps — agent reference
+# Worbus for Android (worbus-android, was navic-gaps) — agent reference
 
 **This file is the source of truth for working inside this tree.** `README.md` is the front page
-and stays brief. The wider stack — the hub, the wire protocol, the desktop client, lb-bot — is
-documented in **[navi-connect](https://github.com/illuminator69/navi-connect)**; anything about how
-two clients agree on something belongs there, and anything about *this* app belongs here.
+and stays brief. The wider stack — Worbus Server (the hub and lb-bot), the wire protocol, Worbus for
+desktop — is documented in **[worbus](https://github.com/illuminator69/worbus)** (the umbrella, was
+navi-connect); anything about how two clients agree on something belongs there, and anything about
+*this* app belongs here.
 
 Keep it in sync when architecture changes. Sections 2 and 6 are the ones that repay reading before
 you touch anything: they record failures that the compiler cannot see and that cost a full
@@ -13,17 +14,37 @@ build-and-drive round each to find.
 
 ## 1. What this is
 
-A fork of **[ssalggnikool/Navic](https://github.com/ssalggnikool/Navic)** — a Kotlin
-Multiplatform / Compose Multiplatform (Open)Subsonic client — that turns it into a client for a
-shared playback session, a Chromecast bridge, an AudioMuse-AI front end and an lb-bot front end.
+**Worbus for Android**, a fork of **[ssalggnikool/Navic](https://github.com/ssalggnikool/Navic)** by
+paige — a Kotlin Multiplatform / Compose Multiplatform (Open)Subsonic client — that turns it into a
+client for a shared playback session, a Chromecast bridge, an AudioMuse-AI front end and an lb-bot
+front end.
 
 | | |
 |---|---|
+| Repository | `illuminator69/worbus-android` (renamed from `navic-gaps` at the P5 landing) |
 | Branch | **`navi-connect`** (not `master`) |
+| App ID | **`app.worbus.android`**; debug `app.worbus.android.debug` ("Worbus (Dev)"). Permanent: a new ID is a new app |
+| Packages | `app.worbus` (composeApp), `app.worbus.androidApp` (the app module), `app.worbus.icons` (Valkyrie), `app.worbus.generated` (BuildInfo); resources `worbus.composeapp.generated.resources` (`rootProject.name = "Worbus"`) |
+| Version | `0.5.0`, versionCode 61 (`androidApp/build.gradle.kts`; BuildInfo reads the name from there) |
+| Release key | lives only on the workstation; its certificate's SHA-256 is `androidApp/release-cert.sha256` (§3) |
 | Upstream base | ssalggnikool/Navic **`v1.0.0-alpha59`** |
-| Divergence | ~264 files, +33.6k / −3.5k |
+| Divergence | ~264 files, +33.6k / −3.5k (before the package move) |
 | Modules | `:androidApp` (the application), `:composeApp` (the shared KMP library, Android its only target) |
 | Licence | GPL-3.0, inherited |
+
+**The package moved in Worbus P5** (`paige.navic` → `app.worbus`, design §6.3) by one commit made
+only by `tools/rename-package.sh paige.navic app.worbus Worbus`, kept in the tree: it `git mv`s every
+source tree and Room's two schema directories (`composeApp/schemas/app.worbus.data.database.*`, whole
+history), rewrites the dotted and slashed names in `*.kt`, `*.kts`, `*.pro` and the manifest (never
+an `applicationId` line), and makes the Compose resource imports match `rootProject.name`.
+Idempotent; it prints what it changed. `RenameGuardTest` fails if a test names the old package (a
+source-reading test would read nothing), a file still declares or sits under it, or a schema
+directory lost a version. Every source-reading host test builds its path through `sourceFile()`,
+which fails when the path does not exist. On-disk keys did not move (`navic_secrets`,
+`navic_secrets_v1`, `cache.db`, `downloads.db`, the `navic_*` media ids, `navic:downloads`): a new
+app ID starts with empty storage anyway. `tools/check-names.sh` (with `tools/check-names.allow`) is
+the name check: upstream's package and IDs and the whole words of the two upstream apps' names,
+each hit renamed or allowed with a reason; it exits 1 on any other.
 
 **Android is the only platform.** iOS was removed in Worbus 0.4 (I-060): `iosApp/`, `iosMain`, the
 iOS targets, `ktor-client-darwin`, the Kotlin/Native flags, `Gemfile`, `fastlane/Fastfile` and
@@ -40,10 +61,10 @@ only its `androidMain` actual (legal with one target), and a platform binding go
 | Chromecast | `androidMain/.../domain/manager/cast/*` — `CastDiscovery` (`NsdManager`), a hand-rolled castv2 client (`CastChannel`/`CastProtocol`/`CastPayloads`), `CastDeviceBridge`, `CastBridgeManager` (reconnect safety net: `BridgeLiveness.kt`, §4). No Cast SDK, no Play Services. Scrobbling in `domain/manager/CastScrobbler.kt` |
 | Radio and autoplay (stations, I-040) | `domain/manager/RadioManager.kt` (entry points, the autoplay driver, likes, mixes), `domain/manager/StationManager.kt` (the hub's `/sonic/station/...`, availability, the persisted record of what built the queue), `domain/manager/StationModels.kt` (wire shapes and every rule the driver and the queue sheet apply, `StationDriverTest`), `domain/manager/AutoDj.kt` (the no-hub fallback, a port of upstream Feishin's, `AutoDjPlannerTest`), `domain/manager/AutoplayChips.kt` (the queue's autoplay chips, `AutoplayChipsTest`), `domain/models/settings/StationCharacter.kt`, the chip row and `ui/screens/queue/components/QueueGeneratorLine.kt` in the queue sheet (§4) |
 | AudioMuse-AI | `domain/manager/AudioMuseManager.kt` (CLAP mood search; the fingerprint and alchemy lists the old mix kinds play from without the station engine) |
-| lb-bot | `domain/manager/LbBotManager.kt` (the whole surface plus the persisted watch map; `applyAlbumStatus` / `applyGapSummary` are the ONE writer each, fed by the `/lb/fills` poll and the hub's `fill` frame alike), `ui/components/common/FillVocabulary.kt` (the acquisition vocabulary, PROTOCOL §15.2 — mirrored in Feishin's `fill-vocabulary.ts`), `ui/components/sheets/LbBotCommon.kt`, the album page's gaps box (`ui/screens/collection/components/GapBox.kt`, which retired `GapFillSheet`; its stage is `GapStage.kt`), `domain/manager/FillActions.kt` (what a fill's buttons do, shared by Downloads and the request box), `domain/manager/AlbumDownloadAll.kt` (the album picker's "more files in this folder" and "Download all", §5), `domain/manager/ArtistMbidOverride.kt` + `ui/components/sheets/MbidMatchSheet.kt` (which MusicBrainz artist a library artist is, §5), `domain/manager/AlbumOverride.kt` + `ui/components/sheets/AlbumMatchSheet.kt` ("Fix album match": which MusicBrainz release an owned album is; the sheet is composed by `AlbumMatchHost()` in `App.kt`, §5), `domain/manager/ArtistMerge.kt` + `ui/components/sheets/ArtistMergeBlock.kt` ("Merge into one name": two spellings of one artist, a block of `MbidMatchSheet`, §5), `domain/manager/LbJobPoll.kt` (the one poll rule both background jobs are followed by), `ui/screens/artist/components/{DiscographyShelf,DiscographyBrowser}.kt`, `ui/screens/fresh/*`, `ui/screens/external/*` |
+| lb-bot | `domain/manager/LbBotManager.kt` (the whole surface plus the persisted watch map; `applyAlbumStatus` / `applyGapSummary` are the ONE writer each, fed by the `/lb/fills` poll and the hub's `fill` frame alike), `ui/components/common/FillVocabulary.kt` (the acquisition vocabulary, PROTOCOL §15.2 — mirrored in Worbus for desktop's `fill-vocabulary.ts`), `ui/components/sheets/LbBotCommon.kt`, the album page's gaps box (`ui/screens/collection/components/GapBox.kt`, which retired `GapFillSheet`; its stage is `GapStage.kt`), `domain/manager/FillActions.kt` (what a fill's buttons do, shared by Downloads and the request box), `domain/manager/AlbumDownloadAll.kt` (the album picker's "more files in this folder" and "Download all", §5), `domain/manager/ArtistMbidOverride.kt` + `ui/components/sheets/MbidMatchSheet.kt` (which MusicBrainz artist a library artist is, §5), `domain/manager/AlbumOverride.kt` + `ui/components/sheets/AlbumMatchSheet.kt` ("Fix album match": which MusicBrainz release an owned album is; the sheet is composed by `AlbumMatchHost()` in `App.kt`, §5), `domain/manager/ArtistMerge.kt` + `ui/components/sheets/ArtistMergeBlock.kt` ("Merge into one name": two spellings of one artist, a block of `MbidMatchSheet`, §5), `domain/manager/LbJobPoll.kt` (the one poll rule both background jobs are followed by), `ui/screens/artist/components/{DiscographyShelf,DiscographyBrowser}.kt`, `ui/screens/fresh/*`, `ui/screens/external/*` |
 | Listening history (Stats' tabs) | `domain/manager/Listening.kt` (the wire shapes and every rule the screen applies — `ListeningTest`), `ui/screens/listening/*` (`ListeningStats`, hosted by upstream's `StatisticsScreen`), the `listening*` calls in `LbBotManager`; the Fresh scope "Artists you play" is `freshScoped` in `FreshViewModel.kt` (§5) |
 | Library Matches, pending actions | `ui/screens/matches/*` (`LibraryMatchesScreen` + its view model: the page that was the "lb-bot data" settings section, §5), `domain/manager/LibraryMatches.kt` (its sections and what a row draws — `LibraryMatchesTest`), `ui/components/common/LbArtImage.kt`, `domain/manager/LbBotData.kt` (every sentence these surfaces say, as tested functions — `LbBotDataTest`, and `OverrideListsTest` for the album-override and name-merge lists), `ui/screens/settings/PendingActionsScreen.kt` + its view model, `LbIndexSync.lastRun`, `LbBotManager.refreshArtistMeta` / `refreshAlbumMeta` (§5) |
-| Discover | `ui/screens/discover/*` — `DiscoverRows.kt` (the row catalogue, **duplicated in Feishin**; see below), `DiscoverScreen.kt`, `viewmodels/DiscoverViewModel.kt` |
+| Discover | `ui/screens/discover/*` — `DiscoverRows.kt` (the row catalogue, **duplicated in Worbus for desktop**; see below), `DiscoverScreen.kt`, `viewmodels/DiscoverViewModel.kt` |
 | Saved queues | `domain/repositories/SavedQueueRepository.kt`, `ui/screens/savedqueues/*` |
 | Downloads | `domain/manager/{DownloadManager,PlaylistDownloadManager,DownloadForegroundController}.kt`, `androidMain/.../shared/DownloadService.kt`, `ui/screens/downloads/*` (`DownloadsScreen`, this device's downloads only since P6, and `PasteLinkSheet`; it was Settings' Download Center plus a Wishlist page, I-039; lb-bot's fills and `WishlistSection` are Source history's chips now, and `Downloads(Fills|Wishlist)` opens Source history). What holds downloads back (Wi-Fi only, charging only, how many at once) is in Settings › Quality & data |
 | Mixed for You | `domain/models/Mix.kt`, `ui/screens/mixes/*` (`MixListScreen`, `MixDetailScreen`, `MixArtwork`, `MixFormat`), `RadioManager.generate`/`regenerate`/`currentRecipe` |
@@ -77,7 +98,14 @@ git fetch upstream --tags
 git merge v1.0.0-alphaNN
 ```
 
-That is genuinely the whole workflow. The fork was a squashed snapshot with no shared history until
+**Since the package move (Worbus P5) a plain merge is no longer the whole workflow,** and merging
+upstream is not planned (design §6.13). If it is ever done: upstream's tag still has `paige.navic`, so
+cut a branch from the tag, run `tools/rename-package.sh paige.navic app.worbus Worbus` on it and
+commit, then merge that branch; git follows the moved files by content. Every path in the rules
+below is under `app/worbus/` now. Run `tools/check-names.sh` after: upstream brings its name back in
+strings, comments and docs.
+
+Before the move, that was genuinely the whole workflow. The fork was a squashed snapshot with no shared history until
 September 2026; reconstructing it onto its true base (`v1.0.0-alpha40`) is what makes a plain merge
 resolve per hunk instead of declaring every file a conflict. The reconstruction was one-way — don't
 redo it, and don't rebase the fork onto a new base "to tidy up".
@@ -274,7 +302,7 @@ that before suspecting the merge.
 ## 3. Building, signing, driving
 
 ```bash
-./gradlew :androidApp:assembleRelease     # ~2 min → androidApp/build/outputs/apk/release/Navic.apk
+./gradlew :androidApp:assembleRelease     # ~2 min → androidApp/build/outputs/apk/release/Worbus.apk
 ./gradlew :androidApp:assembleDebug       # for correctness work
 ./gradlew :composeApp:testAndroidHostTest # JVM host tests, no device/emulator
 ```
@@ -312,11 +340,33 @@ While working here:
   `./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx5g" -Pkotlin.compiler.execution.strategy=in-process …`
   — one JVM, nothing resident afterwards.
 
+### Signing: the release key, the certificate file, the debug fallback (Worbus P5)
+
+The Worbus release key (alias `worbus`) was made by the owner **on the workstation** and **never
+comes to the sandbox VM** or into any repository; its passwords live in an env file beside it there
+(design §6.6). Its certificate's SHA-256, 64 lower-case hex characters on one line, is
+`androidApp/release-cert.sha256`; it reads `unset` until the owner records it (`WorbusReleaseTest`
+holds the format). The workstation's local release builds source the env file. Anywhere else a
+release build falls back to the debug key, and Gradle says so in one warning line: `Worbus release
+APK signed with the DEBUG key (SIGNING_* unset): not for distribution`. The VM's APKs are therefore
+debug-signed; the workstation's receiver re-signs a new-ID (`app.worbus.android`) APK with the
+release key only by a deliberate `vmfetch.py apk release`, which checks the result against the
+recorded fingerprint; its 30-second watcher never reads the release key. An old-ID (`paige.navic`)
+APK from an old branch is still re-signed with the debug key, so it updates the old Navic on the
+phone. CI (`build.yml`, §8) refuses to draft a release while the file says `unset` or when the built
+APK's certificate differs. Check any APK by hand:
+
+```bash
+$ANDROID_HOME/build-tools/37.0.0/apksigner verify --print-certs androidApp/build/outputs/apk/release/Worbus.apk \
+  | sed -n 's/.*certificate SHA-256 digest: *//p'
+cat androidApp/release-cert.sha256
+```
+
 ### The signing trap
 
 With `SIGNING_*` unset the release build falls back to the **debug** keystore, and every installed
-copy of this fork trusts that one key. Two ways it goes wrong, both of which read on the phone as
-an unexplained failure to update:
+copy of the old Navic-ID builds trusts that one key. Two ways it goes wrong, both of which read on
+the phone as an unexplained failure to update:
 
 - **A new machine silently generates a fresh `~/.android/debug.keystore`.** The phone then refuses
   the APK with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. Back the keystore up; the private key cannot
@@ -334,7 +384,7 @@ an unexplained failure to update:
 
 ```bash
 $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs \
-    androidApp/build/outputs/apk/release/Navic.apk
+    androidApp/build/outputs/apk/release/Worbus.apk
 keytool -list -v -keystore ~/.android/debug.keystore -storepass android | grep SHA-256
 ```
 
@@ -349,16 +399,16 @@ colour work was done: edit → `assembleDebug` → `adb install -r` → `screenc
 ```bash
 emulator -avd <avd> &            # -no-window for headless; screencap works either way
 adb wait-for-device && adb shell getprop sys.boot_completed
-adb install -r androidApp/build/outputs/apk/debug/Navic.apk
-adb shell monkey -p paige.navic.debug -c android.intent.category.LAUNCHER 1
+adb install -r androidApp/build/outputs/apk/debug/Worbus.apk
+adb shell monkey -p app.worbus.android.debug -c android.intent.category.LAUNCHER 1
 
 adb exec-out screencap -p > /tmp/shot.png          # read it back and sample it
 adb exec-out uiautomator dump /dev/tty             # real element bounds
-adb logcat -d --pid=$(adb shell pidof paige.navic.debug)
+adb logcat -d --pid=$(adb shell pidof app.worbus.android.debug)
 adb shell "cmd uimode night yes"                   # dark mode without touching settings
 adb shell wm size 1600x2560                        # cross the Medium breakpoint for the SideBar
 adb shell wm size reset
-adb shell run-as paige.navic.debug ls cache/       # debug builds only: Coil cache, Room DBs
+adb shell run-as app.worbus.android.debug ls cache/       # debug builds only: Coil cache, Room DBs
 ```
 
 - **A logged-in emulator joins the hub.** Pressing play there moves playback on whatever device is
@@ -418,7 +468,7 @@ Rules that are easy to violate and produce "it looks right and the wrong thing p
 - **Undo reverses the one edit, and never reloads (B-133).** `performQueueUndo` makes the single
   insert or move that reverses a swipe or a drag (`queueUndoEdit`, `QueueUndoTest`): locally
   `insertQueueItem` / `moveQueueItem`; through the hub `move`, or `enqueue` at the end then `move`
-  into place (the hub inserts only next or at the end), each a `queueChanged` that Feishin and Navic
+  into place (the hub inserts only next or at the end), each a `queueChanged` that Worbus for desktop and Worbus for Android
   apply around the playing song. Loading the snapshot re-prepares the playing item (a second of
   silence); rebuilding around it still replaces the next item, which a player in audio offload is
   already decoding; and a whole queue sent to the hub is a `setQueue`, a `load` on the receiver.
@@ -495,7 +545,7 @@ Rules that are easy to violate and produce "it looks right and the wrong thing p
   session (`VolumeKeys.kt`).** A session declared remote takes the buttons from every app, and
   whether the system then draws a slider depends on the Android build: the user's phone drew
   none, the API 37 emulator drew a cast row. So `RemoteSessionPlayer` declares
-  `PLAYBACK_TYPE_REMOTE` only while Navic is on screen or the phone is locked
+  `PLAYBACK_TYPE_REMOTE` only while Worbus is on screen or the phone is locked
   (`AppPresence`, `volumeKeysGoRemote`) and `PLAYBACK_TYPE_LOCAL` otherwise, where the buttons
   move the phone's own volume with the system's slider. On screen, `MainActivity.dispatchKeyEvent`
   takes the press before the system sees it (`HubManager.pressRemoteVolume`), and
@@ -560,7 +610,7 @@ Rules that are easy to violate and produce "it looks right and the wrong thing p
   `pause`, never the hub-side `playpause`, since a toggle applied to a state the user was not
   looking at undoes the tap. A refusal arrives in the ack only (`ok:false`) and goes through
   `onHubError`, the `error` frame's own path. Against a hub without `actAck` nothing carries a
-  `cid` and the timed holds of `CommandHold.kt` stand in. Feishin's `act-pins.ts` is the twin.
+  `cid` and the timed holds of `CommandHold.kt` stand in. Worbus for desktop's `act-pins.ts` is the twin.
 
 - **A device's row says what the device is and how loud it is, and the phone's volume is its
   media volume (I-032, I-033, B-114).** `hello` carries `kind`: `phone` or `tablet` by the
@@ -665,7 +715,7 @@ Rules, each with a reason:
   station (`stationRestart`, below).
 - **Autoplay is the queue's chips, and Off stops everything (I-041).** Under the queue's header,
   one sideways-scrolling `PageChips` row: Off, Close, Balanced, Explore with the engine (the
-  catalogue's words), Off and Auto DJ without it (`AutoplayChips.kt`; Feishin's
+  catalogue's words), Off and Auto DJ without it (`AutoplayChips.kt`; Worbus for desktop's
   `station-chips.ts` is the twin). The switch and the driver read ONE rule, `autoplayWanted`
   (fix round P2, audit L4a-02): with the engine and a bound station, the station's own `stopped`
   (shared by every device) decides, else the local `autoplayOn` ("Autoplay by default"). So Off
@@ -676,7 +726,7 @@ Rules, each with a reason:
   says `stopped` in its frames), and the songs that station added that are still to come are taken
   out. **A character**: autoplay on with it; a bound station that is stopped or on another
   character gets `signal character`, its songs still to come are swapped for a fresh batch at once,
-  and the top-up decision runs at once, **paused or not** (`AutoplayLook.chipTap`; Feishin's
+  and the top-up decision runs at once, **paused or not** (`AutoplayLook.chipTap`; Worbus for desktop's
   B-144). Starting any radio turns autoplay back on.
   **Who edits (S-035).** With `stationEdits` in `welcome.features` and the queue being the
   session's bound station (`chipEditsOnHub`: this device playing it, or controlling the device
@@ -717,7 +767,7 @@ Rules, each with a reason:
   once (`adoptedStationRecord`, in the driver's look): a hub that forgets it also stops naming it in
   the session, and the queue would otherwise have no station left at its next top-up (watched:
   the album queue's line vanished after the scratch hub restarted without its stations file).
-- **Failures are read as Feishin reads them** (`stationFailure`, `stationFailureAction`). A
+- **Failures are read as Worbus for desktop reads them** (`stationFailure`, `stationFailureAction`). A
   fallback (503, a `{fallback: true}` body, no `station` feature, a probe that said unavailable,
   the hub disconnected, a bare 404) is Auto DJ for that top-up (with autoplay on) and stops asking
   the engine for a minute. A transient failure (a timeout or connection error with the hub socket
@@ -985,7 +1035,7 @@ Rules, each with a reason:
     asked for (`listeningSyncOffered`: off, older, nothing heard yet), and **the status is said
     once** — the plain line only while the mirror is simply ready
     (`listeningStatusLineShown`), every other state being the banner's.
-  - **The page is four tabs** (I-026; `ListeningTab`, the same four as Feishin's): Overview
+  - **The page is four tabs** (I-026; `ListeningTab`, the same four as Worbus for desktop's): Overview
     (tiles, rankings, genres), Activity (heat map, plays per day, plays by hour), History
     (recent plays) and Not in library. One period for the page; its picker is drawn where it
     changes something (`listeningTabShowsPeriod`: not on History, and on Activity **below** the
@@ -1234,7 +1284,7 @@ Rules, each with a reason:
     `poor_match` does and is never read as that question: it is shown in lb-bot's words, which
     name the remedy, on preview, apply, cover, remove and both merge writes. Every sentence states what lb-bot
     answered; nothing says whether a favourite, a rating or a play count survives a retag.
-    Feishin's `album-override.ts` is the hand-mirrored twin.
+    Worbus for desktop's `album-override.ts` is the hand-mirrored twin.
 - **"Merge into one name" joins two spellings of one artist, and lb-bot holds all of it
   (I-023).** Navidrome keys artists by NAME, so "Belle & Sebastian" and "Belle and Sebastian"
   are two artists even with one MusicBrainz id. lb-bot retags one spelling's files to the other's
@@ -1331,7 +1381,7 @@ Rules, each with a reason:
     so the job is followed and the library settled the same way; the line under the lists is a
     function of that job (`undoLine`) — "lb-bot is putting … back" only while it is followed,
     then how it ended, and nothing once nobody follows it.
-    Feishin's `artist-merge.ts` is the hand-mirrored twin.
+    Worbus for desktop's `artist-merge.ts` is the hand-mirrored twin.
 - **A failed lb-bot poll is not an answer.** Collapsing it into the default `unknown` state makes
   it indistinguishable from "nothing is filling this". A failed poll goes through `noteError` — the
   row keeps its state and the Downloads page says "Can't reach lb-bot — last checked Ns ago" after
@@ -1356,7 +1406,7 @@ Rules, each with a reason:
   two-disc gap read 1, 2, 1, 2. `gapShowsDisc` is true when some row has `disc > 1`; then
   `gapPositionLabel` writes a row with `disc >= 1` as `<disc>-<position>` ("2-1", no padding)
   and leaves a `disc == 0` row its bare position. Otherwise every row is as it was. Rows are
-  never re-sorted. Both live in `FillVocabulary.kt` (`GapPositionLabelTest`) and are Feishin's
+  never re-sorted. Both live in `FillVocabulary.kt` (`GapPositionLabelTest`) and are Worbus for desktop's
   rule too, mirrored by hand. `MissingTracks` in `GapBox.kt` is the only place a gap row's
   number is printed; its column is 40 dp instead of 28 when discs show ("10-12" measures 27 dp
   in the bundled font). The canonical tracklist of `ExternalAlbumScreen` is another shape
@@ -1386,7 +1436,7 @@ Rules, each with a reason:
   backed off to 30 s — read as 0 it would take the count off the line between polls. The one
   writer keeps the last said value across a silent view (`fillKeepingLeftOut`), except across
   a new search or a view naming another peer, where nothing is shown until a full view says.
-  Only the album picker reads `extraFiles`: the gaps box's cards have no "Download all". Feishin's
+  Only the album picker reads `extraFiles`: the gaps box's cards have no "Download all". Worbus for desktop's
   `album-download.ts` is the hand-mirrored twin.
 - **A cancel is `cancelled`, not a retryable failure.** `canRetry` is false on a cancelled row —
   a cancel is restarted from the album page — and Cancel is offered from the server's own
@@ -1614,12 +1664,12 @@ Library Matches, Downloads and Saved queues are (I-026, I-039), wrapped at their
 
 ### Discover, and the table that is written twice
 
-`ui/screens/discover/DiscoverRows.kt` has a twin in Feishin
+`ui/screens/discover/DiscoverRows.kt` has a twin in Worbus for desktop
 (`renderer/features/discover/discover-rows.ts`). There is no shared build between
 the repos, so the ids are kept in step by hand and are written down in
 `navi-connect/CLAUDE.md` §6. The precedent was `MoodCharacter`, and it is a
 cautionary one: same three presets both sides, matching numbers, different ids,
-and the behaviour has already drifted (Feishin's auto-DJ escalates temperature
+and the behaviour has already drifted (Worbus for desktop's auto-DJ escalates temperature
 per pass; `RadioManager.topUp` did not; since I-040 both read the hub's catalogue
 instead). Change a row id here and there.
 
@@ -1673,10 +1723,10 @@ published concurrently, so last-write-wins is the entire conflict story.
 playing", whose recipe comes from `RadioManager.currentRecipe` — i.e. from whichever
 autoplay mode happens to be on — so `MixKind.GENRE` and `MixKind.ARTIST` were
 **unreachable from this client entirely**. `regenerate` could play them, `MixFormat`
-could label them and the hub validated them; they could only arrive from Feishin.
+could label them and the hub validated them; they could only arrive from Worbus for desktop.
 `ui/screens/mixes/MixFormSheet.kt` was the general path until P5 replaced it with the custom
 radio (§4; the paragraph below is its history): name, kind, and a seed
-picker that fits the kind. It makes four, **in Feishin's order and with Feishin's words**
+picker that fits the kind. It makes four, **in Worbus for desktop's order and with Worbus for desktop's words**
 (B-150, `MixFormKind` in `MixFormKind.kt`; `MixRecipesTest`, `MixFormWordsTest`): Radio
 ("Around a song, steered by your skips and likes": a `station` recipe on the playing track),
 Your mix ("Built from what you play most": a seedless `station`, offered only with the
@@ -1685,7 +1735,7 @@ engine), Genre ("A random run through one genre": the genre's NAME in `seedId` a
 character). An `artist` mix is the artist page's radio (`artistRadioPlan`, shared with
 `startArtistRadio`): a station from up to five of their songs with the engine, Navidrome's
 similar songs after them without it; it used to shuffle the artist's own songs. A genre
-recipe is drawn by name, trying `seedName` after `seedId`, because Feishin wrote the genre's
+recipe is drawn by name, trying `seedName` after `seedId`, because Worbus for desktop wrote the genre's
 id there before B-150 (`genreSeedNames`). `similar`, `fingerprint` and `adaptive` still play
 (as stations when the engine is there: `similar` a track radio on Balanced, the other two
 Your mix) and are no longer made. A station-backed mix has no preview: it is built as it
@@ -1702,7 +1752,7 @@ now — no hub change — stamped from the **seed**, which is a fixed part of th
 and so stays true on a second play, unlike the last regenerated queue's cover.
 `ui/screens/mixes/MixArtwork.kt` is the single renderer both surfaces draw through;
 with no stamped cover it draws a kind glyph over a gradient keyed on `mix.id`.
-**That is a deliberate divergence from Feishin**, whose `mixes-row.tsx` declines to
+**That is a deliberate divergence from Worbus for desktop**, whose `mixes-row.tsx` declines to
 generate anything on the grounds that it "would be a lie about what is inside" —
 true of invented *album art*, and not of an icon naming the kind.
 
@@ -1710,13 +1760,13 @@ true of invented *album art*, and not of an icon naming the kind.
 
 ## 7. Conventions and gotchas
 
-- **Navic files use tabs.** Multi-line edit matches are fragile; prefer matching single bare lines.
+- **Kotlin files here use tabs.** Multi-line edit matches are fragile; prefer matching single bare lines.
 - **There is one `MainActivity`: it is `singleTask`, and a launch intent is handled once (B-181).**
   It was `standard`, and the widgets, the fill notification and a share into the app all name the
   class, so each started a *second* instance on top of the running one: a fresh `[Home]` over the old
   `[Home, Search]`, and Back walked both (B-180's `[Home, Search, Home]`; reproduced 2026-10-22 with
   `adb shell am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT <url>
-  -p paige.navic.debug`, then `dumpsys activity activities` showed two history entries). They now
+  -p app.worbus.android.debug`, then `dumpsys activity activities` showed two history entries). They now
   reach the running instance through `onNewIntent`. `onCreate` hands `intent` to `handleDeepLink`
   only when `savedInstanceState == null`: a rotation or a restore re-enters it with the intent the
   activity was last given, and a link that had already opened its page opened it again.
@@ -2256,7 +2306,7 @@ true of invented *album art*, and not of an icon naming the kind.
   the chips again). Discover's four unowned carousels became one stack with a reason per row
   (`discoverStack`: up to 3 Fresh, 3 similar artists, 2 chart, 2 editorial, dealt round-robin; only reasons
   something backs), above "From your library" (Mixed for You, ListenBrainz, Rediscover, Mood search).
-  `DiscoverRows.kt`'s ids did not change (Feishin's twin). "Add from a link" (New sheet, Search's "Nothing for …")
+  `DiscoverRows.kt`'s ids did not change (Worbus for desktop's twin). "Add from a link" (New sheet, Search's "Nothing for …")
   is paste / looking / failed in one sheet; "Paste from clipboard" reads the clipboard once, on the tap.
 
 - **An unowned album is requested from its own page, in one box (P4).** The missing-album sheet is gone; every way
@@ -2316,7 +2366,7 @@ true of invented *album art*, and not of an icon naming the kind.
     the whole library. The Songs lists (the artist's and the library's, `SongListScreenItem`) draw the artist page's
     rows: rounded segments in a 16 dp gutter, 2 dp apart, on `SongRowDefaults.frostedContainerColor()`.
 
-- **Moods (P7, PROTOCOL §18.5): the catalogue is the hub's, the draw is Navic's.** `MoodManager` reads
+- **Moods (P7, PROTOCOL §18.5): the catalogue is the hub's, the draw is this app's.** `MoodManager` reads
   `GET /sonic/mood/catalogue` (cached in `moodCatalogue`, shown at once, refreshed on every Home visit and every
   `welcome`; a 404 hub offers no chips, a hub that does not answer keeps the cache) and a tile's ranked ids
   (`POST /sonic/mood/list`, one request per tile however many ask, `SingleFlight`). Home draws the hub's ten Home
@@ -2347,9 +2397,12 @@ git push origin navi-connect
   here and in `README.md`, and the dated notes live beside the tree in navi-connect's working
   folder, which is not a git repo.
 - `.github/` is the fork's since Worbus 0.4 (§2 rule 7): `build.yml` builds a debug APK on pull
-  requests and pushes, and on a `v*` tag a signed `assembleRelease` attached to a draft release on
-  this fork, only when the four signing secrets (`KEYSTORE`, `KEY_ALIAS`, `KEY_PASSWORD`,
-  `KEYSTORE_PASSWORD`) exist; without them it logs a notice and does nothing. `checks.yml` validates
+  requests and pushes (artifact `worbus-debug-android`), and on a `v*` tag of
+  `illuminator69/worbus-android` a signed `assembleRelease`, `Worbus-<tag>.apk`, attached to a draft
+  release on this repository, only when the four signing secrets (`KEYSTORE`, `KEY_ALIAS`,
+  `KEY_PASSWORD`, `KEYSTORE_PASSWORD`) exist; without them it logs a notice and does nothing. Before
+  drafting, it compares the APK's certificate with `androidApp/release-cert.sha256` and fails on
+  `unset` or a mismatch (Worbus P5, §3). Releases are tagged `v0.5.0` and on. `checks.yml` validates
   the Gradle wrapper. Upstream's `publish.yml` (TestFlight, AltStore) and `mirror.yml` (Codeberg) are
   deleted. Issues go to the umbrella's tracker (`ISSUE_TEMPLATE/config.yml`, blank issues off). The
   fork's README is at the repo root, which GitHub prefers over `.github/README.md`.

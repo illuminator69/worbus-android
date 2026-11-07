@@ -30,7 +30,7 @@ import app.worbus.domain.models.settings.StationCharacter
  * the same arrangement `SavedQueueFormat.kt` has, and for the same reason: one
  * record, several surfaces, and it must read identically on all of them.
  *
- * Feishin renders the same hub-side list, so these labels are kept deliberately in
+ * Worbus for desktop renders the same hub-side list, so these labels are kept deliberately in
  * step with its own. There is no shared build; see `DiscoverRows.kt`.
  */
 

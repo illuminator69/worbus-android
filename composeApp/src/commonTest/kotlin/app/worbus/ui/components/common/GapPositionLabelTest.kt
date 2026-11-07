@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /*
  * B-071: lb-bot's gap rows carry `disc` since 2026-10-10, and a multi-disc gap listed by
- * position alone reads 1, 2, 1, 2. The rule is Feishin's too, mirrored by hand.
+ * position alone reads 1, 2, 1, 2. The rule is Worbus for desktop's too, mirrored by hand.
  */
 class GapPositionLabelTest {
 	private val json = Json { ignoreUnknownKeys = true }

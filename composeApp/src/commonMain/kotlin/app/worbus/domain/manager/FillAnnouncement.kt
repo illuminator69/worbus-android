@@ -3,11 +3,11 @@ package app.worbus.domain.manager
 import io.ktor.http.encodeURLParameter
 
 /*
- * B-026 (Navic half): what to say about a fill that just settled, and where its
+ * B-026 (Android half): what to say about a fill that just settled, and where its
  * "Open in lb-bot" goes. Read by the snackbar (App.kt) and the system notification
  * (androidApp's FillNotifier), and kept apart from both so the rule is host-tested.
  *
- * Mirrors Feishin's `announcementKindFor` / `announcementLinkPathFor`
+ * Mirrors Worbus for desktop's `announcementKindFor` / `announcementLinkPathFor`
  * (fill-announce-logic.ts) so the two clients say the same thing. A settled `failed`
  * does not always mean nothing arrived. Two roads reach it with the files already
  * sitting in lb-bot, waiting to be filed by hand (PROTOCOL §15.2's needs_match row,

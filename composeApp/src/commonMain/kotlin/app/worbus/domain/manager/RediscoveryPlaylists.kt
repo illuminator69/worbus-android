@@ -18,7 +18,7 @@ import kotlinx.serialization.json.putJsonObject
  *
  * **Server-side on purpose.** These are Navidrome native smart playlists
  * (`POST /api/playlist` with `rules` criteria), so Navidrome keeps them current
- * by itself and *every* Subsonic client sees them — this one, Feishin, and
+ * by itself and *every* Subsonic client sees them — this one, Worbus for desktop, and
  * anything else pointed at the same server. There is no polling, no
  * client-side computation and no second source of truth.
  *

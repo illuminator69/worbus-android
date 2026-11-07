@@ -183,7 +183,7 @@ class AudioMuseManager(
 		if (addIds.isEmpty()) return emptyList()
 		val ep = endpoint() ?: return emptyList()
 
-		// `type` is sent on every item, as Feishin sends it: a default the Json config does not
+		// `type` is sent on every item, as Worbus for desktop sends it: a default the Json config does not
 		// encode was simply absent from the wire, leaving AudioMuse to guess.
 		val items = addIds.map { AlchemyItem(op = "ADD", id = it, type = "song") } +
 			subtractIds.map { AlchemyItem(op = "SUBTRACT", id = it, type = "song") }

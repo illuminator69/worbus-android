@@ -539,7 +539,7 @@ class DbRepository(
 	 * Bring Room up to date with whatever changed in Navidrome, from anywhere.
 	 *
 	 * The lb-bot events only cover fills lb-bot announces, and only while the hub is
-	 * reachable: an album downloaded from lb-bot's own page, a gap filled from Feishin, or
+	 * reachable: an album downloaded from lb-bot's own page, a gap filled from Worbus for desktop, or
 	 * files matched by hand arrived in Navidrome and stayed invisible here until the hourly
 	 * full sync. Worse for a gap fill: the lb-bot row said the album was whole again while
 	 * Room still held the old tracklist, and [syncNewestAlbums] can't see it because the
@@ -646,7 +646,7 @@ class DbRepository(
 	}
 
 	suspend fun syncArtists(): Result<Unit> = runDbOp {
-		// ALBUM artists via getArtists (canonical list, like Feishin). search3
+		// ALBUM artists via getArtists (canonical list, like Worbus for desktop). search3
 		// returns every track/featured artist too — a 7k mess — and its
 		// albumCount is populated for those, so an albumCount filter doesn't
 		// distinguish them. fetchAlbumArtists hits getArtists with a lenient

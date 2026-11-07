@@ -116,7 +116,7 @@ class StationDriverTest {
 
 	@Test
 	fun aChipTapDecidesOnAPausedQueueToo() {
-		// S-035 (Feishin's B-144): a character picked while paused, the queue on its last song,
+		// S-035 (Worbus for desktop's B-144): a character picked while paused, the queue on its last song,
 		// tops it up now, not at the next play.
 		assertEquals(AutoplayStep.Next("st_1", 20), autoplayStep(look(remaining = 0, paused = true, chipTap = true)))
 		assertEquals(AutoplayStep.Start, autoplayStep(look(remaining = 1, paused = true, chipTap = true, bound = null)))

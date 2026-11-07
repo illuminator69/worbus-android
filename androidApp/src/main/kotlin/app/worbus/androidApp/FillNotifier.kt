@@ -17,7 +17,7 @@ import app.worbus.androidApp.R
  *
  * Android-only and deliberately outside `composeApp`: it needs a runtime permission and
  * the platform notification API. The in-app
- * half — a snackbar, which is all that is needed while Navic is in front — lives in
+ * half — a snackbar, which is all that is needed while Worbus is in front — lives in
  * `App.kt` and works whether or not this permission was ever granted.
  *
  * A fill takes minutes: search, transfer, tagging, placement, then Navidrome's own scan.
@@ -26,7 +26,7 @@ import app.worbus.androidApp.R
  *
  * Built on the platform APIs rather than `NotificationCompat` so this module needs no
  * dependency it doesn't already have; the only version gate is the channel, which is
- * API 26 and up while Navic's minSdk is 24.
+ * API 26 and up while the app's minSdk is 24.
  */
 class FillNotifier(private val context: Context) {
 
@@ -61,7 +61,7 @@ class FillNotifier(private val context: Context) {
 		// means we stopped tracking rather than that anything happened — none of the three is
 		// news arriving from elsewhere, which is what a notification is for.
 		//
-		// Text only: the tap still just opens Navic, as Feishin's desktop notification is
+		// Text only: the tap still just opens Worbus, as the desktop app's notification is
 		// text-only too. The in-app snackbar is what carries "Open in lb-bot".
 		val text = when (fillAnnouncementFor(event)) {
 			FillAnnouncement.DONE -> context.getString(R.string.notif_fill_landed, name)

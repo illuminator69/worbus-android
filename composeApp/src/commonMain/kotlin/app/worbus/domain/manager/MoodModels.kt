@@ -9,7 +9,7 @@ import kotlin.random.Random
 
 /*
  * navi-connect P7: Home's moods, as plain functions (`MoodModelsTest`). The catalogue is the hub's
- * (PROTOCOL §18.5, `GET /sonic/mood/catalogue`); the draw is Navic's, because the library's durations
+ * (PROTOCOL §18.5, `GET /sonic/mood/catalogue`); the draw is Worbus's, because the library's durations
  * and what it holds are here and not on the hub. "Mood" already names three older things in this
  * tree (the `MoodCharacter` presets, now `StationCharacter`; the free-text Mood search; AudioMuse's
  * Mood Flow): nothing here touches them, and every name in this file says `Mood…` + a noun of its own.

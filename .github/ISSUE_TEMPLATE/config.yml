@@ -1,7 +1,8 @@
 # Worbus P4: one place for issues. A tester rarely knows which piece is at fault, so every report
 # goes to the umbrella repository, whose bug template asks for the three versions and the logs file.
+# Worbus P5: the umbrella is illuminator69/worbus (renamed from navi-connect at landing).
 blank_issues_enabled: false
 contact_links:
   - name: "Report a problem or an idea (Worbus)"
-    url: https://github.com/illuminator69/navi-connect/issues
-    about: Every Worbus issue lives in one place, the navi-connect repository.
+    url: https://github.com/illuminator69/worbus/issues
+    about: Every Worbus issue lives in one place, the worbus repository.

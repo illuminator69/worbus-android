@@ -216,7 +216,7 @@ class HubFinderTest {
 		probe.asked.clear()
 		assertEquals(emptyList(), f.autoLook(afterLogin = true))
 		assertEquals(emptyList(), probe.asked)
-		// Review M2: the app's gate is a typed or tapped address, whatever Connect says (Navic's
+		// Review M2: the app's gate is a typed or tapped address, whatever Connect says (Worbus's
 		// default is Connect off): a typed address with Connect off is a set server, no look.
 		prefs.hubEnabled = false
 		prefs.hubUrl = "ws://192.168.1.20:4790"

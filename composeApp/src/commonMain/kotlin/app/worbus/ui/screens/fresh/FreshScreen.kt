@@ -302,7 +302,7 @@ private fun open(backStack: MutableList<NavKey>, release: LbFreshRelease) {
  *
  * Owned → the real artist page. Unowned but MusicBrainz-identified → the external
  * one, which renders their discography from lb-bot. Neither → nothing, never a
- * destination that cannot load. The same three-way rule Feishin's tile uses.
+ * destination that cannot load. The same three-way rule Worbus for desktop's tile uses.
  */
 private fun openArtist(backStack: MutableList<NavKey>, release: LbFreshRelease): (() -> Unit)? {
 	if (release.artistOwned && release.artistId.isNotBlank()) {
@@ -428,7 +428,7 @@ private fun bucketLabel(bucket: Int): String = stringResource(
  * One release, as upstream's grid card (`ArtGridItem`) with its cover from the Cover Art Archive:
  * a release nobody owns has no Navidrome art, and plenty of release-groups have no front cover at
  * all, which `RemoteCoverArt` falls back from rather than showing a broken image. The artist name
- * is its own link wherever there is somewhere for it to go, as Feishin's tile has always had it.
+ * is its own link wherever there is somewhere for it to go, as Worbus for desktop's tile has always had it.
  */
 @Composable
 private fun FreshTile(

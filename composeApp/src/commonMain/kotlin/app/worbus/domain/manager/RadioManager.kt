@@ -1040,7 +1040,7 @@ class RadioManager(
 
 	/**
 	 * Resolve a CLAP text→mood search (AudioMuse Tier 2) to playable songs WITHOUT
-	 * playing — the UI shows them as a proposed queue (Feishin-style) so the user
+	 * playing — the UI shows them as a proposed queue (desktop-style) so the user
 	 * can review and choose to play ([playMoodMix]) or enqueue. The caller gates the
 	 * UI on [AudioMuseManager.isClapAvailable].
 	 */
@@ -1562,7 +1562,7 @@ class RadioManager(
 
 	/**
 	 * A `station` frame that moves the bound station's cursor while this device asked nothing is
-	 * another device's top-up (Feishin's `stationFrame` rule): this device waits for that batch
+	 * another device's top-up (Worbus for desktop's `stationFrame` rule): this device waits for that batch
 	 * rather than asking from the new cursor and adding a second one.
 	 */
 	private fun observeElsewhere() {

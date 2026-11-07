@@ -44,7 +44,7 @@ fun importsRow(page: AttentionPage.Rows, link: String?): ImportsRow? =
 fun serverVersionShown(version: String?): String? = version?.trim()?.ifEmpty { null }
 
 /**
- * Worbus P4, ruling R16 (one rule with Feishin): the version of the server on the live socket, and
+ * Worbus P4, ruling R16 (one rule with Worbus for desktop): the version of the server on the live socket, and
  * nothing else. Set from each `welcome`; cleared when the socket to that server closes, on stop and
  * on restart, and when another server answers. So the Server screen's line and the logs header say
  * "server version unknown" until the next welcome, never the version of a server that is not

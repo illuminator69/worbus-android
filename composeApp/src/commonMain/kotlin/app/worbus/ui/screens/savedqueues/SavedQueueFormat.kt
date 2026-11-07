@@ -22,7 +22,7 @@ import kotlinx.coroutines.isActive
 
 /**
  * Display rules for saved queues, shared by the Saved Queues screen, the home "Continue listening"
- * row and the preview sheet — the Kotlin twin of Feishin's `saved-queue-format.ts`. Kept in one place
+ * row and the preview sheet — the Kotlin twin of Worbus for desktop's `saved-queue-format.ts`. Kept in one place
  * and in step with that file, because the two clients render one shared history: a record must read
  * the same wherever it appears.
  */
@@ -43,7 +43,7 @@ fun queueKindLabel(kind: String): String = when (kind) {
  * Names of the shape "Queue · 12 tracks" that older builds SYNTHESIZED and then stored as a real
  * source name. They go stale as soon as the queue is edited and they duplicate the subtitle word for
  * word. Nothing writes them any more; this hides the ones already in the history (including the ones
- * that arrived from Feishin before it stopped writing them).
+ * that arrived from Worbus for desktop before it stopped writing them).
  */
 private val SYNTHESIZED_NAME =
 	Regex("""^(Album|Journey|Manual|Mood Flow|Playlist|Queue|Radio) · \d+ (songs?|tracks?)$""")

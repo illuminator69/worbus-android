@@ -36,11 +36,11 @@ class MainActivity : ComponentActivity() {
 	private var volumePressAtMs = 0L
 
 	/**
-	 * While another device plays, a volume button pressed in Navic is that device's, and Navic
+	 * While another device plays, a volume button pressed in Worbus is that device's, and Worbus
 	 * draws the level itself (`RemoteVolumeHud`). Taken here, before the system sees it, so that
 	 * what happens does not depend on whether this Android version draws a slider for a remote
 	 * session: some do and some do not. A sheet or a dialog is a window of its own and does not
-	 * pass through here; there the session, declared remote while Navic is on screen, gets the
+	 * pass through here; there the session, declared remote while Worbus is on screen, gets the
 	 * press (`VolumeKeys.kt`).
 	 */
 	override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
 		// Delivered from the manager's own `settle`, so a fill that settles while the
 		// process is alive but this activity is stopped is announced then and there.
 		// In the foreground the snackbar in `App.kt` is the announcement, and the
-		// system notification is deliberately skipped — the same rule Feishin uses —
+		// system notification is deliberately skipped — the same rule Worbus for desktop uses —
 		// so the user is not told twice. The row is still marked delivered.
 		lbBot.notificationSink = { event ->
 			if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) notifier.notify(event)

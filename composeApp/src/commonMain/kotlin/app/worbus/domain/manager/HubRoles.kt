@@ -78,7 +78,7 @@ fun fingerprintRouteAllowed(viaHub: Boolean, signedIn: Boolean): Boolean = viaHu
 enum class LbAccess {
 	OPEN,
 
-	/** 401 `signin_required`: lb-bot refused the server (Feishin's `lbRefused`). Its surfaces render nothing. */
+	/** 401 `signin_required`: lb-bot refused the server (Worbus for desktop's `lbRefused`). Its surfaces render nothing. */
 	REFUSED,
 
 	/** 503 `lbbot_too_old` from the hub: lb-bot is too old for signed-in users. Rendered as unavailable. */

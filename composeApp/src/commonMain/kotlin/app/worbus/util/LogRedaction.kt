@@ -5,7 +5,7 @@ package app.worbus.util
  * screen's Share logs file and its copy, and the crash screen's report. Applied per line; each
  * secret's value becomes [LOG_REDACTION_MARK], its name stays so the line still says what it was.
  *
- * The rule and its vectors are shared with Feishin (the controller's `RULE.md` and
+ * The rule and its vectors are shared with Worbus for desktop (the controller's `RULE.md` and
  * `redaction-vectors.json`, ruling R2, v2 by ruling R14; `LogRedactionTest` holds them verbatim).
  * In order:
  *  a'. the same field inside escaped JSON (a JSON document carried as a string, its quotes written

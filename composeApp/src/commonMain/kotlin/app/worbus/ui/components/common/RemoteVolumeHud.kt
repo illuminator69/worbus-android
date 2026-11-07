@@ -40,7 +40,7 @@ private const val HUD_LINGER_MS = 1_800L
 
 /**
  * The app's own volume bar for the device that is playing, shown when the phone's volume
- * buttons move that device's level while Navic is on screen (`VolumeKeys.kt`). Not every
+ * buttons move that device's level while Worbus is on screen (`VolumeKeys.kt`). Not every
  * Android build draws a slider for a remote session, and the app's own window takes the press
  * before the system sees it, so this is the one place the level is shown.
  *

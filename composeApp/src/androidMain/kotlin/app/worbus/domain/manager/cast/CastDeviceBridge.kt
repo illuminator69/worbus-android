@@ -61,7 +61,7 @@ private const val TAG = "CastBridge"
 private const val INITIAL_BACKOFF_MS = 1_000L
 private const val MAX_BACKOFF_MS = 30_000L
 
-/** Position reporting cadence while playing, matching Feishin's ticker. */
+/** Position reporting cadence while playing, matching Worbus for desktop's ticker. */
 private val TICK_INTERVAL = 1.seconds
 
 /**
@@ -142,7 +142,7 @@ private data class BridgeTrack(
 /**
  * A Chromecast registered with the hub as its own virtual receiver.
  *
- * This is a port of Feishin's `CastDeviceBridge` (`feishin/src/main/features/core/cast/index.ts`),
+ * This is a port of Worbus for desktop's `CastDeviceBridge` (`feishin/src/main/features/core/cast/index.ts`),
  * and intentionally so: the safeguards in here are not speculative hardening, they are the residue
  * of bugs already found in the field and written up in `SESSION-2026-08-08-v1.15.1-merge.md`.
  * Where this diverges from that file, it is a bug.
@@ -402,7 +402,7 @@ internal class CastDeviceBridge(
 			markDisconnected()
 			if (destroyed) return
 			if (superseded) {
-				// Someone else (almost certainly Feishin's bridge) owns this speaker. Reconnecting
+				// Someone else (almost certainly Worbus for desktop's bridge) owns this speaker. Reconnecting
 				// would kick them off, they would kick us back, and the two clients would flap
 				// forever. Stand down and let the manager decide when to try again.
 				Logger.i(TAG, "$friendlyName: superseded by another bridge — standing down")
@@ -418,8 +418,8 @@ internal class CastDeviceBridge(
 			// Back through arbitration, not straight to connectOnce(). The hub closes the previous
 			// socket with 4003 on ANY re-registration of a device id (hub.py `_register`), so a
 			// blind reconnect evicts whoever took the speaker while we were away — which is exactly
-			// how Navic won every race and Feishin logged `superseded` each time this socket blipped.
-			// Feishin has always routed reconnects through its claim check; this is the missing half.
+			// how Worbus won every race and Worbus for desktop logged `superseded` each time this socket blipped.
+			// Worbus for desktop has always routed reconnects through its claim check; this is the missing half.
 			// Checked AFTER the backoff, so it reads the freshest device list the hub has sent us.
 			if (claimedElsewhere()) {
 				Logger.i(TAG, "$friendlyName: claimed by another client while we were away — standing down")
@@ -561,7 +561,7 @@ internal class CastDeviceBridge(
 					releasing = false
 					tracks = msg["tracks"]?.jsonArray?.toTracks() ?: emptyList()
 					index = msg["index"]?.jsonPrimitive?.int ?: 0
-					// Honour `play`. Never load-playing-then-pause: in Feishin the async play
+					// Honour `play`. Never load-playing-then-pause: in Worbus for desktop the async play
 					// could land after the pause, leaving audio running under a store that read
 					// PAUSED — and since engines act on status *changes*, every later pause,
 					// ours or the user's, became a no-op.
@@ -727,7 +727,7 @@ internal class CastDeviceBridge(
 			if (transferId != null) put("transferId", transferId)
 		})
 
-		// PAUSE, not STOP — parity with Feishin's bridge, and for the reason measured there:
+		// PAUSE, not STOP — parity with Worbus for desktop's bridge, and for the reason measured there:
 		// STOP ends the media session and takes the receiver app down with it, and every
 		// LAUNCH that followed a release-with-stop was answered LAUNCH_ERROR: CANCELLED.
 		// Releasing only has to stop the sound; leaving the app up means the next do:load
@@ -1077,7 +1077,7 @@ internal class CastDeviceBridge(
 	 *
 	 * Fires in two cases. The obvious one is the hub still naming us active. The important one is
 	 * an ORPHANED session — the hub relinquishes the active slot whenever the active device drops,
-	 * so after Navic restarts `activeDeviceId` is already null. Gating on "still ours" meant this
+	 * so after Worbus restarts `activeDeviceId` is already null. Gating on "still ours" meant this
 	 * never fired in the one case it was written for, and a speaker that was audibly still playing
 	 * was treated as stopped by every client.
 	 */
@@ -1148,7 +1148,7 @@ internal class CastDeviceBridge(
 	private suspend fun adoptRunningSession(claim: Boolean) {
 		// Join-only. Adoption asks a question — "is this speaker still playing our session?" — and
 		// launching the receiver to ask it makes the answer no: LAUNCH seizes the audio output, so
-		// a speaker happily playing over Bluetooth fell silent every time Navic started, with
+		// a speaker happily playing over Bluetooth fell silent every time Worbus started, with
 		// nothing taking its place. If the Default Media Receiver isn't already up, there is by
 		// definition nothing of ours to adopt.
 		val ch = ensureCast(allowLaunch = false) ?: run {
@@ -1283,7 +1283,7 @@ private fun kotlinx.serialization.json.JsonPrimitive.contentOrNullSafe(): String
  * Comparing whole URLs looked equivalent and was not. The URL carries a salted auth token and
  * transcoding parameters, so rotating credentials, changing the bitrate setting, or simply having
  * been published by the other client all produce a different string for the same song — and every
- * ownership check that depended on it silently answered "not ours". Feishin fixed this
+ * ownership check that depended on it silently answered "not ours". Worbus for desktop fixed this
  * (`streamIdentity` in `cast/index.ts`); this is the same rule, which CLAUDE.md §3 already states
  * as the rule for both bridges.
  */
@@ -1337,7 +1337,7 @@ internal fun castBridgeHello(
 		credential?.let { putHelloCredential(it) }
 		put("device", buildJsonObject {
 			put("id", hubDeviceId)
-			// The speaker's own name, bare, as Feishin's bridge sends it: the same
+			// The speaker's own name, bare, as Worbus for desktop's bridge sends it: the same
 			// speaker reads identically whichever client is bridging it. What it is
 			// goes in `kind`, and a picker draws that (PROTOCOL §12.2).
 			put("name", friendlyName)

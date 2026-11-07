@@ -13,7 +13,7 @@ import kotlinx.serialization.serializer
  * the kept name — and keeps the previous tags, so it can be undone — when both entries resolve
  * to the same MusicBrainz artist. Folders are not renamed; what changes is what Navidrome lists.
  *
- * Feishin's `artist-merge.ts` is this file's twin, mirrored by hand.
+ * Worbus for desktop's `artist-merge.ts` is this file's twin, mirrored by hand.
  */
 
 // ----- wire shapes --------------------------------------------------------------------------
@@ -550,7 +550,7 @@ sealed interface MergeLeave {
 }
 
 /**
- * Where a screen showing artist [shownArtistId] goes when [job] has ended. Feishin's
+ * Where a screen showing artist [shownArtistId] goes when [job] has ended. Worbus for desktop's
  * `decideMergeLeave`, decided on ids.
  *
  * Only a merge that LANDED kills an id — the rewritten spelling's — and only a page showing that
@@ -561,7 +561,7 @@ sealed interface MergeLeave {
  * the page was opened, not when it was last drawn — the screen keeps it with its back-stack
  * entry, so a page that was under another one when the merge ended still moves.
  *
- * A merge that ended `merged` WITH failures moves the page too, as Feishin's does: most of the
+ * A merge that ended `merged` WITH failures moves the page too, as Worbus for desktop's does: most of the
  * artist is under the kept name now, and what is left is reachable from the artist list.
  */
 internal fun mergeLeave(job: MergeJobState, shownArtistId: String, onScreenSinceMs: Long): MergeLeave {

@@ -103,13 +103,13 @@ import app.worbus.ui.screens.savedqueues.viewmodels.SavedQueuesViewModel
 import kotlinx.coroutines.isActive
 
 /**
- * The Symfonium-style "select media queue" list: every queue Navic has auto-captured (rolling cache
+ * The Symfonium-style "select media queue" list: every queue Worbus has auto-captured (rolling cache
  * of the 20 most recent), most-recent first, with the one playing right now pinned to the top and
  * marked. A chip row filters by how the queue was made (album / playlist / radio / Mood Flow /
  * journey / manual). Tapping a row restores it PAUSED where it left off; a per-row overflow previews
  * its tracks, resumes it playing, saves it as a Navidrome playlist, renames, or deletes.
  *
- * The history itself is shared through the hub, so this screen and Feishin's are two views of one
+ * The history itself is shared through the hub, so this screen and Worbus for desktop's are two views of one
  * list — which is why the presentation (art, three lines, "Now playing", preview, clear all) is kept
  * deliberately in step with it.
  */

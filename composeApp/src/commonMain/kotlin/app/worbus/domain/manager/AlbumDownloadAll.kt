@@ -15,7 +15,7 @@ package app.worbus.domain.manager
  * - `leftOut` on the fill view → the status line (`leftOutPart` in `FillVocabulary.kt`), kept
  *   across the views that do not say it ([fillKeepingLeftOut]).
  *
- * Pure, so `AlbumDownloadAllTest` runs it against the contract's own bodies. Feishin's
+ * Pure, so `AlbumDownloadAllTest` runs it against the contract's own bodies. Worbus for desktop's
  * `album-download.ts` is the hand-mirrored twin.
  */
 

@@ -53,6 +53,12 @@ extensions.configure<ApplicationExtension> {
 	buildTypes {
 		val isRelease = true
 		val hasReleaseSigning = System.getenv("SIGNING_STORE_PASSWORD")?.isNotEmpty() == true
+		// Worbus P5 (design §6.6): the release key lives only on the workstation, so a release built
+		// anywhere else is debug-signed. Say so once, so such an APK is never taken for a release one.
+		// The real key's certificate is recorded in release-cert.sha256 (build.yml checks it).
+		if (isTaskRelease && !hasReleaseSigning) {
+			logger.warn("Worbus release APK signed with the DEBUG key (SIGNING_* unset): not for distribution")
+		}
 
 		getByName("release") {
 			isMinifyEnabled = true

@@ -5,11 +5,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 /*
- * Q-031 (Navic half): lb-bot reports `picking` for two buckets — the picker holding candidates and
+ * Q-031 (Android half): lb-bot reports `picking` for two buckets — the picker holding candidates and
  * waiting on the user ("your move"), and its needs_match bucket, files already `downloaded` and
  * waiting on a manual match only lb-bot's own workspace can do. `gapSettle` is the mapping
  * applyGapSummary writes to the ledger when a gap stops being busy, and `gapLedgerState` the row's
- * state while it is polled. Mirrors Feishin's `gapSettleOutcome` (fill-announce-logic.ts): the
+ * state while it is polled. Mirrors Worbus for desktop's `gapSettleOutcome` (fill-announce-logic.ts): the
  * needs_match bucket settles the same way a stalled placement and an album fill's needs_match
  * already do — failed, at needs_match — so it is announced "Downloaded X — needs sorting out in
  * lb-bot" and the Download Center row reads the needs_match wording, not "Waiting for you to pick a
@@ -93,7 +93,7 @@ class GapSettleTest {
 	fun aTransferInFlightIsNeverReadAsAPendingMatch() {
 		// A fetch on a gap that already holds a `downloaded` track: lb-bot queues the new tracks
 		// before it flips the status off `picking`, so for a tick or two the group reads `picking`
-		// + `downloaded` + `queued`. Nothing it says is final while a transfer runs (Feishin's
+		// + `downloaded` + `queued`. Nothing it says is final while a transfer runs (Worbus for desktop's
 		// gapIsBusy never settles it), and reading it as needs_match would announce "Downloaded X
 		// — needs sorting out" at the start of a fetch. A transfer in flight is never a reason to
 		// stop: lb-bot ranks a failed or needs_match bucket above it, so gapSettle must not fire

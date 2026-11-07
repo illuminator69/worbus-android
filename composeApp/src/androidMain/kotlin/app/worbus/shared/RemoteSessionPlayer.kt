@@ -216,7 +216,7 @@ class RemoteSessionPlayer(
 		}
 		// Presses taken by the app's own window (`MainActivity.dispatchKeyEvent`) step here too.
 		hubManager.remoteVolumePress = { direction -> pressVolume(direction * VOLUME_STEP) }
-		// Navic left the screen, came back, or the phone was locked: the buttons change hands.
+		// Worbus left the screen, came back, or the phone was locked: the buttons change hands.
 		scope.launch {
 			volumeKeysGoRemote.collect { invalidateIfShown() }
 		}

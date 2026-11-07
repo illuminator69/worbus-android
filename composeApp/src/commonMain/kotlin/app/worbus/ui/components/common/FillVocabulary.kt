@@ -51,9 +51,9 @@ import app.worbus.ui.components.sheets.lbUnavailableRes
  *
  * One state renders the same words and offers the same buttons everywhere a fill
  * is shown — the Downloads page, the missing-album sheet, the discography tile —
- * and in Feishin, which implements the same table in `fill-vocabulary.ts`. There
+ * and in Worbus for desktop, which implements the same table in `fill-vocabulary.ts`. There
  * is no shared build between the two clients, so the table in PROTOCOL is the
- * contract and this file is Navic's copy of it. Change one, change all three.
+ * contract and this file is Worbus's copy of it. Change one, change all three.
  *
  * Pure: the same row and the same clock give the same answer, which is what makes
  * the table checkable against the protocol by reading rather than by driving the UI.
@@ -134,7 +134,7 @@ fun runningHeadline(state: String, done: Int, total: Int, verifyGaveUp: Boolean 
  *
  * Said where a status line for an album download already exists, and only there: while the
  * album downloads, as one more part of the line, and once it is in the library, as the line.
- * Feishin's `leftOutText` and its two uses in `fill-vocabulary.ts` are the mirror.
+ * Worbus for desktop's `leftOutText` and its two uses in `fill-vocabulary.ts` are the mirror.
  */
 fun leftOutPart(leftOut: Int): FillText? =
 	if (leftOut > 0) FillText.Counted(Res.plurals.lbbot_fill_left_out, leftOut) else null
@@ -266,7 +266,7 @@ fun describeFill(
 /**
  * Q-037: a gap track's `state` (lb-bot's `_TRACK_STATE_BY_DECISION`, PROTOCOL §15.2) as words —
  * the sheet printed the raw lowercase token beside the one it did translate ("Cancelled").
- * Mirrors Feishin's `TRACK_LABEL`. Null for a token this build doesn't know.
+ * Mirrors Worbus for desktop's `TRACK_LABEL`. Null for a token this build doesn't know.
  */
 fun gapTrackStateLabel(state: String): StringResource? = when (state) {
 	"missing" -> Res.string.lbbot_track_missing
@@ -287,7 +287,7 @@ fun gapTrackStateLabel(state: String): StringResource? = when (state) {
  * two-disc gap read 1, 2, 1, 2. A single-disc gap, and one whose discs are not known (`disc` 0,
  * or no field from an older lb-bot), is numbered as it always was.
  *
- * Mirrors Feishin's `gapShowsDisc` / `gapPositionLabel`; the two must not drift.
+ * Mirrors Worbus for desktop's `gapShowsDisc` / `gapPositionLabel`; the two must not drift.
  */
 fun gapShowsDisc(tracks: List<LbGapTrack>): Boolean = tracks.any { it.disc > 1 }
 

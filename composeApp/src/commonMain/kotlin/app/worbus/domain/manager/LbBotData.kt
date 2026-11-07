@@ -652,7 +652,7 @@ internal fun pendingActionTitle(itemId: String, titles: Map<String, String>): St
  * to say there are none. With nothing loaded at all there is no section either: the overrides
  * list above already says lb-bot is being asked, is out of reach, or is older. And [controls]
  * — the hub offers the route the rows' Undo goes through — because a list whose every button
- * can only fail is not one to show (Feishin gates the same two sections the same way).
+ * can only fail is not one to show (Worbus for desktop gates the same two sections the same way).
  */
 internal fun overrideListShown(data: LbPanelData, rows: List<*>?, controls: Boolean = true): Boolean =
 	controls && rows != null && (data == LbPanelData.STALE || data == LbPanelData.CURRENT)

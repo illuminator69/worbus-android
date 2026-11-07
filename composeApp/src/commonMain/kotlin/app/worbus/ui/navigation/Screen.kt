@@ -264,7 +264,7 @@ sealed interface Screen : NavKey {
 	 * Fresh, "fans also like", the rediscovery set and mood search were each
 	 * reachable from somewhere different and each invented its own empty state.
 	 * The rows come from [app.worbus.ui.screens.discover.DISCOVER_ROWS], whose
-	 * ids are duplicated in Feishin on purpose. A tab, hence [nested].
+	 * ids are duplicated in Worbus for desktop on purpose. A tab, hence [nested].
 	 */
 	@Immutable
 	@Serializable

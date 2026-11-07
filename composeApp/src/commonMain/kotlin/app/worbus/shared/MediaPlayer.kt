@@ -896,7 +896,7 @@ abstract class MediaPlayerViewModel(
 	 * The random suffix is not decoration: the hub's union-merge is keyed purely by id, so two devices
 	 * that started a queue in the same millisecond used to mint the same `q_<t>_0` and have two
 	 * unrelated listening sessions silently fused into one record. The hub (`os.urandom(3).hex()`) and
-	 * Feishin (`crypto.randomUUID()`) both carry entropy for the same reason.
+	 * Worbus for desktop (`crypto.randomUUID()`) both carry entropy for the same reason.
 	 */
 	@OptIn(ExperimentalTime::class)
 	protected fun newSessionId(): String =
@@ -907,7 +907,7 @@ abstract class MediaPlayerViewModel(
 	 * The saved-queue session id for [songs]: the id of the record we ALREADY have for this queue when
 	 * one exists, else a fresh one. Without the lookup every replay of the same album, every relaunch
 	 * and every restore minted another near-identical history card until the 20-row cache was nothing
-	 * but duplicates. Feishin does the same (`findMatchingSavedQueueId`), so both clients converge on
+	 * but duplicates. Worbus for desktop does the same (`findMatchingSavedQueueId`), so both clients converge on
 	 * one record per listening session.
 	 *
 	 * Synchronous by design — the queue-REPLACE paths that call it are not suspending, which is why
@@ -928,7 +928,7 @@ abstract class MediaPlayerViewModel(
 	 * queue itself. Used when the record the live queue was writing into disappears (the user deleted
 	 * it, or cleared the whole history): without this the session id points at nothing, the publish
 	 * dedupe means nothing re-mints, and what you are listening to has no card until you play something
-	 * else. Feishin's `restartQueueSession` does the same.
+	 * else. Worbus for desktop's `restartQueueSession` does the same.
 	 */
 	fun restartQueueSession() {
 		val state = _uiState.value

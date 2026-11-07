@@ -130,7 +130,7 @@ class NativeApiManager(
 	 *
 	 * Navidrome's native `artist_id` filter is a participation filter, which is the whole reason
 	 * this exists: Subsonic's `getArtist` returns only albums the artist is credited on as ALBUM
-	 * artist, so a record they merely guest on is unreachable through the bundled client. Feishin's
+	 * artist, so a record they merely guest on is unreachable through the bundled client. Worbus for desktop's
 	 * "Appears on" is the same query (`artistIds` -> `artist_id=`) with the album-artist rows
 	 * subtracted afterwards.
 	 *

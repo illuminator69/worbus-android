@@ -5363,7 +5363,7 @@ internal data class GapProgress(val done: Int, val total: Int, val percent: Int,
  * the notification verbatim before this ordering (B-026) — "Couldn't get Help!: download_failed".
  * `noSourceReason` is the attributable one ("103 peers offered 2,047 files, but none in FLAC…") and
  * is what makes the Allow-MP3 offer make sense; the task error is the fallback for a search that
- * itself broke. Mirrors Feishin's `gap.failDetail || gap.failReason || gap.noSourceReason ||
+ * itself broke. Mirrors Worbus for desktop's `gap.failDetail || gap.failReason || gap.noSourceReason ||
  * gap.sourceTask?.error`.
  */
 internal fun gapReason(gap: LbGap): String = when {
@@ -5379,7 +5379,7 @@ internal fun gapLedgerProgress(gap: LbGap): GapProgress {
 	return GapProgress(
 		done = done,
 		total = total,
-		// Round half up in integer arithmetic to match Feishin's Math.round(done * 100 / wanted)
+		// Round half up in integer arithmetic to match Worbus for desktop's Math.round(done * 100 / wanted)
 		// — Math.round takes .5 and up, and a floor read 2-of-3 as 66 rather than 67.
 		percent = if (total == 0) 0 else (done * 200 + total) / (2 * total),
 		failed = gap.tracksFailed
@@ -5395,7 +5395,7 @@ internal fun gapLedgerProgress(gap: LbGap): GapProgress {
  *  - Q-031: a `picking` gap with a `downloaded` track ([LbGap.awaitingMatch]) — lb-bot's
  *    needs_match bucket, which read "Waiting for you to pick a source".
  * A `state`, not an lb-bot status: `needs_match` is never a gap status, exactly as the stalled
- * case already reused it. The second case is gated on nothing being in flight, as Feishin's
+ * case already reused it. The second case is gated on nothing being in flight, as Worbus for desktop's
  * gapIsBusy gates its settle: a search ([searching]) flips the group to `picking` before it has
  * found anything, and a fetch ([transferring]) queues its tracks before lb-bot moves the status
  * off `picking` — on a gap already holding a `downloaded` track, that window would otherwise
@@ -5409,7 +5409,7 @@ internal data class GapSettle(val outcome: String, val state: String)
 
 /**
  * The settle mapping `applyGapSummary` writes for a gap in [LbBotManager.TERMINAL_GAP_STATES];
- * `null` for any other status. Mirrors Feishin's `gapSettleOutcome` (fill-announce-logic.ts):
+ * `null` for any other status. Mirrors Worbus for desktop's `gapSettleOutcome` (fill-announce-logic.ts):
  * the needs_match cases settle `failed` at `needs_match`, the shape an album fill's needs_match
  * already has, so `fillAnnouncementFor` says "Downloaded X — needs sorting out in lb-bot" and the
  * Download Center row takes FillVocabulary's needs_match branch. A `picking` gap with nothing
@@ -5423,7 +5423,7 @@ internal data class GapSettle(val outcome: String, val state: String)
  * on the very first poll of a fill whose other tracks are still `queued`/`downloading`. The poll
  * loop only re-polls `!settled || retryAt > 0`, and a gap never sets `retryAt`, so settling here
  * while [transferring] is true would be permanent — the running fill is never watched again.
- * Mirrors Feishin's `gapIsBusy`.
+ * Mirrors Worbus for desktop's `gapIsBusy`.
  */
 internal fun gapSettle(gap: LbGap, searching: Boolean, transferring: Boolean): GapSettle? {
 	if (gap.status !in LbBotManager.TERMINAL_GAP_STATES) return null

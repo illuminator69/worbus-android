@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 class VolumeKeysTest {
 	@Test
 	fun theButtonsAreThePlayingDevicesOnlyWhereNothingElseCanMeanThem() {
-		// Navic in front: it draws the level itself.
+		// Worbus in front: it draws the level itself.
 		assertTrue(volumeKeysGoRemote(appOnScreen = true, phoneLocked = false))
 		// Locked, in a pocket: no other app in front, nothing local to turn down.
 		assertTrue(volumeKeysGoRemote(appOnScreen = false, phoneLocked = true))

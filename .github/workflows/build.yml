@@ -1,10 +1,12 @@
 name: Build
 
 # Worbus P4 (design §6.9): Android only. Pull requests and branch pushes build a debug APK; a `v*`
-# tag builds a signed release APK and attaches it to a DRAFT release on this fork. The signed job is
-# inert until the four signing secrets exist (KEYSTORE, KEY_ALIAS, KEY_PASSWORD, KEYSTORE_PASSWORD):
-# it says so in the log and stops green, and releases stay workstation-built until then.
-# Nothing here publishes anywhere but this fork.
+# tag builds a signed release APK and attaches it to a DRAFT release on this repository. The signed
+# job is inert until the four signing secrets exist (KEYSTORE, KEY_ALIAS, KEY_PASSWORD,
+# KEYSTORE_PASSWORD): it says so in the log and stops green, and releases stay workstation-built.
+# Worbus P5 (design §6.6): before drafting, the built APK's certificate must be the release key's,
+# whose SHA-256 is recorded in androidApp/release-cert.sha256; while that file says `unset`, or on a
+# mismatch, the job fails and nothing is drafted. Nothing here publishes anywhere but this repository.
 
 on:
   push:
@@ -67,14 +69,14 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v6
         with:
-          name: navic-debug-android
+          name: worbus-debug-android
           path: ./*.apk
           compression-level: 0
           if-no-files-found: error
 
   release:
     name: Android (signed release)
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.repository == 'illuminator69/navic-gaps' }}
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.repository == 'illuminator69/worbus-android' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -123,14 +125,37 @@ jobs:
           trap 'rm -f release.keystore' EXIT
           printf '%s' "$KEYSTORE" | base64 -d > release.keystore
           ./gradlew :androidApp:assembleRelease --stacktrace
-          mv androidApp/build/outputs/apk/release/Navic.apk "./Navic-${GITHUB_REF_NAME}.apk"
+          mv androidApp/build/outputs/apk/release/Worbus.apk "./Worbus-${GITHUB_REF_NAME}.apk"
 
-      - name: Create draft release on this fork
+      # A wrong-key APK is never published: the certificate must be the one recorded in the repo.
+      - name: Check the APK's certificate against release-cert.sha256
+        if: steps.signing.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          want="$(tr -d '[:space:]' < androidApp/release-cert.sha256)"
+          if [ "$want" = "unset" ]; then
+            echo "::error::androidApp/release-cert.sha256 says unset: the release key's fingerprint is not recorded, so no release is drafted."
+            exit 1
+          fi
+          if ! printf '%s' "$want" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "::error::androidApp/release-cert.sha256 is not 64 lower-case hex characters."
+            exit 1
+          fi
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          got="$("$apksigner" verify --print-certs "./Worbus-${GITHUB_REF_NAME}.apk" \
+            | sed -n 's/.*certificate SHA-256 digest: *//p' | tr -d ': ' | tr 'A-F' 'a-f' | sort -u)"
+          if [ "$got" != "$want" ]; then
+            echo "::error::The APK is signed by ${got:-nothing readable}, not the release key ${want}. No release is drafted."
+            exit 1
+          fi
+          echo "The APK's certificate is the release key's (${want})."
+
+      - name: Create draft release on this repository
         if: steps.signing.outputs.ok == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "./Navic-${GITHUB_REF_NAME}.apk" \
+          gh release create "$GITHUB_REF_NAME" "./Worbus-${GITHUB_REF_NAME}.apk" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
             --draft --generate-notes

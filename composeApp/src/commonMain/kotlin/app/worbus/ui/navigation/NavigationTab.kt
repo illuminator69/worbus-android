@@ -189,7 +189,7 @@ fun rememberVisibleNavigationTabs(): List<NavigationTab> {
 	// which is the exact shape of the bug the lb-bot gate above is written to avoid,
 	// where the tab blinks out for the length of a round trip. A configured hub that
 	// is momentarily down costs a list that repopulates a second later; the recipes
-	// themselves still regenerate locally, since the engine is local. (Feishin gates
+	// themselves still regenerate locally, since the engine is local. (Worbus for desktop gates
 	// its equivalent on the live connection — that client reconnects differently, and
 	// the divergence is deliberate rather than drift.)
 	val hubConfigured = koinInject<HubManager>().isServerSet()

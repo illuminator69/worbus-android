@@ -245,7 +245,7 @@ class SessionManager(
 
 	/**
 	 * ALBUM artists via Subsonic `getArtists` (the canonical album-artist list,
-	 * matching Feishin's "Album Artists"). search3 returns every track/featured
+	 * matching Worbus for desktop's "Album Artists"). search3 returns every track/featured
 	 * artist too (a 7k mess), and the bundled library's getArtists deserializer
 	 * silently drops index groups — so this is a raw, lenient parse of all
 	 * `index[].artist[]` entries.
@@ -291,7 +291,7 @@ class SessionManager(
 	 *    changes the call site and nothing else.
 	 *
 	 * The ID3 endpoint also returns full `similarArtist[]` entries rather than
-	 * bare ids, which is what has limited Navic's similar artists to the ones that
+	 * bare ids, which is what has limited Worbus's similar artists to the ones that
 	 * happen to be in the library.
 	 *
 	 * Lenient parse throughout: `biography` is HTML from whichever agent Navidrome

@@ -45,7 +45,7 @@ class GapLedgerProgressTest {
 
 	@Test
 	fun percentRoundsHalfUpLikeFeishinsMathRound() {
-		// Feishin's gapProgress is Math.round(done * 100 / wanted); 2 of 3 is 66.67 and Math.round
+		// Worbus for desktop's gapProgress is Math.round(done * 100 / wanted); 2 of 3 is 66.67 and Math.round
 		// takes .5 and up, so it reads 67, not the 66 a floor gives.
 		val g = gap("downloaded", "downloaded", "downloading")
 		val progress = gapLedgerProgress(g)

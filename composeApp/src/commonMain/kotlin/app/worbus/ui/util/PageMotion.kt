@@ -34,7 +34,7 @@ data class PageMotion(
 /** Which of [Material3Transitions]' easings the incoming page uses. */
 enum class PageEasing { Emphasized, EmphasizedDecelerate }
 
-/** Expressive and Standard: what Navic has always done (450/500 ms from half the width). */
+/** Expressive and Standard: what Worbus has always done (450/500 ms from half the width). */
 val DefaultPageMotion = PageMotion(
 	enterFadeMs = 450,
 	enterSlideMs = 500,

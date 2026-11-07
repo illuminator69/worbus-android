@@ -11,7 +11,7 @@ package app.worbus.domain.manager
  * is the finish or a surprise — and that is an [LbJobSpec]. The reading, the row and the
  * sentences stay with each feature (`AlbumOverride.kt`, `ArtistMerge.kt`).
  *
- * Feishin's `PollSpec` / `pollStep` is the twin.
+ * Worbus for desktop's `PollSpec` / `pollStep` is the twin.
  */
 
 /** How often a followed job is asked about. */
@@ -131,7 +131,7 @@ internal fun lbJobStep(
  * only, so "done == total" never comes when one file failed: the writes are over when successes
  * plus failures reach the total, and the row is still in an active state ([working]). The
  * surface then says the tags are written and lb-bot is waiting, with no "N of N" and no
- * determinate bar. Feishin's `awaitingIndex`.
+ * determinate bar. Worbus for desktop's `awaitingIndex`.
  */
 internal fun lbWritesOver(working: Boolean, done: Int, total: Int, failures: Int): Boolean =
 	working && total > 0 && done + failures >= total

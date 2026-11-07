@@ -1,1 +1,1 @@
-Subsonic music streaming app for Android and iOS
+A music app for your own Navidrome server, one session across devices

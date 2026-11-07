@@ -103,7 +103,7 @@ fun FillRow(
 ) {
 	val preferenceManager = koinInject<PreferenceManager>()
 	// Every word and every button comes from the shared vocabulary (PROTOCOL §15.2), the table
-	// Feishin renders from too.
+	// Worbus for desktop renders from too.
 	val described = describeFill(fill, now.value, wishlistAvailable, tooOld = rememberLbTooOld())
 	val view = if (lbBotOnly) described.copy(
 		buttons = listOfNotNull(FillButton.OPEN_ALBUM.takeIf { fill.rgid.isNotBlank() }),

@@ -83,7 +83,7 @@ internal data class MediaStatus(
 	 * Position in ms, or null when the device isn't reporting a usable one.
 	 *
 	 * A literal 0 is treated as "no reading". Cast devices transiently report 0 while
-	 * (re)buffering, and in Feishin a 0 landing just before a pause is what intermittently
+	 * (re)buffering, and in Worbus for desktop a 0 landing just before a pause is what intermittently
 	 * reset the progress bar — and, on release, what reset transfers to the beginning of the
 	 * track. Callers keep their last good value instead.
 	 */

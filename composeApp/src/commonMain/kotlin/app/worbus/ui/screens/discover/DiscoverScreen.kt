@@ -139,7 +139,7 @@ import app.worbus.ui.screens.mixes.mixKindLabel
  * sheet at the bottom of Search. Each had its own empty state, so lb-bot down,
  * AudioMuse cold and Navidrome fine all looked different.
  *
- * The rows come from [DISCOVER_ROWS], whose ids are duplicated in Feishin on
+ * The rows come from [DISCOVER_ROWS], whose ids are duplicated in Worbus for desktop on
  * purpose; see that file. Every row is a [horizontalSection] carrying a reason
  * line, and `horizontalSection` hides itself when its data is empty — so a row
  * with nothing to say renders nothing, rather than a heading over a gap.
@@ -171,7 +171,7 @@ fun DiscoverScreen(nested: Boolean = false) {
 	val backStack = LocalNavStack.current
 	val state by viewModel.state.collectAsStateWithLifecycle()
 	// The listening history (I-006; Stats' since I-039) is a link here, not a row of the
-	// catalogue: it has no tiles of its own to show, and DISCOVER_ROWS is mirrored in Feishin,
+	// catalogue: it has no tiles of its own to show, and DISCOVER_ROWS is mirrored in Worbus for desktop,
 	// which reaches it from its sidebar. Offered only where the hub advertises the listening routes.
 	val lbBot = koinInject<LbBotManager>()
 	val listeningAdvertised by lbBot.listeningSupported.collectAsStateWithLifecycle()
@@ -193,7 +193,7 @@ fun DiscoverScreen(nested: Boolean = false) {
 	val titleListening = stringResource(Res.string.title_statistics)
 	val becauseListening = stringResource(Res.string.because_listening)
 	// The six prompts are the row's whole point: it is not a list of results but a
-	// statement of what the search can be asked. Mirrors Feishin's `mood-row.tsx`
+	// statement of what the search can be asked. Mirrors Worbus for desktop's `mood-row.tsx`
 	// verbatim — same six, so the two clients teach the feature the same way.
 	val moodPrompts = listOf(
 		stringResource(Res.string.mood_prompt_1),
@@ -425,7 +425,7 @@ fun DiscoverScreen(nested: Boolean = false) {
 						}
 
 						// P3: Fresh, similar artists, charts and editors' picks are the stack above,
-						// each row with its reason; the catalogue's ids do not change (Feishin's twin).
+						// each row with its reason; the catalogue's ids do not change (Worbus for desktop's twin).
 						DiscoverRowId.FRESH, DiscoverRowId.SIMILAR_ARTISTS,
 						DiscoverRowId.CHARTS, DiscoverRowId.EDITORIAL -> Unit
 

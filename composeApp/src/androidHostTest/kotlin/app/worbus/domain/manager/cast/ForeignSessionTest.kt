@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 /*
  * Worbus P2, lane N4 (design §6.3, Chromecasts are per user): when another user's sender takes the
  * speaker, this bridge reports it released (its own user's session pauses) and never adopts the
- * foreign session. Navic used to adopt any mediaSessionId that arrived (`CastChannel`'s spontaneous
+ * foreign session. Worbus used to adopt any mediaSessionId that arrived (`CastChannel`'s spontaneous
  * MEDIA_STATUS), and so went on driving the other user's music.
  */
 class ForeignSessionTest {

@@ -1,0 +1,20 @@
+# tools/check-names.sh: where a hit is allowed, and why (Worbus P5, ruling R1).
+# Three fields separated by TABs: <path glob>	<text the hit's line contains, or *>	<reason>
+# A glob's * crosses directories. Add an entry only for a reason in the design's §6.2 list: the
+# credit, history, upstream's remote, a kept on-disk key, or the check's own needles.
+
+tools/check-names.*	*	the check itself: its needles and this list
+tools/rename-package.sh	*	the package move: it names the package it moved from
+
+*	fork of Navic by paige	the credit line (design §6.8): About, README, the store text and their tests
+*	ssalggnikool/Navic	the credit line's link to upstream (design §6.8), and upstream's remote in CLAUDE.md
+*	upstream Feishin	upstream history: Auto DJ is a port of upstream's desktop code, credited as such
+
+README.md	credit for Navic itself	the credit block
+README.md	installs beside Navic	the old app the reader may still have: Worbus installs beside it
+README.md	Navic keeps working	the old app the reader may still have: Worbus installs beside it
+androidApp/build.gradle.kts	installs beside Navic	the old app: the reason the app ID is new
+CLAUDE.md	paige.navic	the package move's own sentences, and the old-ID APK route (§1, §2, §3)
+CLAUDE.md	old Navic	the old app the owner's phone still has, signed with the old debug key
+.gitignore	/Navic Redesign.dc.html	ignores a local design file on the workstation by its existing name
+composeApp/src/androidHostTest/kotlin/app/worbus/WorbusReleaseTest.kt	"Navic" !in workflow	the test's own needle

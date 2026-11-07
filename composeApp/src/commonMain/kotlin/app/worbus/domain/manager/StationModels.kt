@@ -331,7 +331,7 @@ sealed interface StationResult {
 }
 
 /**
- * How a `start` / `next` that did not answer 200 is read (Feishin's classification, I-040).
+ * How a `start` / `next` that did not answer 200 is read (Worbus for desktop's classification, I-040).
  * [status] null is a request that never got an answer (timeout, connection error): transient
  * while the hub socket is up, a fallback when the hub is disconnected.
  */
@@ -615,7 +615,7 @@ const val STATION_BATCH = 5
  * How long a station-bound queue waits after another device topped its station up (a
  * `servedElsewhere` answer, or a `station` frame moving the cursor while this device asked
  * nothing): that batch reaches this queue through the session. Asking again at once with the new
- * cursor added a second batch for the same top-up. Feishin's SERVED_ELSEWHERE_GRACE_MS.
+ * cursor added a second batch for the same top-up. Worbus for desktop's SERVED_ELSEWHERE_GRACE_MS.
  */
 const val STATION_ELSEWHERE_GRACE_MS = 8_000L
 
@@ -666,7 +666,7 @@ data class AutoplayLook(
 	val autoDjTiming: Int,
 	/** Another device topped the bound station up in the last [STATION_ELSEWHERE_GRACE_MS]. */
 	val elsewhereRecent: Boolean = false,
-	/** A chip tap asked for this look: it decides paused too (S-035, Feishin's B-144). */
+	/** A chip tap asked for this look: it decides paused too (S-035, Worbus for desktop's B-144). */
 	val chipTap: Boolean = false
 )
 

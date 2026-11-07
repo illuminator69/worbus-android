@@ -135,7 +135,7 @@ fun nameNeverResolved(t: Throwable): Boolean = causeChain(t).any { it.simpleName
 /**
  * Is Android's local network permission the likely reason [t] happened? (B-108; the review's
  * finding 1.) [localNetworkBlocked] holds for the host, and the failure is not a name that never
- * resolved: "Android is blocking Navic" with Open settings cannot help with a typo.
+ * resolved: "Android is blocking Worbus" with Open settings cannot help with a typo.
  */
 fun failureLooksLocalNetworkBlocked(t: Throwable, sdk: Int, granted: Boolean, host: String?): Boolean =
 	!nameNeverResolved(t) && localNetworkBlocked(sdk, granted, host)

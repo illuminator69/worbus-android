@@ -52,7 +52,7 @@ class LoginFailureKindTest {
 
 	/*
 	 * The review's finding 1: a name that never resolved is a wrong address, and saying "Android is
-	 * blocking Navic from your local network" with Open settings would send the person to a page that
+	 * blocking Worbus from your local network" with Open settings would send the person to a page that
 	 * cannot help. A dial to a private host that was refused or timed out still says it.
 	 */
 	@Test

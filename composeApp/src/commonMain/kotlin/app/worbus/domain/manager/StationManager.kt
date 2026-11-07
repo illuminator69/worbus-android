@@ -428,7 +428,7 @@ class StationManager(
 	}
 
 	/**
-	 * One request, read the way Feishin reads it (`stationFailure`): a fallback (503, a
+	 * One request, read the way Worbus for desktop reads it (`stationFailure`): a fallback (503, a
 	 * `{fallback: true}` body, no engine, the hub disconnected) is told apart from a transient
 	 * failure (a timeout or connection error with the hub socket up, another 5xx, 429, 408), which
 	 * the driver asks again and which never marks the engine unavailable.

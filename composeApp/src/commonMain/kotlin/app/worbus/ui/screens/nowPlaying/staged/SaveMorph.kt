@@ -51,9 +51,9 @@ import kotlin.math.roundToInt
  * buttons beside it, and shrinks back into the pill when it closes. One shape driven by one number
  * (the progress, 0 = the pill, 1 = the panel) on the motion of the animation style the app is set
  * to (`rememberFoldMotion`: the motion scheme's springs, whose expressive overshoot gives the panel
- * its little swell; Quick's short times), so it moves like the rest of Navic. Reduced motion snaps.
+ * its little swell; Quick's short times), so it moves like the rest of Worbus. Reduced motion snaps.
  *
- * Liquid-glass inspired, in Navic's terms: a blur of the player behind it (Haze, drawn in the
+ * Liquid-glass inspired, in Worbus's terms: a blur of the player behind it (Haze, drawn in the
  * player's own layout because a popup window cannot blur another window), the pills' own fill, and a
  * thin light edge and sheen that grow in with the panel so the closed shape matches the pill exactly.
  */

@@ -3,7 +3,7 @@ package app.worbus.domain.manager
 /*
  * What a hub device's row says and where it stands, wherever devices are listed: the picker,
  * the navi-connect settings and the line over the now-playing title (PROTOCOL §3.1-3.2). Kept
- * free of Compose so that the rules run in a test (`DeviceRowsTest`); Feishin's picker follows
+ * free of Compose so that the rules run in a test (`DeviceRowsTest`); Worbus for desktop's picker follows
  * the same ones.
  */
 

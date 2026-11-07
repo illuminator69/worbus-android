@@ -17,7 +17,7 @@ import androidx.compose.runtime.Immutable
  * one for every client without ever knowing what a song is.
  *
  * **The hub stores and broadcasts these.** Each client regenerates locally through the
- * engine it has ([RadioManager] here, Feishin's `auto-dj` package), except that since
+ * engine it has ([RadioManager] here, Worbus for desktop's `auto-dj` package), except that since
  * 2026-10-16 (PROTOCOL §18) the radio kinds play through the hub's station engine when it
  * has one: [MixKind.STATION], and `similar` / `fingerprint` / `adaptive` / `artist` with it.
  *
@@ -37,7 +37,7 @@ data class Mix(
 	/**
 	 * What the recipe is seeded from, in the seed kind's own vocabulary: a Navidrome
 	 * song / album / artist id for [MixKind.SIMILAR] and [MixKind.ARTIST], a genre
-	 * name for [MixKind.GENRE] (an older Feishin wrote the genre's id here and the name in
+	 * name for [MixKind.GENRE] (an older desktop app wrote the genre's id here and the name in
 	 * [seedName]: [genreSeedNames]), and nothing at all for the seedless kinds, which
 	 * seed from listening history rather than from a thing.
 	 */
@@ -73,7 +73,7 @@ data class Mix(
 )
 
 /**
- * The five recipes, matching the hub's `kind` vocabulary and Feishin's.
+ * The five recipes, matching the hub's `kind` vocabulary and Worbus for desktop's.
  *
  * String-valued rather than an enum on the wire, for the same reason
  * [SavedQueueSource] is: a newer client's kind must round-trip through an older one
@@ -120,7 +120,7 @@ object MixKind {
 /**
  * The names a `genre` recipe may hold its genre under, in the order to try them: `seedId`, which
  * is the name (what both clients write since B-150), then `seedName`, for an older
- * Feishin recipe whose `seedId` was the genre's Navidrome id. A genre is drawn by name.
+ * Worbus for desktop recipe whose `seedId` was the genre's Navidrome id. A genre is drawn by name.
  */
 /** Whether [mix] is a custom radio: an `artist` mix of more than one artist (P5). */
 /**

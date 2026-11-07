@@ -9,7 +9,7 @@ import app.worbus.domain.models.DomainSong
 import app.worbus.ui.util.rememberNowPlayingCoverAmbient
 
 /**
- * Feishin-style preview for a CLAP text→mood search: shows the proposed queue
+ * desktop-style preview for a CLAP text→mood search: shows the proposed queue
  * (best match first) and lets the user Play it as the queue or append it — it
  * does NOT auto-play on open, so the user reviews the matches first.
  */
