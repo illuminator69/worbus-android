@@ -2219,6 +2219,19 @@ true of invented *album art*, and not of an icon naming the kind.
   shared-element cover goes through it too, never a hard-coded `tween(500)`.
   Sheets: the shared `ModalBottomSheet` wrapper takes its show / hide times from it (so the
   player and queue scenes too); only the times, the one-motion opening is unchanged.
+- **The launcher icons and the splash are Worbus's own (P5, design §6.5).** The picker's two entries are
+  `AppIconVariant.Default` (**Kelp and clay**) and `Tidepool`, stored by position, each an `activity-alias`
+  (`MainActivityDefault`, `MainActivityTidepool`) with its adaptive icon in `mipmap-anydpi-v26/` (a colour
+  background, `ic_launcher_foreground[_tidepool]`, the shared `ic_launcher_monochrome` for Android 13's themed
+  icons). The legacy `mipmap-xxhdpi/*.webp` and fastlane's `icon.png` are rendered on the workstation by
+  `worbus-icons/tools/make_icons.py` (ImageMagick) and committed as they come; regenerate them there, never by
+  hand here. The splash is the platform's own (Android 12+, no androidx splashscreen library): `values-v31`'s
+  `Theme.Worbus` sets `worbus_splash_icon` (an animated vector, 760 ms), the duration and a white / black
+  background. The art read `?attr/colorPrimary` / `?attr/colorTertiary`, which a platform theme does not
+  define, so the vector reads `@color/worbus_splash_wave` / `_arc`, the wallpaper's Material You tones on 31+
+  (`values-v31`, `values-night-v31`). `ic_worbus` (the disc in one colour) is the notifications' small icon and
+  Android Auto's attribution icon; `brand/ic_worbus.xml` is the same glyph as `Icons.Brand.Worbus`.
+  `WorbusIconsTest` holds all of it.
 - **The `Form` family is gone and is not to come back.** Upstream deleted `Form`, `FormRow`,
   `FormTitle`, `FormButton`, `Dropdown`, `SettingSelectionRow`, `SettingSwitch` and
   `SettingSwitchRow` in `81e72ffa`; the fork carried them on for nineteen screens until I-039

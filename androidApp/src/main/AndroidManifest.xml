@@ -77,7 +77,7 @@
 			</intent-filter>
 		</activity>
 
-		<!-- app icon activities -->
+		<!-- app icon activities: Kelp and clay (the default) and Tidepool (AppIconVariant) -->
 		<activity-alias
 			android:name="${applicationId}.MainActivityDefault"
 			android:enabled="true"
@@ -93,12 +93,12 @@
 		</activity-alias>
 
 		<activity-alias
-			android:name="${applicationId}.MainActivityInverted"
+			android:name="${applicationId}.MainActivityTidepool"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@mipmap/ic_launcher_inverted"
+			android:icon="@mipmap/ic_launcher_tidepool"
 			android:label="@string/app_name"
-			android:roundIcon="@mipmap/ic_launcher_inverted_round"
+			android:roundIcon="@mipmap/ic_launcher_tidepool_round"
 			android:targetActivity=".MainActivity">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
@@ -212,6 +212,6 @@
 			android:resource="@xml/automotive_app_desc" />
 		<meta-data
 			android:name="androidx.car.app.TintableAttributionIcon"
-			android:resource="@drawable/ic_navic" />
+			android:resource="@drawable/ic_worbus" />
 	</application>
 </manifest>

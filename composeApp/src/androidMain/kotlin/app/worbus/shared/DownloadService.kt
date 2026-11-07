@@ -108,7 +108,7 @@ class DownloadService : Service(), KoinComponent {
 			this,
 			if (forSync) CHANNEL_SYNC_ID else CHANNEL_DOWNLOAD_ID
 		)
-			.setSmallIcon(resourceProvider.icNavic)
+			.setSmallIcon(resourceProvider.icWorbus)
 			.setContentTitle(applicationInfo.loadLabel(packageManager).toString())
 			.setContentText(if (forSync) SYNCING else DOWNLOADING)
 			.setPriority(NotificationCompat.PRIORITY_LOW)

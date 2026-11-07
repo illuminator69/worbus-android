@@ -1659,8 +1659,8 @@
 	<string name="option_marquee_slow">Slow</string>
 	<string name="option_marquee_medium">Medium</string>
 	<string name="option_marquee_fast">Fast</string>
-	<string name="option_app_icon_default">Default</string>
-	<string name="option_app_icon_inverted">Inverted</string>
+	<string name="option_app_icon_default">Kelp and clay</string>
+	<string name="option_app_icon_tidepool">Tidepool</string>
 	<string name="title_colours">Colours</string>
 	<string name="title_text">Text</string>
 	<string name="title_motion">Motion</string>

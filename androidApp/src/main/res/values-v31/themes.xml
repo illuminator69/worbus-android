@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+	<!-- Worbus P5: the 760 ms animated splash (design §6.5), on the platform's own splash screen.
+	     No androidx splashscreen library: the platform attributes are enough on Android 12+. -->
 	<style name="Theme.Worbus" parent="android:Theme.DeviceDefault.DayNight">
-		<item name="android:windowSplashScreenAnimatedIcon">@drawable/splash</item>
+		<item name="android:windowSplashScreenBackground">@color/worbus_splash_background</item>
+		<item name="android:windowSplashScreenAnimatedIcon">@drawable/worbus_splash_icon</item>
+		<item name="android:windowSplashScreenAnimationDuration">760</item>
 		<item name="android:windowActionBar">false</item>
 		<item name="android:windowNoTitle">true</item>
 	</style>

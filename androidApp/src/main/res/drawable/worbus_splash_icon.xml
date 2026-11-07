@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/worbus_splash_vector">
+    <target
+        android:name="wave"
+        android:animation="@animator/worbus_wave_draw" />
+    <target
+        android:name="arc_upper_left"
+        android:animation="@animator/worbus_arc_upper_left_draw" />
+    <target
+        android:name="arc_lower_right"
+        android:animation="@animator/worbus_arc_lower_right_draw" />
+    <target
+        android:name="sheen"
+        android:animation="@animator/worbus_sheen_rotate" />
+</animated-vector>

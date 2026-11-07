@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:name="wave"
+        android:pathData="M29,43 C34.5,43 35,66 42,66 C49,66 48,43 54,43 C60,43 59,66 66,66 C73,66 73.5,43 79,43"
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="@color/worbus_splash_wave"
+        android:strokeWidth="8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:trimPathEnd="0" />
+
+    <group
+        android:name="sheen"
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-30">
+        <path
+            android:name="arc_upper_left"
+            android:pathData="M20.13,51.04 A34,34 0 0,1 45.20,21.16"
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@color/worbus_splash_arc"
+            android:strokeWidth="3.2"
+            android:strokeLineCap="round"
+            android:trimPathEnd="0" />
+        <path
+            android:name="arc_lower_right"
+            android:pathData="M87.87,56.96 A34,34 0 0,1 62.80,86.84"
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@color/worbus_splash_arc"
+            android:strokeWidth="3.2"
+            android:strokeLineCap="round"
+            android:trimPathEnd="0" />
+    </group>
+</vector>

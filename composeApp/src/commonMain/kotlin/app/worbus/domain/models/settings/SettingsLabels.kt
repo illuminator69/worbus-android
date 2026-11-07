@@ -10,7 +10,7 @@ import worbus.composeapp.generated.resources.option_shape_curved
 import worbus.composeapp.generated.resources.option_shape_soft
 import worbus.composeapp.generated.resources.option_shape_square
 import worbus.composeapp.generated.resources.option_app_icon_default
-import worbus.composeapp.generated.resources.option_app_icon_inverted
+import worbus.composeapp.generated.resources.option_app_icon_tidepool
 import org.jetbrains.compose.resources.StringResource
 
 /*
@@ -37,5 +37,5 @@ val MarqueeSpeed.label: StringResource
 val AppIconVariant.label: StringResource
 	get() = when (this) {
 		AppIconVariant.Default -> Res.string.option_app_icon_default
-		AppIconVariant.Inverted -> Res.string.option_app_icon_inverted
+		AppIconVariant.Tidepool -> Res.string.option_app_icon_tidepool
 	}

@@ -203,7 +203,7 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 
 		val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
 			.build().apply {
-				setSmallIcon(resourceProvider.icNavic)
+				setSmallIcon(resourceProvider.icWorbus)
 			}
 
 		// Audio gets its own client, not the shared API one, for three measured reasons:

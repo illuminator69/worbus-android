@@ -79,7 +79,7 @@ import app.worbus.domain.manager.SessionManager
 import app.worbus.domain.manager.ShareManager
 import app.worbus.domain.models.DomainSong
 import app.worbus.icons.Icons
-import app.worbus.icons.brand.Navic
+import app.worbus.icons.brand.Worbus
 import app.worbus.icons.outlined.Check
 import app.worbus.icons.outlined.Picker
 import app.worbus.icons.outlined.Share
@@ -230,7 +230,7 @@ fun LyricsShareSheet(
 						modifier = Modifier.fillMaxWidth()
 					) {
 						Icon(
-							imageVector = Icons.Brand.Navic,
+							imageVector = Icons.Brand.Worbus,
 							contentDescription = null,
 							modifier = Modifier.size(24.dp)
 						)

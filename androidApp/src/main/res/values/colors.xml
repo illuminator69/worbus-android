@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<!-- Worbus P5: the launcher's backgrounds, Kelp and clay (default) and Tidepool. -->
+	<color name="ic_launcher_background">#18211F</color>
+	<color name="ic_launcher_background_tidepool">#172326</color>
+
+	<!-- The splash (Android 12+, values-v31/themes.xml): pure white, pure black at night. -->
+	<color name="worbus_splash_background">#FFFFFF</color>
+	<!-- The splash's wave and sheen arcs. The art reads ?attr/colorPrimary and ?attr/colorTertiary,
+	     which the platform launch theme does not define (ruling R9), so it reads these; values-v31
+	     points them at the wallpaper's own Material You tones, as the Dynamic theme does. Below 31
+	     there is no splash, and these are the icon's kelp and clay. -->
+	<color name="worbus_splash_wave">#72A58F</color>
+	<color name="worbus_splash_arc">#C8735D</color>
+</resources>

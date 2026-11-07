@@ -4,5 +4,5 @@ enum class AppIconVariant(
 	val activityName: String
 ) {
 	Default("MainActivityDefault"),
-	Inverted("MainActivityInverted")
+	Tidepool("MainActivityTidepool")
 }

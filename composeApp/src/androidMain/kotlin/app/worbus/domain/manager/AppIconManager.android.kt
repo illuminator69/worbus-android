@@ -43,7 +43,7 @@ actual class AppIconManager(
 
 		val iconRes = when (variant) {
 			AppIconVariant.Default -> resourceProvider.appIconDefault
-			AppIconVariant.Inverted -> resourceProvider.appIconInverted
+			AppIconVariant.Tidepool -> resourceProvider.appIconTidepool
 		}
 
 		val drawable = if (iconRes != 0) {

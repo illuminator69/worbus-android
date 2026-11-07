@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<!-- Material You's dark primary and tertiary (tone 80), from the wallpaper. -->
+	<color name="worbus_splash_wave">@android:color/system_accent1_200</color>
+	<color name="worbus_splash_arc">@android:color/system_accent3_200</color>
+</resources>

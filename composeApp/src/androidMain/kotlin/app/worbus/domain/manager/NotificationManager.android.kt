@@ -57,7 +57,7 @@ actual class NotificationManager(
 	) {
 		val channelId = if (id == NotificationIds.SYNC_LIBRARY) CHANNEL_SYNC_ID else CHANNEL_DOWNLOAD_ID
 		val builder = NotificationCompat.Builder(context, channelId)
-			.setSmallIcon(resourceProvider.icNavic)
+			.setSmallIcon(resourceProvider.icWorbus)
 			.setContentTitle(title)
 			.setContentText(message)
 			.setPriority(NotificationCompat.PRIORITY_LOW)
