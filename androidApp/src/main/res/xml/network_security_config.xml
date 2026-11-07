@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Navic talks to a self-hosted server whose address the user types in at runtime, so this
+   Worbus talks to a self-hosted server whose address the user types in at runtime, so this
    config cannot name the hosts it trusts. Two separate permissions were being granted
    globally, and only one of them is actually required.
 

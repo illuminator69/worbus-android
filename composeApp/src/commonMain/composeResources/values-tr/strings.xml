@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Navic</string>
+    <string name="app_name" translatable="false">Worbus</string>
     <string name="title_library">Kütüphane</string>
     <string name="title_playlists">Çalma Listeleri</string>
     <string name="title_settings">Ayarlar</string>
@@ -69,9 +69,6 @@
     <string name="option_position_bottom">Alt</string>
     <string name="theme_dynamic">Dinamik</string>
     <string name="theme_seeded">Renklendirilmiş</string>
-    <string name="theme_ios">Cupertino</string>
-    <string name="theme_apple_music">Music.app</string>
-    <string name="theme_spotify">Spotlight</string>
     <string name="theme_mode_system">Sistem</string>
     <string name="theme_mode_dark">Karanlık</string>
     <string name="theme_mode_light">Aydınlık</string>
@@ -132,7 +129,7 @@
     <string name="notice_copied">Panoya kopyalandı.</string>
     <string name="notice_expiry">%1$s içinde süresi dolacak.</string>
     <string name="notice_loading_lyrics">Şarkı sözleri yükleniyor...\nBu biraz zaman alabilir.</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_action_is_permanent">Bu işlem geri alınamaz</string>
     <string name="info_error">Bir şeyler ters gitti.</string>
     <string name="info_error_show">Ayrıntıları göster</string>
@@ -296,7 +293,6 @@
     <string name="title_account">Hesap</string>
     <string name="title_github">Github</string>
     <string name="title_codeberg">Codeberg</string>
-    <string name="subtitle_app_icon_designer">%1$s Tarafından tasarlanmıştır</string>
     <string name="option_off">Kapalı</string>
     <string name="option_now_playing_song_info">Teknik müzik bilgisini göster</string>
     <string name="option_now_playing_slider_style_slim">İnce</string>
@@ -417,7 +413,7 @@
     <string name="info_repeat_off">Tekrarlama kapalı</string>
     <string name="info_equaliser_mode_not_builtin">Kontroller sadece yerleşik modda kullanılabilir.</string>
     <string name="subtitle_offline_mode">Uygulamanın ne zaman çevrimdışı moda geçmesi gerektiğini belirler. Uygulamanın yeniden başlatılmasını gerektirir</string>
-    <string name="subtitle_local_network_denied">Sunucunuza erişilebilir olması için Navic'e yerel ağınıza erişim izni vermeniz gerekir.</string>
+    <string name="subtitle_local_network_denied">Sunucunuza erişilebilir olması için Worbus'e yerel ağınıza erişim izni vermeniz gerekir.</string>
     <string name="subtitle_equaliser">Sesi ayarla ve iyileştir</string>
     <string name="subtitle_equaliser_disabled">Ses aktarımı etkinken kullanılamaz</string>
     <string name="option_cover_art_quality">Kapak tasarımı kalitesi</string>
@@ -433,7 +429,7 @@
     <string name="action_trigger_sync">Manuel senkronizasyonu başlat</string>
     <string name="info_streaming_quality">Daha yüksek kaliteli ön ayarlar daha fazla veri kullanır. Kod dönüştürme işlemi, yükleme sürelerini ciddi şekilde etkileyebilir ve şarkı sözlerinin senkronizasyonunun bozulmasına neden olabilir. Herhangi bir sorunla karşılaşırsanız “Kayıpsız” seçeneğini seçin.</string>
     <string name="info_download_quality">Daha yüksek kaliteli ön ayarlar daha fazla depolama alanı ve veri tüketir. Kod dönüştürme işlemi indirme sürelerini uzatabilir. Herhangi bir sorunla karşılaşırsanız “Kayıpsız” seçeneğini seçin.</string>
-    <string name="info_app_icon">Uygulama simgesini değiştirmek Navic'i kapatacaktır çünkü Android bunu gerektirir. Başlatıcınız (launcher) simge renklerini dinamik olarak temalıyorsa, bazı simgeler ana ekranınızda aynı görünebilir.</string>
+    <string name="info_app_icon">Uygulama simgesini değiştirmek Worbus'i kapatacaktır çünkü Android bunu gerektirir. Başlatıcınız (launcher) simge renklerini dinamik olarak temalıyorsa, bazı simgeler ana ekranınızda aynı görünebilir.</string>
     <string name="info_lyric_provider_disclaimer">LRCLIB ve/veya LyricsPlus’ı etkinleştirdiğinizde, harici ve bağlantılı olmayan web hizmetlerine istekler gönderilecektir.</string>
     <string name="title_link_confirmation">Navicden ayrıl</string>
     <string name="subtitle_dynamic_theming">Albüm ve sanatçı sayfalarını kapak resmine göre dinamik olarak temalandır</string>

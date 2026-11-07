@@ -246,7 +246,8 @@ class PreferenceManager(
 	val serverRecordStore: HubServerRecordStore by lazy { HubServerRecordStore(this) }
 	// The legacy token and the Worbus P2 device secret are sealed in the secrets file (B-279) and
 	// read only through HubAuth (`HubBearerGuardTest`): no passthrough here any more.
-	var hubDeviceName by preference("Navic")
+	// Blank until the user types a name: the device then goes by its model (`deviceName`, Worbus P5).
+	var hubDeviceName by preference("")
 	var hubDeviceId by preference("")
 	// Worbus P2, R32: the device id each account was bound to at each Worbus Server address, as a
 	// JSON object keyed "<hub address>|<lower-cased account>" (HubAuth). `hubDeviceId` above stays the

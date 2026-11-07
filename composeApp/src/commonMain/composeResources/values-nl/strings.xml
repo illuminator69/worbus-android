@@ -100,9 +100,6 @@
     <string name="option_mini_player_progress_style_seekable">Zoekbaar</string>
     <string name="theme_dynamic">Dynamisch</string>
     <string name="theme_seeded">Getint</string>
-    <string name="theme_ios">Cupertino</string>
-    <string name="theme_apple_music">Music.app</string>
-    <string name="theme_spotify">In de kijker</string>
     <string name="theme_mode_system">Systeem</string>
     <string name="theme_mode_dark">Donker</string>
     <string name="theme_mode_light">Licht</string>
@@ -210,7 +207,7 @@
         <item quantity="one">%1$d artiest</item>
         <item quantity="other">%1$d artiesten</item>
     </plurals>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="title_data_storage">Data en Opslag</string>
     <string name="title_sync_control">Synchronisatiecontrole</string>
     <string name="title_cache_management">Cache en Opslagbeheer</string>
@@ -269,13 +266,12 @@
     <string name="title_lyric_providers">Bron voor Songtext</string>
     <string name="title_github">GitHub</string>
     <string name="title_codeberg">Codeberg</string>
-    <string name="title_link_confirmation">Navic Verlaten</string>
+    <string name="title_link_confirmation">Worbus Verlaten</string>
     <string name="subtitle_offline_mode">Legt vast, wanneer de App in de offline-modus gaat. Vereist het herstarten van de App</string>
     <string name="subtitle_streaming_quality">Pas de qualiteit van gestreamde muziek aan</string>
     <string name="subtitle_download_quality">Pas de qualiteit van gedownloade muziek aan</string>
     <string name="subtitle_dynamic_theming">Pas kleuren automatisch aan de coverkleuren aan</string>
-    <string name="subtitle_app_icon_designer">Ontworpen door: %1$s</string>
-    <string name="subtitle_local_network_denied">U dient Navic netwerk toegang te geven om met een server te verbinden</string>
+    <string name="subtitle_local_network_denied">U dient Worbus netwerk toegang te geven om met een server te verbinden</string>
     <string name="subtitle_equaliser">Radio beistellen en verbeteren</string>
     <string name="subtitle_equaliser_disabled">Niet ondersteund in combinatie met audio-offload</string>
     <string name="subtitle_configure_lyric_providers">Bronnen voor songtexten aanpassen</string>
@@ -436,7 +432,7 @@
     <string name="info_repeat_off">Herhaling uit</string>
     <string name="info_repeat_one">Herhaal huidig</string>
     <string name="info_repeat_all">Herhaal alle</string>
-    <string name="info_app_icon">Het veranderen van het App Logo zal Navic afsluiten omdat dit voor android nodig is. Sommige Logos zien er mogelijk identiek uit als uw launcher deze aanpasst.</string>
+    <string name="info_app_icon">Het veranderen van het App Logo zal Worbus afsluiten omdat dit voor android nodig is. Sommige Logos zien er mogelijk identiek uit als uw launcher deze aanpasst.</string>
     <string name="info_equaliser_unsupported">Uw apparaat ondersteund deze functie niet.</string>
     <string name="info_equaliser_mode_not_builtin">Bediening is alleen in de interne modus beschikbaar.</string>
     <string name="info_lyric_provider_disclaimer">Het gebruik van LRCLIB en/of LyricsPlus zal verbinding met externe en ongerelateerde webservices maken.</string>

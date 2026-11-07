@@ -59,6 +59,13 @@ val gitCommit: String = try {
 	"unknown"
 }
 
+// Worbus P5: the version name is androidApp's (one place to change it); BuildInfo carries it so the
+// shared module can name it in its User-Agent (`Worbus-Android/0.5.0`).
+val appVersionName: String = providers.fileContents(rootProject.layout.projectDirectory.file("androidApp/build.gradle.kts"))
+	.asText.get()
+	.let { Regex("""\bversionName\s*=\s*"([^"]+)"""").find(it)?.groupValues?.get(1) }
+	?: error("androidApp/build.gradle.kts sets no versionName")
+
 val generateBuildInfo = tasks.register("generateBuildInfo", Sync::class) {
 	description = "generate BuildInfo.kt"
 
@@ -74,6 +81,7 @@ val generateBuildInfo = tasks.register("generateBuildInfo", Sync::class) {
 			|object BuildInfo {
 			|	const val FDROID = $fdroid
 			|	const val GIT_COMMIT = "$gitCommit"
+			|	const val VERSION_NAME = "$appVersionName"
 			|}
 			|
 			""".trimMargin()

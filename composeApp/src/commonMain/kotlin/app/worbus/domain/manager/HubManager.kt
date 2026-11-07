@@ -193,6 +193,14 @@ class HubManager(
 	private val hubAuth: HubAuth
 ) : RemotePlaybackRouter {
 	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+	/** Worbus P5: the name this device goes by on the Worbus Server, the saved one or else its model. */
+	val deviceName: String
+		get() = app.worbus.util.deviceName(preferenceManager.hubDeviceName, localDevice.model)
+
+	/** What a blank saved name falls back to: the device's model, else `Worbus`. */
+	val defaultDeviceName: String
+		get() = app.worbus.util.defaultDeviceName(localDevice.model)
 	// Protocol-level WS pings, so a half-open socket (Wi-Fi→cellular, a NAT timeout) fails and
 	// the loop reconnects instead of blocking `incoming` forever; the app-level `ping`/`pong` only
 	// refreshes the hub's last-seen. They come from the platform's factory because the
@@ -1404,7 +1412,7 @@ class HubManager(
 					// R32: with a secret, the id this account is bound to here; else the single id.
 					val savedId = hubAuth.helloDeviceId().orEmpty()
 					if (savedId.isNotEmpty()) put("id", savedId) else put("id", JsonNull)
-					put("name", preferenceManager.hubDeviceName.ifBlank { "Navic" })
+					put("name", deviceName)
 					put("platform", "android")
 					// The icon every picker draws for this device (PROTOCOL §3.1).
 					put("kind", localDevice.kind)

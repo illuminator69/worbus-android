@@ -105,9 +105,6 @@
     <string name="option_mini_player_progress_style_seekable">قابل للتحريك</string>
     <string name="theme_dynamic">ديناميكي</string>
     <string name="theme_seeded">ملون</string>
-    <string name="theme_ios">كوبرتينو</string>
-    <string name="theme_apple_music">Music.app</string>
-    <string name="theme_spotify">سبوتلايت</string>
     <string name="theme_mode_system">حسب الجهاز</string>
     <string name="theme_mode_dark">داكن</string>
     <string name="theme_mode_light">فاتح</string>

@@ -1,5 +1,6 @@
 package app.worbus.domain.manager
 
+import app.worbus.util.userAgent
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
@@ -62,7 +63,7 @@ class PreviewManager(
 	private val client by lazy {
 		HttpClient {
 			install(ContentNegotiation) { json(json) }
-			install(UserAgent) { agent = "Navic" }
+			install(UserAgent) { agent = userAgent() }
 			// A resolve runs a provider search upstream, which is slow the first time
 			// and instant afterwards (an `ext:` id is stable, so the sidecar caches
 			// it). Generous, but bounded: this is a user-initiated tap, and the

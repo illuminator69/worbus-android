@@ -1,5 +1,7 @@
 package app.worbus.domain.manager
 
+import app.worbus.util.deviceName
+import app.worbus.util.userAgent
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.UserAgent
@@ -290,7 +292,9 @@ class HubAuth(
 	private val transport: HubAuthTransport = KtorHubAuthTransport(),
 	private val platform: String = "android",
 	/** Where its lines go (lengths and outcomes only, never a credential). Tests pass a no-op. */
-	private val log: (String) -> Unit = { Logger.i("HubAuth", it) }
+	private val log: (String) -> Unit = { Logger.i("HubAuth", it) },
+	/** The device's model, the name it signs in with until the user types one (Worbus P5). */
+	private val model: () -> String? = { null }
 ) {
 	/** The app's: the account from [SessionManager], the device kind from [HubLocalDevice]. */
 	constructor(
@@ -298,7 +302,7 @@ class HubAuth(
 		secrets: SecretStore,
 		sessionManager: SessionManager,
 		localDevice: HubLocalDevice
-	) : this(preferenceManager, secrets, { sessionManager.navidromeAccount() }, { localDevice.kind })
+	) : this(preferenceManager, secrets, { sessionManager.navidromeAccount() }, { localDevice.kind }, model = { localDevice.model })
 
 	private val lock = Mutex()
 
@@ -534,7 +538,7 @@ class HubAuth(
 			username = acct.username,
 			pair = pair,
 			deviceId = signInDeviceId(acct.username),
-			name = preferenceManager.hubDeviceName.ifBlank { "Navic" },
+			name = deviceName(preferenceManager.hubDeviceName, model()),
 			platform = platform,
 			kind = kind()
 		)
@@ -826,7 +830,7 @@ class HubAuth(
 /** The app's [HubAuthTransport]: one Ktor client, bounded so a tap never spins for long. */
 class KtorHubAuthTransport(
 	private val client: HttpClient = HttpClient {
-		install(UserAgent) { agent = "Navic" }
+		install(UserAgent) { agent = userAgent() }
 		// The hub gives Navidrome 8 s (`SIGNIN_ND_TIMEOUT`) and answers 503 after it.
 		install(HttpTimeout) {
 			connectTimeoutMillis = 8_000

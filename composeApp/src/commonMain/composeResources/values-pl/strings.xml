@@ -77,8 +77,7 @@
     <string name="subtitle_streaming_quality">Zmienia jakość streamowanej muzyki</string>
     <string name="subtitle_download_quality">Zmienia jakość pobranej muzyki</string>
     <string name="subtitle_dynamic_theming">Dynamicznie zmień motyw widoku albumu i artysty w oparciu o okładkę</string>
-    <string name="subtitle_app_icon_designer">Projekt: %1$s</string>
-    <string name="subtitle_local_network_denied">Musisz nadać Navic uprawnienia do swojej lokalnej sieci, by móc się komunikować z serwerem.</string>
+    <string name="subtitle_local_network_denied">Musisz nadać Worbus uprawnienia do swojej lokalnej sieci, by móc się komunikować z serwerem.</string>
     <string name="option_off">Wyłącz</string>
     <string name="option_now_playing_background_style">Styl tła</string>
     <string name="option_now_playing_background_style_dynamic">Dynamiczny</string>
@@ -207,9 +206,6 @@
     <string name="option_mini_player_progress_style_seekable">Interaktywny</string>
     <string name="theme_dynamic">Dynamiczny</string>
     <string name="theme_seeded">Przyciemniony</string>
-    <string name="theme_ios">Cupertino</string>
-    <string name="theme_apple_music">Music.app</string>
-    <string name="theme_spotify">Spotlight</string>
     <string name="theme_mode_system">Systemowy</string>
     <string name="theme_mode_dark">Ciemny</string>
     <string name="theme_mode_light">Jasny</string>
@@ -336,7 +332,7 @@
     <string name="notice_login_suggestion">Czy masz na myśli...</string>
     <string name="notice_queue_duplicate">Ta piosenka jest już w kolejce. Czy chcesz dodać ją ponownie?</string>
     <string name="notice_local_network_denied">Odmowa dostępu</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_action_is_permanent">Tej akcji nie można cofnąć</string>
     <string name="info_error">Coś poszło nie tak.</string>
     <string name="info_error_show">Pokaż szczegóły</string>
@@ -406,13 +402,13 @@
     <string name="info_repeat_off">Zapętlanie wyłączone</string>
     <string name="info_repeat_one">Zapętl jeden</string>
     <string name="info_repeat_all">Zapętl wszystkie</string>
-    <string name="info_app_icon">Zmiana ikony aplikacji zamknie Navic z uwagi na wymogi Androida. Niektóre ikony mogą wyglądać identycznie na twoim ekranie startowym jeżeli twój launcher dynamicznie zmienia kolory ikon.</string>
+    <string name="info_app_icon">Zmiana ikony aplikacji zamknie Worbus z uwagi na wymogi Androida. Niektóre ikony mogą wyglądać identycznie na twoim ekranie startowym jeżeli twój launcher dynamicznie zmienia kolory ikon.</string>
     <string name="option_cover_art_action_show_lyrics">Pokaż tekst</string>
     <string name="option_cover_art_action_disabled">Wyłączone</string>
     <string name="title_discord_server">Serwer Discord</string>
     <string name="title_github">GitHub</string>
     <string name="title_codeberg">Codeberg</string>
-    <string name="title_link_confirmation">Wyjście z Navic</string>
+    <string name="title_link_confirmation">Wyjście z Worbus</string>
     <string name="action_visit_site">Odwiedź stronę</string>
     <string name="notice_link_confirmation">Ten link zabierze Ciebie do następującej strony:</string>
     <string name="info_equaliser_unsupported">Twoje urządzenie nie obsługuje tej funkcji.</string>

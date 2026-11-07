@@ -82,7 +82,7 @@ class CrashActivity : ComponentActivity() {
 								text = "Something went wrong",
 								style = MaterialTheme.typography.headlineMedium
 							)
-							Text("Navic has encountered an unknown error and needs to close.")
+							Text("Worbus has encountered an unknown error and needs to close.")
 							Spacer(modifier = Modifier.height(16.dp))
 							SelectionContainer(
 								Modifier
@@ -145,14 +145,14 @@ class CrashActivity : ComponentActivity() {
 
 	private fun copyReport(report: String) {
 		val clipboard = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager ?: return
-		clipboard.setPrimaryClip(ClipData.newPlainText("Navic crash report", report))
+		clipboard.setPrimaryClip(ClipData.newPlainText("Worbus crash report", report))
 	}
 
 	private fun shareReport(report: String) {
 		val intent = Intent(Intent.ACTION_SEND).apply {
 			type = "text/plain"
 			putExtra(Intent.EXTRA_TEXT, report)
-			putExtra(Intent.EXTRA_SUBJECT, "Navic crash report")
+			putExtra(Intent.EXTRA_SUBJECT, "Worbus crash report")
 		}
 		runCatching { startActivity(Intent.createChooser(intent, null)) }
 	}

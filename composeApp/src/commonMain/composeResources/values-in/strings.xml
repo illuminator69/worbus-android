@@ -197,7 +197,7 @@
     <string name="option_mini_player_progress_style">Gaya kemajuan pemain mini</string>
     <string name="title_albums">Album</string>
     <string name="option_live_status">Status langsung</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="title_fonts_inbuilt">Terpasang</string>
     <string name="title_sort_by">Urutkan berdasarkan</string>
     <string name="title_create_share">Buat bagikan</string>
@@ -207,7 +207,6 @@
     <string name="info_syncing_saving">Menyimpan...</string>
     <string name="info_no_radios">Tidak ada radio</string>
     <string name="option_mini_player_progress_style_hidden">Tersembunyi</string>
-    <string name="theme_spotify">Menyoroti</string>
     <string name="info_error">Terjadi kesalahan.</string>
     <string name="option_now_playing_song_info">Tampilkan informasi teknis lagu</string>
     <string name="info_album_replay_gain">Album ReplayGain</string>
@@ -232,7 +231,6 @@
     <string name="option_enable_scrobbling">Aktifkan scrobbling</string>
     <string name="info_not_available_offline">Tidak tersedia secara offline</string>
     <string name="info_track_channel_count">Jumlah saluran</string>
-    <string name="theme_ios">Cupertino</string>
     <string name="option_gapless_playback">Pemutaran tanpa jeda</string>
     <string name="info_track_artist">Artis</string>
     <string name="title_more_by_artist">Lebih lanjut oleh %1$s</string>
@@ -323,7 +321,6 @@
     <string name="action_sleep_timer_enabled">Pengatur waktu tidur - %1$s tersisa</string>
     <string name="option_max_bitrate_wifi">Kecepatan Bit Maksimum WiFi (kbps)</string>
     <string name="option_quality_lossless">Tanpa kehilangan data (tanpa transkode)</string>
-    <string name="theme_apple_music">Aplikasi Musik</string>
     <string name="option_animation_style_expressive">Ekspresif</string>
     <string name="option_lyrics_beat_by_beat">Lirik per ketukan</string>
     <string name="option_mini_player_progress_style_visible">Bisa dilihat</string>

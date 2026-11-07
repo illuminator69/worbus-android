@@ -62,7 +62,7 @@ class LoginFailureOverHttpTest {
 		val client = SubsonicClient(
 			baseUrl = base,
 			auth = SubsonicAuth.Token(username = "sandbox", password = "hunter2"),
-			client = "Navic",
+			client = "Worbus-Android",
 			engine = OkHttp.create(),
 			clientConfig = {
 				install(HttpTimeout) {

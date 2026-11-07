@@ -37,6 +37,13 @@ interface HubLocalDevice {
 	 * `hello` promises with the [CAP_IDLE_VOLUME] cap, asked at every `hello`.
 	 */
 	val setsMediaVolume: Boolean
+
+	/**
+	 * Worbus P5: the device's model (`Build.MODEL` on Android, "Pixel 8 Pro"), the name this device
+	 * goes by until the user types one (`deviceName`). Null where the platform gives none.
+	 */
+	val model: String?
+		get() = null
 }
 
 /**

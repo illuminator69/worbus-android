@@ -11,11 +11,11 @@ import com.materialkolor.dynamiccolor.ColorSpec
 import com.materialkolor.rememberDynamicColorScheme
 import dev.zt64.compose.pipette.HsvColor
 import worbus.composeapp.generated.resources.Res
-import worbus.composeapp.generated.resources.theme_apple_music
 import worbus.composeapp.generated.resources.theme_dynamic
-import worbus.composeapp.generated.resources.theme_ios
+import worbus.composeapp.generated.resources.theme_crisp
+import worbus.composeapp.generated.resources.theme_evergreen
+import worbus.composeapp.generated.resources.theme_rose
 import worbus.composeapp.generated.resources.theme_seeded
-import worbus.composeapp.generated.resources.theme_spotify
 import org.jetbrains.compose.resources.StringResource
 import org.koin.compose.koinInject
 import app.worbus.di.LocalPlatformContext
@@ -24,7 +24,11 @@ import app.worbus.ui.util.darkIosColorScheme
 import app.worbus.ui.util.lightIosColorScheme
 
 /**
- * Theme choices that the user can choose from
+ * Theme choices that the user can choose from.
+ *
+ * Stored by position (`getEnum`, the ordinal), so an entry is renamed in place and never moved:
+ * Worbus P5 renamed iOS, AppleMusic and Spotify to Crisp, Rose and Evergreen (design §6.11), and a
+ * saved choice still reads the same theme.
  */
 enum class Theme(val title: StringResource) {
 
@@ -42,22 +46,14 @@ enum class Theme(val title: StringResource) {
 	 */
 	Dynamic(Res.string.theme_dynamic),
 
-	/**
-	 * The app will be themed according to Apple's HIG.
-	 * TODO: this should pull from UIColor
-	 */
-	@Suppress("EnumEntryName")
-	iOS(Res.string.theme_ios),
+	/** Flat and bright, with soft corners, and a blue accent. */
+	Crisp(Res.string.theme_crisp),
 
-	/**
-	 * The same as iOS, but with a pink-ish accent.
-	 */
-	AppleMusic(Res.string.theme_apple_music),
+	/** The same as Crisp, with red and pink highlights. */
+	Rose(Res.string.theme_rose),
 
-	/**
-	 * The same as iOS, but with a green accent.
-	 */
-	Spotify(Res.string.theme_spotify);
+	/** The same as Crisp, with green highlights. */
+	Evergreen(Res.string.theme_evergreen);
 
 	@Composable
 	fun colorScheme(): ColorScheme {
@@ -97,15 +93,15 @@ enum class Theme(val title: StringResource) {
 				isAmoled = preferenceManager.amoled
 			)
 
-			iOS -> if (isDark)
+			Crisp -> if (isDark)
 				darkIosColorScheme(Color(0, 145, 255))
 			else lightIosColorScheme(Color(0, 136, 255))
 
-			AppleMusic -> if (isDark)
+			Rose -> if (isDark)
 				darkIosColorScheme(Color(255, 55, 95))
 			else lightIosColorScheme(Color(255, 45, 85))
 
-			Spotify -> if (isDark)
+			Evergreen -> if (isDark)
 				darkIosColorScheme(Color(30, 215, 96))
 			else lightIosColorScheme(Color(30, 215, 96))
 		}

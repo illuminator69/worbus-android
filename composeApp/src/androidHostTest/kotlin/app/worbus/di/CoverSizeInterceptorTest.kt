@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
 
 /** Row 9 (adapted from upstream 6dcfa9f4 … 24e531e9): Subsonic covers by size bucket. */
 class CoverSizeInterceptorTest {
-	private val url = "https://nd.example/rest/getCoverArt?u=me&t=abc&s=salt&v=1.16.1&c=Navic&f=json&id=al-1%2B2&size=4096"
+	private val url = "https://nd.example/rest/getCoverArt?u=me&t=abc&s=salt&v=1.16.1&c=Worbus-Android&f=json&id=al-1%2B2&size=4096"
 
 	@Test
 	fun theSmallestBucketAtOrAboveTheWidthUnderTheCap() {

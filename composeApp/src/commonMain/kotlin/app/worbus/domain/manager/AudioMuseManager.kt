@@ -1,5 +1,6 @@
 package app.worbus.domain.manager
 
+import app.worbus.util.userAgent
 import com.russhwolf.settings.Settings
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -123,7 +124,7 @@ class AudioMuseManager(
 					coerceInputValues = true
 				})
 			}
-			install(UserAgent) { agent = "Navic" }
+			install(UserAgent) { agent = userAgent() }
 			// Tier-2 endpoints are synchronous in-memory lookups; keep timeouts tight
 			// so a slow/unreachable core fails fast and we fall back to Tier 1.
 			install(HttpTimeout) {

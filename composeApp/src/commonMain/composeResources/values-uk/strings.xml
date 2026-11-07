@@ -81,8 +81,7 @@
     <string name="subtitle_streaming_quality">Налаштуйте якість музики під час потокового відтворення</string>
     <string name="subtitle_download_quality">Налаштуйте якість завантаженої музики</string>
     <string name="subtitle_dynamic_theming">Автоматично підбирати оформлення альбомів і виконавців за кольорами обкладинки</string>
-    <string name="subtitle_app_icon_designer">Дизайн: %1$s</string>
-    <string name="subtitle_local_network_denied">Щоб підключитися до сервера, надайте Navic доступ до локальної мережі.</string>
+    <string name="subtitle_local_network_denied">Щоб підключитися до сервера, надайте Worbus доступ до локальної мережі.</string>
     <string name="subtitle_equaliser">Налаштування та покращення звучання</string>
     <string name="subtitle_equaliser_disabled">Недоступно, коли ввімкнено апаратне розвантаження аудіо</string>
     <string name="subtitle_configure_lyric_providers">Виберіть, звідки завантажувати тексти пісень</string>
@@ -230,9 +229,6 @@
     <string name="option_mini_player_progress_style_seekable">З можливістю перемотування</string>
     <string name="theme_dynamic">Динамічна</string>
     <string name="theme_seeded">Тонована</string>
-    <string name="theme_ios">Cupertino</string>
-    <string name="theme_apple_music">Music.app</string>
-    <string name="theme_spotify">Spotlight</string>
     <string name="theme_mode_system">Системна</string>
     <string name="theme_mode_dark">Темна</string>
     <string name="theme_mode_light">Світла</string>
@@ -388,7 +384,7 @@
     <string name="notice_queue_duplicate">Ця пісня вже є в черзі. Додати її ще раз?</string>
     <string name="notice_local_network_denied">Доступ заборонено</string>
     <string name="notice_link_confirmation">Це посилання відкриє такий вебсайт:</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_action_is_permanent">Цю дію неможливо скасувати</string>
     <string name="info_error">Щось пішло не так.</string>
     <string name="info_error_show">Показати подробиці</string>
@@ -459,10 +455,10 @@
     <string name="info_repeat_off">Повтор вимкнено</string>
     <string name="info_repeat_one">Повтор однієї композиції</string>
     <string name="info_repeat_all">Повтор усіх композицій</string>
-    <string name="info_app_icon">Після зміни значка Navic закриється — цього вимагає Android. Якщо ваш лаунчер автоматично змінює кольори значків відповідно до теми, деякі варіанти на головному екрані можуть виглядати однаково.</string>
+    <string name="info_app_icon">Після зміни значка Worbus закриється — цього вимагає Android. Якщо ваш лаунчер автоматично змінює кольори значків відповідно до теми, деякі варіанти на головному екрані можуть виглядати однаково.</string>
     <string name="info_equaliser_unsupported">Ваш пристрій не підтримує цю функцію.</string>
     <string name="info_equaliser_mode_not_builtin">Будь ласка, налаштуйте зовнішній еквалайзер за допомогою відповідного застосунку.</string>
-    <string name="info_lyric_provider_disclaimer">Якщо ввімкнути LRCLIB та/або LyricsPlus, застосунок надсилатиме запити до сторонніх вебсервісів, не пов’язаних із Navic.</string>
+    <string name="info_lyric_provider_disclaimer">Якщо ввімкнути LRCLIB та/або LyricsPlus, застосунок надсилатиме запити до сторонніх вебсервісів, не пов’язаних із Worbus.</string>
     <string name="action_scroll_down">Прокрутити вниз</string>
     <string name="title_audio_effects">Аудіоефекти</string>
     <string name="subtitle_audio_effects">Налаштуйте звучання музики</string>

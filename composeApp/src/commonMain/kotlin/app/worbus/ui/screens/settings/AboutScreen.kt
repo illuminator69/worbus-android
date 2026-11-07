@@ -18,6 +18,9 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.about_credit
+import worbus.composeapp.generated.resources.about_licence
+import worbus.composeapp.generated.resources.about_navidrome
 import worbus.composeapp.generated.resources.info_app_version
 import worbus.composeapp.generated.resources.action_copy_logs_for_report
 import worbus.composeapp.generated.resources.option_check_for_updates
@@ -47,11 +50,14 @@ import app.worbus.ui.screens.settings.components.SettingsNavItem
 import app.worbus.ui.screens.settings.components.SettingsToggleItem
 import app.worbus.util.versionLine
 
-/** This fork's repository: the one link About offers (upstream's repository, Codeberg mirror and Discord are not ours). */
-private const val SOURCE_CODE_URL = "https://github.com/illuminator69/navic-gaps"
+/** This fork's repository (upstream's repository, Codeberg mirror and Discord are not ours). */
+private const val SOURCE_CODE_URL = "https://github.com/illuminator69/worbus-android"
+
+/** The credit line's link (design §6.8): the app this is a fork of. The only upstream link About has. */
+const val UPSTREAM_CREDIT_URL = "https://github.com/ssalggnikool/Navic"
 
 /** Every link About offers. */
-val aboutLinks = listOf(SOURCE_CODE_URL)
+val aboutLinks = listOf(SOURCE_CODE_URL, UPSTREAM_CREDIT_URL)
 
 @Composable
 fun SettingsAboutScreen() {
@@ -95,8 +101,22 @@ fun SettingsAboutScreen() {
 				}
 				SegmentedListItem(
 					onClick = { clipboard.setText(AnnotatedString(text)) },
-					shapes = SegmentedListItemDefaults.segmentedShapes(index = 0, count = 1),
+					shapes = SegmentedListItemDefaults.segmentedShapes(index = 0, count = 4),
 					content = { Text(text) }
+				)
+				// Worbus P5 (design §6.8): the credit, with its link, the licence and the Navidrome line.
+				SettingsNavItem(
+					onClick = { linkToOpen = UPSTREAM_CREDIT_URL },
+					shapes = SegmentedListItemDefaults.segmentedShapes(index = 1, count = 4),
+					content = { Text(stringResource(Res.string.about_credit)) }
+				)
+				SegmentedListItem(
+					shapes = SegmentedListItemDefaults.segmentedShapes(index = 2, count = 4),
+					content = { Text(stringResource(Res.string.about_licence)) }
+				)
+				SegmentedListItem(
+					shapes = SegmentedListItemDefaults.segmentedShapes(index = 3, count = 4),
+					content = { Text(stringResource(Res.string.about_navidrome)) }
 				)
 			}
 

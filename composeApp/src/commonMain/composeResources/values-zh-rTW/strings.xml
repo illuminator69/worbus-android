@@ -97,7 +97,7 @@
     <string name="action_dont_show_again">不再顯示</string>
     <string name="action_open_settings">開啟設定</string>
     <string name="action_reset">重設</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_error_show">顯示詳情</string>
     <string name="info_error_hide">隱藏詳情</string>
     <string name="info_unknown">未知</string>

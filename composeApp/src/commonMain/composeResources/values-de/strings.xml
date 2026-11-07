@@ -28,9 +28,9 @@
     <string name="action_view_on_lastfm">Auf last.fm anzeigen</string>
     <string name="action_view_on_musicbrainz">Auf MusicBrainz anzeigen</string>
     <string name="action_view_playlist">Playlist anzeigen</string>
-    <string name="app_name" translatable="false">Navic</string>
+    <string name="app_name" translatable="false">Worbus</string>
     <string name="info_action_is_permanent">Dies kann nicht rückgängig gemacht werden!</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_error">Etwas ist schiefgelaufen.</string>
     <string name="info_error_hide">Details ausblenden</string>
     <string name="info_error_show">Details anzeigen</string>
@@ -192,9 +192,6 @@
     <string name="option_mini_player_progress_style_seekable">Suchbar</string>
     <string name="theme_dynamic">Dynamisch</string>
     <string name="theme_seeded">Getönt</string>
-    <string name="theme_ios">Cupertino</string>
-    <string name="theme_apple_music">Music.app</string>
-    <string name="theme_spotify">Spotlight</string>
     <string name="theme_mode_system">System</string>
     <string name="theme_mode_dark">Dunkel</string>
     <string name="theme_mode_light">Hell</string>
@@ -365,13 +362,12 @@
     <string name="info_repeat_off">Wiederholung aus</string>
     <string name="info_repeat_one">Wiederhole Titel</string>
     <string name="info_repeat_all">Wiederhole alle</string>
-    <string name="info_app_icon">Das Ändern des App-Symbols wird Navic schließen, da Android dies erfordert. Einige Symbole können auf deinem Startbildschirm identisch aussehen, wenn dein Launcher die Symbolfarben dynamisch anpasst.</string>
+    <string name="info_app_icon">Das Ändern des App-Symbols wird Worbus schließen, da Android dies erfordert. Einige Symbole können auf deinem Startbildschirm identisch aussehen, wenn dein Launcher die Symbolfarben dynamisch anpasst.</string>
     <string name="title_theme_mode">Themen Modus</string>
     <string name="title_track_info">Lied Informationen</string>
     <string name="subtitle_download_quality">Download Qualität</string>
     <string name="subtitle_dynamic_theming">Farben automatisch an das Cover anpassen</string>
-    <string name="subtitle_app_icon_designer">Entworfen von: %1$s</string>
-    <string name="subtitle_local_network_denied">Navic benötigt Netzwerkberechtigungen um deinen Server zu erreichen.</string>
+    <string name="subtitle_local_network_denied">Worbus benötigt Netzwerkberechtigungen um deinen Server zu erreichen.</string>
     <string name="option_artist_image_shape">Form des Künstlerbilds</string>
     <string name="option_sort_year">Jahr</string>
     <string name="option_choose_app_icon">App-Symbol</string>
@@ -398,7 +394,7 @@
     <string name="title_discord_server">Discord Server</string>
     <string name="title_lyric_providers">Lyrics Quelle</string>
     <string name="title_github">GitHub</string>
-    <string name="title_link_confirmation">Navic verlassen</string>
+    <string name="title_link_confirmation">Worbus verlassen</string>
     <string name="subtitle_equaliser_disabled">Mit aktivierter Audio-Auslagerung nicht verfügbar</string>
     <string name="subtitle_configure_lyric_providers">Lyrics Quelle ändern</string>
     <string name="option_auto_fill_queue">Wiedergabeliste automatisch füllen</string>

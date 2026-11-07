@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Navic</string>
+    <string name="app_name" translatable="false">Worbus</string>
     <string name="title_library">Biblioteca</string>
     <string name="title_playlists">Listas de reproducción</string>
     <string name="title_settings">Ajustes</string>
@@ -104,7 +104,7 @@
     <string name="notice_copied">Copiado al portapapeles.</string>
     <string name="notice_expiry">Caduca en %1$s.</string>
     <string name="notice_loading_lyrics">Cargando letra...\nEsto puede llevar un tiempo.</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_action_is_permanent">Esta acción no se puede deshacer</string>
     <string name="info_error">Algo salió mal.</string>
     <string name="info_error_show">Mostrar detalles</string>
@@ -171,11 +171,8 @@
     <string name="option_mini_player_progress_style_visible">Visible</string>
     <string name="theme_dynamic">Dinámico</string>
     <string name="theme_seeded">Teñido</string>
-    <string name="theme_ios">Cupertino</string>
-    <string name="theme_spotify">Spotlight</string>
     <string name="theme_mode_dark">Oscuro</string>
     <string name="theme_mode_light">Claro</string>
-    <string name="theme_apple_music">Music.app</string>
     <string name="theme_mode_system">Del sistema</string>
     <string name="action_share_lyrics">Compartir letra</string>
     <string name="action_update_app">Actualizar</string>
@@ -370,8 +367,7 @@
     <string name="title_track_info">Información de pista</string>
     <string name="subtitle_download_quality">Ajuste la calidad de la música descargada</string>
     <string name="subtitle_dynamic_theming">Ajuste dinámicamente los temas de álbum y artista en función de la portada</string>
-    <string name="subtitle_app_icon_designer">Diseñado por: %1$s</string>
-    <string name="subtitle_local_network_denied">Necesita otorgar a Navic acceso a la red para que su servidor sea accesible.</string>
+    <string name="subtitle_local_network_denied">Necesita otorgar a Worbus acceso a la red para que su servidor sea accesible.</string>
     <string name="option_artist_image_shape">Forma de la imagen de artista</string>
     <string name="option_sort_year">Año</string>
     <string name="option_choose_app_icon">Icono de la aplicación</string>
@@ -399,14 +395,14 @@
     <string name="info_repeat_off">Repetición apagada</string>
     <string name="info_repeat_one">Repetir una</string>
     <string name="info_repeat_all">Repetir todas</string>
-    <string name="info_app_icon">Cambiar el icono de la app cerrará Navic, pues Android requiere esto. Algunos iconos pueden parecer idénticos en su pantalla de inicio si su lanzador cambia dinámicamente los colores del icono.</string>
+    <string name="info_app_icon">Cambiar el icono de la app cerrará Worbus, pues Android requiere esto. Algunos iconos pueden parecer idénticos en su pantalla de inicio si su lanzador cambia dinámicamente los colores del icono.</string>
     <string name="option_cover_art_action_show_lyrics">Mostrar letra</string>
     <string name="option_cover_art_action_disabled">Deshabilitada</string>
     <string name="title_discord_server">Servidor de Discord</string>
     <string name="title_lyric_providers">Proveedores de letras</string>
     <string name="title_github">GitHub</string>
     <string name="title_codeberg">Codeberg</string>
-    <string name="title_link_confirmation">Saliendo de Navic</string>
+    <string name="title_link_confirmation">Saliendo de Worbus</string>
     <string name="subtitle_equaliser">Ajuste y mejore el audio</string>
     <string name="subtitle_equaliser_disabled">No disponible mientras la relegación de audio esté activada</string>
     <string name="subtitle_configure_lyric_providers">Cambie el origen de las letras</string>

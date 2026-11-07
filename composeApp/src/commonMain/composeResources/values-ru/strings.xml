@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Navic</string>
+    <string name="app_name" translatable="false">Worbus</string>
     <string name="title_library">Библиотека</string>
     <string name="title_playlists">Плейлисты</string>
     <string name="title_settings">Настройки</string>
@@ -100,7 +100,7 @@
     <string name="notice_copied">Скопировано в буфер обмена.</string>
     <string name="notice_expiry">Истекает через %1$s</string>
     <string name="notice_loading_lyrics">Загружаем текст...\nЭто займет время.</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_action_is_permanent">Это не может быть отменено</string>
     <string name="info_error">Что-то пошло не так.</string>
     <string name="info_error_show">Показать детали</string>
@@ -187,8 +187,6 @@
     <string name="option_mini_player_progress_style_seekable">Перематываемый</string>
     <string name="theme_dynamic">Динамическая</string>
     <string name="theme_seeded">Тонированная</string>
-    <string name="theme_ios">Купертино</string>
-    <string name="theme_apple_music">Music.app</string>
     <string name="theme_mode_system">Система</string>
     <string name="theme_mode_dark">Тёмная</string>
     <string name="theme_mode_light">Светлая</string>
@@ -218,7 +216,6 @@
     <string name="info_no_playlists_short">Плейлисты отсутствуют</string>
     <string name="info_lyrics_provider">Текст песни предоставлен %1$s</string>
     <string name="info_image_failed_to_load">Не удалось загрузить</string>
-    <string name="theme_spotify">Spotlight</string>
     <string name="info_track_replay_gain_effective">Текущее значение ReplayGain</string>
     <string name="title_data_storage">Данные и хранилище</string>
     <string name="title_sync_control">Управление синхронизацией</string>
@@ -373,8 +370,7 @@
     <string name="title_track_info">Информация о треке</string>
     <string name="subtitle_download_quality">Настроить качество скачиваемой музыки</string>
     <string name="subtitle_dynamic_theming">Динамическое оформление страниц альбомов и исполнителей на основе обложек</string>
-    <string name="subtitle_app_icon_designer">Дизайнер: %1$s</string>
-    <string name="subtitle_local_network_denied">Вам необходимо предоставить Navic доступ к вашей локальной сети, чтобы ваш сервер был доступен.</string>
+    <string name="subtitle_local_network_denied">Вам необходимо предоставить Worbus доступ к вашей локальной сети, чтобы ваш сервер был доступен.</string>
     <string name="option_artist_image_shape">Форма изображения исполнителя</string>
     <string name="option_choose_app_icon">Иконка приложения</string>
     <string name="option_stream_custom_quality">Пользовательское качество</string>
@@ -397,7 +393,7 @@
     <string name="info_repeat_off">Повтор отключен</string>
     <string name="info_repeat_one">Повторить один</string>
     <string name="info_repeat_all">Повторить все</string>
-    <string name="info_app_icon">При смене иконки Navic закроется, так как этого требует Android. Некоторые иконки на главном экране могут выглядеть одинаково, если лаунчер динамически меняет их в соответствии с темой.</string>
+    <string name="info_app_icon">При смене иконки Worbus закроется, так как этого требует Android. Некоторые иконки на главном экране могут выглядеть одинаково, если лаунчер динамически меняет их в соответствии с темой.</string>
     <string name="option_palette_specification">Спецификация палитры</string>
     <string name="option_palette_style">Стиль палитры</string>
     <string name="notice_local_network_denied">В разрешении отказано</string>
@@ -462,7 +458,7 @@
     <string name="info_lyric_provider_disclaimer">Включении LRCLIB и/или LyricsPlus приведёт к отправке запросов на внешние и не связанные с приложением веб-сервисы.</string>
     <string name="title_discord_server">Сервер Discord</string>
     <string name="title_lyric_providers">Источники текстов песен</string>
-    <string name="title_link_confirmation">Покидаете Navic</string>
+    <string name="title_link_confirmation">Покидаете Worbus</string>
     <string name="action_start">Запустить</string>
     <string name="action_scroll_down">Прокрутить вниз</string>
     <string name="title_audio_effects">Аудиоэффекты</string>

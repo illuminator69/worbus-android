@@ -1,5 +1,5 @@
 <resources>
-	<string name="app_name" translatable="false">Navic</string>
+	<string name="app_name" translatable="false">Worbus</string>
 
 	<string name="title_library">Library</string>
 	<string name="title_starred">Starred</string>
@@ -67,7 +67,7 @@
 	<string name="title_github">GitHub</string>
 	<string name="title_source_code">Source code</string>
 	<string name="title_codeberg">Codeberg</string>
-	<string name="title_link_confirmation">Leaving Navic</string>
+	<string name="title_link_confirmation">Leaving Worbus</string>
 	<string name="title_audio_effects">Audio effects</string>
 
 	<string name="subtitle_appearance">Colours, text, library, motion, app icon</string>
@@ -90,9 +90,8 @@
 	<string name="subtitle_download_quality">Adjust the quality of downloaded music</string>
 	<string name="subtitle_dynamic_theming">Colour the whole app from the artwork on screen, and from the playing song</string>
 	<string name="subtitle_theme_overridden">Artwork is driving the colours. This still applies where there is none — settings, dialogs, and browsing pages with nothing playing.</string>
-	<string name="subtitle_app_icon_designer">Designed by: %1$s</string>
-	<string name="subtitle_local_network_denied">You need to grant Navic access to your local network in order for your server to be reachable.</string>
-	<string name="subtitle_notifications_denied">You need to grant Navic notification permissions to receive download and sync notifications.</string>
+	<string name="subtitle_local_network_denied">You need to grant Worbus access to your local network in order for your server to be reachable.</string>
+	<string name="subtitle_notifications_denied">You need to grant Worbus notification permissions to receive download and sync notifications.</string>
 	<string name="subtitle_equaliser">Tune &amp; enhance audio</string>
 	<string name="subtitle_equaliser_disabled">Not available when audio offload is enabled</string>
 	<string name="subtitle_configure_lyric_providers">Choose where to fetch lyrics from</string>
@@ -260,9 +259,9 @@
 
 	<string name="theme_dynamic">Dynamic</string>
 	<string name="theme_seeded">Tinted</string>
-	<string name="theme_ios">Cupertino</string>
-	<string name="theme_apple_music">Music.app</string>
-	<string name="theme_spotify">Spotlight</string>
+	<string name="theme_crisp">Crisp</string>
+	<string name="theme_rose">Rose</string>
+	<string name="theme_evergreen">Evergreen</string>
 
 	<string name="theme_mode_system">System</string>
 	<string name="theme_mode_dark">Dark</string>
@@ -445,7 +444,7 @@
 	<string name="notice_notifications_denied">Permission denied</string>
 	<string name="notice_link_confirmation">This link is taking you to the following website:</string>
 
-	<string name="info_app_version">Navic %1$s</string>
+	<string name="info_app_version">Worbus %1$s</string>
 	<string name="info_action_is_permanent">This action cannot be undone</string>
 	<string name="info_error">Something went wrong.</string>
 	<string name="info_error_show">Show details</string>
@@ -521,7 +520,7 @@
 	<string name="login_error_unreachable">Can't reach the server at %1$s. Check the address and that the server is running.</string>
 	<string name="login_error_not_https">This server doesn't use https. Try http:// instead.</string>
 	<string name="login_error_not_navidrome">That address answers, but it isn't a Navidrome server.</string>
-	<string name="notice_local_network_blocked">Android is blocking Navic from your local network.</string>
+	<string name="notice_local_network_blocked">Android is blocking Worbus from your local network.</string>
 	<string name="notice_login_notifications_off">Notifications are off, so download and sync progress won't show outside the app.</string>
 	<string name="info_exception_handler">This will immediately crash the application. Are you sure?</string>
 	<string name="info_streaming_quality">Higher quality presets will use more data. Transcoding can severely impact load times and cause lyrics to become unsynced. Select Original if you encounter any issues.</string>
@@ -529,7 +528,7 @@
 	<string name="info_repeat_off">Repeat off</string>
 	<string name="info_repeat_one">Repeat one</string>
 	<string name="info_repeat_all">Repeat all</string>
-	<string name="info_app_icon">Changing the app icon will close Navic as Android requires this. Some icons may look identical on your home screen if your launcher dynamically theme the icons.</string>
+	<string name="info_app_icon">Changing the app icon will close Worbus as Android requires this. Some icons may look identical on your home screen if your launcher dynamically theme the icons.</string>
 	<string name="info_equaliser_unsupported">Your device does not support this feature.</string>
 	<string name="info_equaliser_mode_not_builtin">Please adjust the external equaliser using its dedicated app.</string>
 	<string name="info_lyric_provider_disclaimer">Enabling LRCLIB and/or LyricsPlus will make requests to external and unaffiliated web services.</string>
@@ -539,7 +538,7 @@
 	<string name="info_login_description_start">Log into your</string>
 	<string name="info_login_description_middle">Navidrome</string>
 	<string name="info_login_description_end">instance.</string>
-	<string name="info_update_check">This option will check for updates from GitHub.\n\nThis may not be desirable if you installed Navic through an app repository, such as F-Droid or IzzyOnDroid, as checking for updates from GitHub bypasses any screening performed by the app repository.\n\nAre you sure you want to enable this?</string>
+	<string name="info_update_check">This option will check for updates from GitHub.\n\nThis may not be desirable if you installed Worbus through an app repository, such as F-Droid or IzzyOnDroid, as checking for updates from GitHub bypasses any screening performed by the app repository.\n\nAre you sure you want to enable this?</string>
 	<string name="title_acknowledgements">Acknowledgements</string>
 	<string name="sideloading_warning_title">STOP, READ!</string>
 	<string name="sideloading_warning_subtitle">Google is planning to kill sideloading for ALL devices with Google Play Services installed!\n</string>
@@ -560,9 +559,9 @@
 
 	<string name="theme_subtitle_dynamic">Available on Android 12 and above</string>
 	<string name="theme_subtitle_seeded">One colour for all</string>
-	<string name="theme_subtitle_ios">A city in California</string>
-	<string name="theme_subtitle_apple_music">A theme with red/pink highlights</string>
-	<string name="theme_subtitle_spotify">A theme with green highlights</string>
+	<string name="theme_subtitle_crisp">Flat and bright, with soft corners</string>
+	<string name="theme_subtitle_rose">Red and pink highlights</string>
+	<string name="theme_subtitle_evergreen">Green highlights</string>
 
 	<plurals name="count_tracks">
 		<item quantity="one">%1$d track</item>
@@ -1412,7 +1411,7 @@
 	<string name="mood_play_short">Only %1$d of this mix's songs are in your library yet.</string>
 	<string name="mood_play_short_length">Only %1$d of this mix's songs are short enough for this mood.</string>
 	<string name="mood_unavailable_title">Mood search is not available right now</string>
-	<string name="mood_unavailable_body">Navic could not reach the server that finds songs by mood. Your library and everything else still work.</string>
+	<string name="mood_unavailable_body">Worbus could not reach the server that finds songs by mood. Your library and everything else still work.</string>
 	<!-- navi-connect P2: the staged queue inside the player (portrait phones). -->
 	<string name="staged_playing_from">Playing from</string>
 	<string name="staged_playing_from_album">Playing from album</string>
@@ -1737,4 +1736,9 @@
 	<string name="attention_imports_line">lb-bot couldn't finish filing these albums.</string>
 	<string name="attention_imports_home_only">Open lb-bot's page on your home network to fix them.</string>
 	<string name="info_server_version">Version %1$s</string>
+
+	<!-- Worbus P5 -->
+	<string name="about_credit">Worbus for Android is a fork of Navic by paige.</string>
+	<string name="about_licence">Licensed GPL-3.0, like the original.</string>
+	<string name="about_navidrome">Worbus is not affiliated with Navidrome.</string>
 </resources>

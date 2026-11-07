@@ -10,8 +10,9 @@
    The settings file stays excluded as before. It no longer holds a credential, but an install
    that has not opened since this change can still hold the old plaintext values until its
    first launch moves them. Multiplatform-Settings' `Settings()` maps to the default
-   SharedPreferences file, <applicationId>_preferences.xml: "paige.navic", plus ".debug" on
-   debug builds, so both are named.
+   SharedPreferences file, <applicationId>_preferences.xml: "app.worbus.android", plus ".debug" on
+   debug builds, so both are named (WorbusIdentityTest.backupRulesNameTheAppId reads the IDs from
+   the build file).
 
    Cached library data lives in the Room databases and is re-syncable, so it is excluded too
    rather than dragging a stale copy of the library onto a new device.
@@ -22,10 +23,10 @@
 		path="navic_secrets.xml" />
 	<exclude
 		domain="sharedpref"
-		path="paige.navic_preferences.xml" />
+		path="app.worbus.android_preferences.xml" />
 	<exclude
 		domain="sharedpref"
-		path="paige.navic.debug_preferences.xml" />
+		path="app.worbus.android.debug_preferences.xml" />
 	<exclude
 		domain="database"
 		path="cache.db" />

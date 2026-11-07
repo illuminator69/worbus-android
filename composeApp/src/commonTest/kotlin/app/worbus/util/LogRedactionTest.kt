@@ -108,7 +108,7 @@ class LogRedactionTest {
 			serverVersion = "0.4.0 (678af87)"
 		)
 		val text = logsFileText(known, emptyList())
-		assertTrue("Navic 0.4.0 (36a8ea5)" in text, text)
+		assertTrue("Worbus 0.4.0 (36a8ea5)" in text, text)
 		assertTrue("Android 17 (API 37)" in text, text)
 		assertTrue("Google Pixel 9" in text, text)
 		assertTrue("Worbus Server 0.4.0 (678af87)" in text, text)
@@ -123,7 +123,7 @@ class LogRedactionTest {
 		assertEquals("Samsung SM-S921B", deviceModelName("samsung", "SM-S921B"))
 		assertEquals("Google Pixel 9", deviceModelName("Google", "Google Pixel 9"))
 		assertEquals("Pixel 9", deviceModelName("", "Pixel 9"))
-		assertEquals("navic-logs-20261106-090502.txt", logsFileName(2026, 11, 6, 9, 5, 2))
+		assertEquals("worbus-logs-20261106-090502.txt", logsFileName(2026, 11, 6, 9, 5, 2))
 	}
 
 	@Test
@@ -139,7 +139,7 @@ class LogRedactionTest {
 		for (secret in listOf("planted-ds-77", "planted-user", "planted-t", "planted-s", "planted-bearer", "planted-pw")) {
 			assertFalse(secret in text, secret)
 		}
-		assertTrue(text.startsWith("Navic 0.4.0 (36a8ea5)\n"), text)
+		assertTrue(text.startsWith("Worbus 0.4.0 (36a8ea5)\n"), text)
 		assertTrue("Authorization: [removed]" in text, text)
 	}
 

@@ -616,7 +616,7 @@ fun SmartPlaylistEditorScreen(playlistId: String? = null) {
 							// re-saving edited rules means re-running them.
 							matchAlbums -> albumMode.build(
 								name = name.trim(),
-								comment = "Created with Navic",
+								comment = "Created with Worbus",
 								isPublic = isPublic,
 								rules = criteria,
 								existingId = playlistId
@@ -628,14 +628,14 @@ fun SmartPlaylistEditorScreen(playlistId: String? = null) {
 							editing -> nativeApi.updateSmartPlaylist(
 								playlistId = playlistId!!,
 								name = name.trim(),
-								comment = "Created with Navic",
+								comment = "Created with Worbus",
 								isPublic = isPublic,
 								rules = criteria
 							).map { playlistId }
 
 							else -> nativeApi.createSmartPlaylist(
 								name = name.trim(),
-								comment = "Created with Navic",
+								comment = "Created with Worbus",
 								isPublic = isPublic,
 								rules = criteria
 							)

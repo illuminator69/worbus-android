@@ -82,9 +82,9 @@ data class LogsHeader(
 	val serverVersion: String?
 )
 
-/** The text of `navic-logs-<stamp>.txt`: the header, a blank line, then [lines], each redacted. */
+/** The text of `worbus-logs-<stamp>.txt`: the header, a blank line, then [lines], each redacted. */
 fun logsFileText(header: LogsHeader, lines: List<String>): String = buildString {
-	append("Navic ").append(header.appVersion).append('\n')
+	append("Worbus ").append(header.appVersion).append('\n')
 	append(header.androidVersion).append('\n')
 	append("Device: ").append(header.deviceModel).append('\n')
 	append(header.serverVersion?.let { "Worbus Server $it" } ?: "Worbus Server: server version unknown").append('\n')
@@ -106,8 +106,8 @@ fun deviceModelName(manufacturer: String, model: String): String {
 	}
 }
 
-/** `navic-logs-20261106-153012.txt`, from the local date and time the file was made. */
+/** `worbus-logs-20261106-153012.txt`, from the local date and time the file was made. */
 fun logsFileName(year: Int, month: Int, day: Int, hour: Int, minute: Int, second: Int): String {
 	fun two(n: Int) = n.toString().padStart(2, '0')
-	return "navic-logs-$year${two(month)}${two(day)}-${two(hour)}${two(minute)}${two(second)}.txt"
+	return "worbus-logs-$year${two(month)}${two(day)}-${two(hour)}${two(minute)}${two(second)}.txt"
 }

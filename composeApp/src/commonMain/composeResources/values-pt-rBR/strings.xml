@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Navic</string>
+    <string name="app_name" translatable="false">Worbus</string>
     <string name="title_library">Biblioteca</string>
     <string name="title_playlists">Playlists</string>
     <string name="title_settings">Configurações</string>
@@ -55,9 +55,6 @@
     <string name="option_choose_theme">Escolher tema</string>
     <string name="theme_dynamic">Dinâmico</string>
     <string name="theme_seeded">Tonalizado</string>
-    <string name="theme_ios">Cupertino</string>
-    <string name="theme_apple_music">Music.app</string>
-    <string name="theme_spotify">Spotlight</string>
     <string name="action_new">Novo</string>
     <string name="action_shuffle">Aleatório</string>
     <string name="action_repeat">Repetir</string>
@@ -90,7 +87,7 @@
     <string name="notice_copied">Copiado para a área de transferência.</string>
     <string name="notice_expiry">Expira em %1$s</string>
     <string name="notice_loading_lyrics">Carregando letra...\nIsso pode levar algum tempo.</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_action_is_permanent">Essa ação não pode ser desfeita!</string>
     <string name="info_error">Algo deu errado.</string>
     <string name="info_error_show">Mostrar detalhes</string>
@@ -319,7 +316,7 @@
     <string name="info_repeat_off">Repetir desativado</string>
     <string name="info_repeat_one">Repetir atual</string>
     <string name="info_repeat_all">Repetir todas</string>
-    <string name="info_app_icon">Alterar o ícone do aplicativo irá fechar o Navic, pois isso é uma exigência do Android. Talvez alguns ícones pareçam idênticos na sua tela inicial se o seu launcher aplica temas dinâmicos no ícone.</string>
+    <string name="info_app_icon">Alterar o ícone do aplicativo irá fechar o Worbus, pois isso é uma exigência do Android. Talvez alguns ícones pareçam idênticos na sua tela inicial se o seu launcher aplica temas dinâmicos no ícone.</string>
     <string name="info_equaliser_unsupported">Seu dispositivo não suporta essa opção.</string>
     <string name="info_equaliser_mode_not_builtin">Por favor ajuste o equalizador externo usando o seu próprio aplicativo dedicado.</string>
     <string name="info_lyric_provider_disclaimer">Ativar o LRCLIB e/ou o LyricsPlus irá fazer requisições a serviços externos e não afiliados.</string>
@@ -381,11 +378,11 @@
     <string name="title_account">Conta</string>
     <string name="title_track_info">Informações da faixa</string>
     <string name="title_lyric_providers">Provedores de letras</string>
-    <string name="title_link_confirmation">Saindo do Navic</string>
+    <string name="title_link_confirmation">Saindo do Worbus</string>
     <string name="subtitle_download_quality">Ajustar a qualidade da música baixada</string>
     <string name="subtitle_dynamic_theming">Alterar dinamicamente o tema das páginas de artista e álbum baseado na capa</string>
     <string name="notice_local_network_denied">Permissão negada</string>
-    <string name="subtitle_local_network_denied">Você precisa permitir o acesso à rede local ao Navic para que seja possível acessar o seu servidor.</string>
+    <string name="subtitle_local_network_denied">Você precisa permitir o acesso à rede local ao Worbus para que seja possível acessar o seu servidor.</string>
     <string name="info_download_quality">Predefinições de qualidade mais altas utilizam mais espaço e dados. A transcodificação pode aumentar o tempo de download. Selecione "Lossless" se encontrar algum problema.</string>
     <string name="subtitle_equaliser_disabled">Indisponível quando o offload de áudio está ativado</string>
     <string name="notice_added_to_queue">Adicionado à fila.</string>
@@ -426,7 +423,6 @@
     <string name="notice_removed_from_playlist">Removido da playlist.</string>
     <string name="notice_play_next">Será reproduzido a seguir.</string>
     <string name="option_sort_year">Ano</string>
-    <string name="subtitle_app_icon_designer">Feito por: %1$s</string>
     <string name="option_palette_specification">Especificação da paleta</string>
     <string name="option_navigation_bar_style_short">Curto</string>
     <string name="action_clear_queue">Limpar fila</string>

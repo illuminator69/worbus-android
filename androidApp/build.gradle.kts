@@ -23,13 +23,15 @@ extensions.configure<ApplicationExtension> {
 	}
 
 	defaultConfig {
-		applicationId = "paige.navic"
+		// Worbus P5: the app's own ID, for good (design §6.1). It installs beside Navic, which keeps
+		// its own ID, data and sign-in.
+		applicationId = "app.worbus.android"
 		minSdk = libs.versions.android.minSdk.get().toInt()
 		targetSdk = libs.versions.android.targetSdk.get().toInt()
-		// Worbus P4: one version for every piece, 0.4.0; the code must stay above upstream's 59 or the
-		// phone refuses the update (and an uninstall costs the login).
-		versionCode = 60
-		versionName = "0.4.0"
+		// One version for every piece of Worbus. The code keeps counting from 0.4.0's 60. BuildInfo
+		// reads versionName from this file for the User-Agent (composeApp/build.gradle.kts).
+		versionCode = 61
+		versionName = "0.5.0"
 
 		ndk {
 			abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
@@ -69,7 +71,7 @@ extensions.configure<ApplicationExtension> {
 
 		getByName("debug") {
 			applicationIdSuffix = ".debug"
-			resValue("string", "app_name", "Navic (Dev)")
+			resValue("string", "app_name", "Worbus (Dev)")
 		}
 	}
 
@@ -106,9 +108,9 @@ extensions.configure<ApplicationAndroidComponentsExtension> {
 		variant.outputs.forEach { output ->
 			if (output is VariantOutputImpl) {
 				output.outputFileName = if (fdroid) {
-					"Navic.fdroid.apk"
+					"Worbus.fdroid.apk"
 				} else {
-					"Navic.apk"
+					"Worbus.apk"
 				}
 			}
 		}

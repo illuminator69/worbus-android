@@ -1,5 +1,6 @@
 package app.worbus.domain.manager
 
+import app.worbus.util.userAgent
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.UserAgent
@@ -71,7 +72,7 @@ class StationManager(
 
 	private val client by lazy {
 		HttpClient {
-			install(UserAgent) { agent = "Navic" }
+			install(UserAgent) { agent = userAgent() }
 			install(HttpTimeout) {
 				connectTimeoutMillis = 8_000
 				requestTimeoutMillis = REQUEST_TIMEOUT_MS

@@ -23,10 +23,10 @@
 			path="navic_secrets.xml" />
 		<exclude
 			domain="sharedpref"
-			path="paige.navic_preferences.xml" />
+			path="app.worbus.android_preferences.xml" />
 		<exclude
 			domain="sharedpref"
-			path="paige.navic.debug_preferences.xml" />
+			path="app.worbus.android.debug_preferences.xml" />
 		<exclude
 			domain="database"
 			path="cache.db" />

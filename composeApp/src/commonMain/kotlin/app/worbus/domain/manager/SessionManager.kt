@@ -1,5 +1,7 @@
 package app.worbus.domain.manager
 
+import app.worbus.util.userAgent
+import app.worbus.util.CLIENT_NAME
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import dev.zt64.subsonic.api.model.Role
@@ -67,7 +69,7 @@ class SessionManager(
 					coerceInputValues = true
 				})
 			}
-			install(UserAgent) { agent = "Navic" }
+			install(UserAgent) { agent = userAgent() }
 			install(HttpTimeout)
 		}
 	}
@@ -129,13 +131,13 @@ class SessionManager(
 			username = username,
 			password = password,
 		),
-		client = "Navic",
+		client = CLIENT_NAME,
 		clientConfig = {
 			// Before anything parses: one album without cover art used to fail every library sync.
 			installSubsonicResponseRepair()
 
 			install(UserAgent) {
-				agent = "Navic"
+				agent = userAgent()
 			}
 
 			// OkHttp's default 10s read timeout aborts library syncs when the
@@ -267,7 +269,7 @@ class SessionManager(
 					parameter("t", token)
 					parameter("s", salt)
 					parameter("v", "1.16.1")
-					parameter("c", "Navic")
+					parameter("c", CLIENT_NAME)
 					parameter("f", "json")
 				}.body()
 			artistsOf(envelope)
@@ -314,7 +316,7 @@ class SessionManager(
 					parameter("t", token)
 					parameter("s", salt)
 					parameter("v", "1.16.1")
-					parameter("c", "Navic")
+					parameter("c", CLIENT_NAME)
 					parameter("f", "json")
 					parameter("id", artistId)
 					parameter("count", maxSimilar)
@@ -348,7 +350,7 @@ class SessionManager(
 					parameter("t", token)
 					parameter("s", salt)
 					parameter("v", "1.16.1")
-					parameter("c", "Navic")
+					parameter("c", CLIENT_NAME)
 					parameter("f", "json")
 					parameter("id", id)
 					parameter("count", count)
@@ -382,7 +384,7 @@ class SessionManager(
 					parameter("t", token)
 					parameter("s", salt)
 					parameter("v", "1.16.1")
-					parameter("c", "Navic")
+					parameter("c", CLIENT_NAME)
 					parameter("f", "json")
 				}.body()
 			envelope.response.openSubsonicExtensions.map { it.name }
@@ -436,7 +438,7 @@ class SessionManager(
 					parameter("t", token)
 					parameter("s", salt)
 					parameter("v", "1.16.1")
-					parameter("c", "Navic")
+					parameter("c", CLIENT_NAME)
 					parameter("f", "json")
 					parameter("mediaId", mediaId)
 					parameter("mediaType", "song")
@@ -481,7 +483,7 @@ class SessionManager(
 					parameter("t", token)
 					parameter("s", salt)
 					parameter("v", "1.16.1")
-					parameter("c", "Navic")
+					parameter("c", CLIENT_NAME)
 					parameter("f", "json")
 					parameter("id", id)
 					parameter("count", count)
@@ -514,7 +516,7 @@ class SessionManager(
 					parameter("t", token)
 					parameter("s", salt)
 					parameter("v", "1.16.1")
-					parameter("c", "Navic")
+					parameter("c", CLIENT_NAME)
 					parameter("f", "json")
 					parameter("startSongId", startId)
 					parameter("endSongId", endId)
@@ -557,7 +559,7 @@ class SessionManager(
 						parameter("t", token)
 						parameter("s", salt)
 						parameter("v", "1.16.1")
-						parameter("c", "Navic")
+						parameter("c", CLIENT_NAME)
 						parameter("f", "json")
 						parameter("query", "")
 						parameter("artistCount", pageSize)

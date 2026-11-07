@@ -32,9 +32,9 @@
     <string name="action_view_on_musicbrainz">Vedi su MusicBrainz</string>
     <string name="action_view_playlist">Vedi playlist</string>
     <string name="action_view_shares">Condivisioni</string>
-    <string name="app_name" translatable="false">Navic</string>
+    <string name="app_name" translatable="false">Worbus</string>
     <string name="info_action_is_permanent">Questa azione non può essere annullata</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_error">Qualcosa è andato storto.</string>
     <string name="info_error_hide">Nascondi dettagli</string>
     <string name="info_error_show">Mostra dettagli</string>
@@ -101,11 +101,8 @@
     <string name="subtitle_enable_scrobbling">Esegui lo Scrobble delle tracce riprodotte sul tuo server Navidrome</string>
     <string name="subtitle_now_playing">Personalizza le pagine del player &amp; il testo</string>
     <string name="subtitle_playlist">Playlist</string>
-    <string name="theme_apple_music">Music.app</string>
     <string name="theme_dynamic">Dinamico</string>
-    <string name="theme_ios">Cupertino</string>
     <string name="theme_seeded">Tinta</string>
-    <string name="theme_spotify">Spotlight</string>
     <string name="title_about">About</string>
     <string name="title_albums">Album</string>
     <string name="title_all">Tutto</string>
@@ -386,14 +383,13 @@
     <string name="info_repeat_all">Ripeti tutto</string>
     <string name="option_sort_year">Anno</string>
     <string name="subtitle_dynamic_theming">Applica un tema dinamico nella pagina degli album e artisti basandosi sulla copertina</string>
-    <string name="subtitle_app_icon_designer">Disegnato da: %1$s</string>
     <string name="option_choose_app_icon">Icona dell'app</string>
     <string name="option_dynamic_theming">Tema dinamico</string>
-    <string name="info_app_icon">Cambiare icona, chiuderà Navic come richiesto da Android. Alcune icone potrebbero sembrare identiche nella home se il launcher applica un tema dinamico ai colori dell'icona.</string>
+    <string name="info_app_icon">Cambiare icona, chiuderà Worbus come richiesto da Android. Alcune icone potrebbero sembrare identiche nella home se il launcher applica un tema dinamico ai colori dell'icona.</string>
     <string name="title_download_quality">Qualità download</string>
     <string name="title_track_info">Info traccia</string>
     <string name="subtitle_download_quality">Regola la qualità delle tracce scaricate</string>
-    <string name="subtitle_local_network_denied">Devi permettere a Navic di accedere alla rete locale per rendere il server raggiungibile.</string>
+    <string name="subtitle_local_network_denied">Devi permettere a Worbus di accedere alla rete locale per rendere il server raggiungibile.</string>
     <string name="subtitle_equaliser">Regola &amp; ottimizza l'audio</string>
     <string name="subtitle_equaliser_disabled">Non disponibile se l'audio offload è attivo</string>
     <string name="option_auto_fill_queue">Riempi automaticamente la coda</string>
@@ -419,7 +415,7 @@
     <string name="title_lyric_providers">Provider dei testi</string>
     <string name="title_github">GitHub</string>
     <string name="title_codeberg">Codeberg</string>
-    <string name="title_link_confirmation">Uscita da Navic</string>
+    <string name="title_link_confirmation">Uscita da Worbus</string>
     <string name="subtitle_configure_lyric_providers">Scegli dove prendere i testi</string>
     <plurals name="count_minutes_ago">
         <item quantity="one">%1$d minuto fa</item>

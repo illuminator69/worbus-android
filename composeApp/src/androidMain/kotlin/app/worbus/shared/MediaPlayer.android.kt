@@ -1,5 +1,6 @@
 package app.worbus.shared
 
+import app.worbus.util.userAgent
 import android.app.Application
 import android.app.PendingIntent
 import android.content.ComponentName
@@ -223,7 +224,7 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 		// [ResumingDataSource] then reopens a broken stream at the byte it stopped at.
 		streamingClient = HttpClient(OkHttp) {
 			engine { config { protocols(listOf(Protocol.HTTP_1_1)) } }
-			install(UserAgent) { agent = "Navic" }
+			install(UserAgent) { agent = userAgent() }
 			install(HttpTimeout) {
 				connectTimeoutMillis = 15_000
 				socketTimeoutMillis = 60_000
@@ -489,7 +490,7 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 		): ListenableFuture<LibraryResult<MediaItem>> {
 			val rootItem = MediaItem.Builder()
 				.setMediaId(MEDIA_ROOT_ID)
-				.setMediaMetadata(browsableFolder("Navic", FOLDER_TYPE_MIXED))
+				.setMediaMetadata(browsableFolder("Worbus", FOLDER_TYPE_MIXED))
 				.build()
 			return Futures.immediateFuture(LibraryResult.ofItem(rootItem, params))
 		}

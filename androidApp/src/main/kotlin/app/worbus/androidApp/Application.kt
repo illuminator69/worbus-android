@@ -50,11 +50,11 @@ class Application : android.app.Application(), SingletonImageLoader.Factory, Koi
 			try {
 				// B-296: `Log.getStackTraceString` (and `Log.e`'s throwable overload) print nothing
 				// for a chain holding an UnknownHostException, so the trace is printed by Kotlin and
-				// logged as text, under the tag "NavicCrash", before anything else is tried.
+				// logged as text, under the tag "WorbusCrash", before anything else is tried.
 				val text = crashReportText(throwable, appVersionLine())
 				try {
-					Log.e("NavicCrash", "Uncaught exception on thread ${thread.name}", throwable)
-					for (chunk in crashLogChunks(text)) Log.e("NavicCrash", chunk)
+					Log.e("WorbusCrash", "Uncaught exception on thread ${thread.name}", throwable)
+					for (chunk in crashLogChunks(text)) Log.e("WorbusCrash", chunk)
 				} catch (_: Throwable) {
 				}
 				val intent = Intent(this, CrashActivity::class.java).apply {

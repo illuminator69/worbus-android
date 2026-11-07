@@ -143,7 +143,7 @@ class AlbumModeSmartPlaylists(
 			?: return Result.failure(IllegalStateException("No stored rules for this playlist"))
 		return build(
 			name = name,
-			comment = "Created with Navic",
+			comment = "Created with Worbus",
 			isPublic = isPublic,
 			rules = rules,
 			existingId = playlistId

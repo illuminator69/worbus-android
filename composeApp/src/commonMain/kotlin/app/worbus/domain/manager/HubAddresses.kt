@@ -1,5 +1,6 @@
 package app.worbus.domain.manager
 
+import app.worbus.util.userAgent
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.UserAgent
@@ -485,7 +486,7 @@ fun InfoOutcome.judgedAgainst(record: HubServerRecord): InfoOutcome = when {
 /** The probes' one client (review M14: not one per probe), made on first use. */
 private val sharedProbeClient: HttpClient by lazy {
 	HttpClient {
-		install(UserAgent) { agent = "Navic" }
+		install(UserAgent) { agent = userAgent() }
 		install(HttpTimeout)
 		expectSuccess = false
 		followRedirects = false

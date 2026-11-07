@@ -13,7 +13,7 @@ package app.worbus.util
  * URL, login query included.
  */
 fun crashReportText(t: Throwable, appVersion: String? = null): String = buildString {
-	append("Navic ").append(appVersion?.ifBlank { null } ?: "(version unknown)").append('\n')
+	append("Worbus ").append(appVersion?.ifBlank { null } ?: "(version unknown)").append('\n')
 	append(redactLines(t.stackTraceToString()))
 }
 

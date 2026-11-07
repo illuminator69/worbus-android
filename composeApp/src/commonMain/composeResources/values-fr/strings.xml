@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Navic</string>
+    <string name="app_name" translatable="false">Worbus</string>
     <string name="title_library">Bibliothèque</string>
     <string name="title_playlists">Playlists</string>
     <string name="title_settings">Paramètres</string>
@@ -56,9 +56,6 @@
     <string name="option_choose_theme">Choisir le thème</string>
     <string name="theme_dynamic">Dynamique</string>
     <string name="theme_seeded">Teinté</string>
-    <string name="theme_ios">Cupertino</string>
-    <string name="theme_apple_music">Music.app</string>
-    <string name="theme_spotify">Spotlight</string>
     <plurals name="count_songs">
         <item quantity="one">%1$d morceau</item>
         <item quantity="many">%1$d morceaux</item>
@@ -116,7 +113,7 @@
     <string name="notice_copied">Copié dans le presse-papiers.</string>
     <string name="notice_expiry">Expire dans %1$s</string>
     <string name="notice_loading_lyrics">Chargement des paroles...\nCela peut prendre un moment.</string>
-    <string name="info_app_version">Navic %1$s</string>
+    <string name="info_app_version">Worbus %1$s</string>
     <string name="info_action_is_permanent">Cette action est irréversible</string>
     <string name="info_error">Une erreur s'est produite.</string>
     <string name="info_error_show">Afficher les détails</string>
@@ -388,8 +385,7 @@
     <string name="title_track_info">Informations sur la piste</string>
     <string name="subtitle_download_quality">Ajuster la qualité des morceaux téléchargés</string>
     <string name="subtitle_dynamic_theming">Thème dynamique pour l'affichage des albums et des artistes, en fonction de l'illustration de couverture</string>
-    <string name="subtitle_app_icon_designer">Conçu par : %1$s</string>
-    <string name="subtitle_local_network_denied">Vous devez autoriser Navic à accéder à votre réseau local pour que votre serveur soit accessible.</string>
+    <string name="subtitle_local_network_denied">Vous devez autoriser Worbus à accéder à votre réseau local pour que votre serveur soit accessible.</string>
     <string name="option_sort_year">Année</string>
     <string name="option_choose_app_icon">Icône de l'application</string>
     <string name="option_download_custom_quality">Utiliser une qualité de téléchargement personnalisée</string>
@@ -399,7 +395,7 @@
     <string name="action_open_settings">Ouvrir les paramètres</string>
     <string name="notice_local_network_denied">Permission refusée</string>
     <string name="info_download_quality">Les préréglages de meilleure qualité occupent davantage d'espace de stockage et de données. Le transcodage peut allonger les délais de téléchargement. Sélectionnez « Sans perte » si vous rencontrez des problèmes.</string>
-    <string name="info_app_icon">Android requiert de fermer Navic afin de changer l'icône de l'application . Certaines icônes peuvent sembler identique sur votre écran d'accueil si votre lanceur d'application modifie dynamiquement la couleur des icônes.</string>
+    <string name="info_app_icon">Android requiert de fermer Worbus afin de changer l'icône de l'application . Certaines icônes peuvent sembler identique sur votre écran d'accueil si votre lanceur d'application modifie dynamiquement la couleur des icônes.</string>
     <string name="option_cover_art_action">Appui sur l'illustration de couverture</string>
     <string name="option_cover_art_action_disabled">Désactivé</string>
     <string name="option_cover_art_action_show_lyrics">Montrer les paroles</string>
@@ -421,7 +417,7 @@
     <string name="title_codeberg">Codeberg</string>
     <string name="subtitle_configure_lyric_providers">Choisir d'où les paroles sont récupérées</string>
     <string name="option_equaliser_mode_disabled">Désactivé</string>
-    <string name="title_link_confirmation">Sortir de Navic</string>
+    <string name="title_link_confirmation">Sortir de Worbus</string>
     <string name="option_equaliser_mode">Source de l'égaliseur</string>
     <string name="option_equaliser_mode_builtin">Intégré</string>
     <string name="option_equaliser_mode_external">Externe</string>

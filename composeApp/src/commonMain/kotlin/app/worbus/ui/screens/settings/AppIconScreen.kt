@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import worbus.composeapp.generated.resources.Res
 import worbus.composeapp.generated.resources.info_app_icon
 import worbus.composeapp.generated.resources.option_choose_app_icon
-import worbus.composeapp.generated.resources.subtitle_app_icon_designer
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import app.worbus.domain.manager.AppIconManager
@@ -78,14 +77,6 @@ fun SettingsAppIconScreen() {
 								}
 							},
 							content = { Text(stringResource(variant.label)) },
-							supportingContent = {
-								Text(
-									text = stringResource(
-										Res.string.subtitle_app_icon_designer,
-										variant.designer
-									)
-								)
-							},
 							leadingContent = {
 								RadioButton(
 									selected = selected,

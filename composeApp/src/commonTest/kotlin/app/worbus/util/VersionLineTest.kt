@@ -19,6 +19,6 @@ class VersionLineTest {
 
 	@Test
 	fun updateCheck_points_at_fork() {
-		assertEquals("https://api.github.com/repos/illuminator69/navic-gaps/releases/latest", UPDATE_CHECK_URL)
+		assertEquals("https://api.github.com/repos/illuminator69/worbus-android/releases/latest", UPDATE_CHECK_URL)
 	}
 }

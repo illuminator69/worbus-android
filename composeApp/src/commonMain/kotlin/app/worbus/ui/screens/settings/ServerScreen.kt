@@ -422,7 +422,7 @@ fun ServerScreen() {
 								)
 								WorbusServerRow.DeviceName -> ValueRow(
 									label = Res.string.option_server_device_name,
-									value = preferenceManager.hubDeviceName.ifBlank { null },
+									value = hubManager.deviceName,
 									index = first + i,
 									count = rows,
 									onClick = { editing = ServerField.DeviceName }
@@ -548,7 +548,7 @@ fun ServerScreen() {
 			ServerField.Address -> FieldSpec(Res.string.action_type_address, false, "", "192.168.1.10:4790")
 			ServerField.Addresses -> return@let
 			ServerField.Token -> FieldSpec(Res.string.option_server_token_old, true, hubAuth.legacyTokenForEditing(), "")
-			ServerField.DeviceName -> FieldSpec(Res.string.option_server_device_name, false, preferenceManager.hubDeviceName, "")
+			ServerField.DeviceName -> FieldSpec(Res.string.option_server_device_name, false, preferenceManager.hubDeviceName, hubManager.defaultDeviceName)
 			ServerField.AudioMuseAddress -> FieldSpec(Res.string.option_audiomuse_address, false, preferenceManager.audioMuseUrl, "http://192.168.1.10:8000")
 			ServerField.AudioMuseToken -> FieldSpec(Res.string.option_audiomuse_token, true, preferenceManager.audioMuseToken, "")
 		}
@@ -574,7 +574,8 @@ fun ServerScreen() {
 						hubManager.restart()
 					}
 					ServerField.DeviceName -> {
-						preferenceManager.hubDeviceName = text.trim().ifBlank { "Navic" }
+						// Blank goes back to the model's name; a typed name is kept as typed.
+						preferenceManager.hubDeviceName = text.trim()
 						hubManager.restart()
 					}
 					ServerField.AudioMuseAddress -> preferenceManager.audioMuseUrl = text.trim()

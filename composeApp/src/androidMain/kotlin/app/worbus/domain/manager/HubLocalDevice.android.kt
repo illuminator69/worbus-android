@@ -41,6 +41,9 @@ class AndroidHubLocalDevice(context: Context) : HubLocalDevice {
 	override val kind: String
 		get() = phoneOrTablet(app.resources.configuration.smallestScreenWidthDp)
 
+	override val model: String?
+		get() = Build.MODEL
+
 	private val _mediaVolume = MutableStateFlow(readLevel())
 	override val mediaVolume: StateFlow<Int?> = _mediaVolume.asStateFlow()
 

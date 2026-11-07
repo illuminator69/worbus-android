@@ -510,10 +510,10 @@ class ListeningTest {
 			unowned.rows.single()
 		)
 		val recent = wire.decodeFromString<LbListeningRecent>(
-			"""{"rows":[{"listenedAt":1791054300,"track":"S","artist":"A","release":"T","artistMbid":"mb-a","rgid":"rg-1","recordingMbid":"rec-1","ndArtistId":"ar-1","ndAlbumId":"al-1","client":"Navic"}],"nextBefore":1791054300}"""
+			"""{"rows":[{"listenedAt":1791054300,"track":"S","artist":"A","release":"T","artistMbid":"mb-a","rgid":"rg-1","recordingMbid":"rec-1","ndArtistId":"ar-1","ndAlbumId":"al-1","client":"Worbus-Android"}],"nextBefore":1791054300}"""
 		)
 		assertEquals(
-			LbRecentPlay(1_791_054_300.0, "S", "A", "T", "mb-a", "rg-1", "rec-1", "ar-1", "al-1", "Navic"),
+			LbRecentPlay(1_791_054_300.0, "S", "A", "T", "mb-a", "rg-1", "rec-1", "ar-1", "al-1", "Worbus-Android"),
 			recent.rows.single()
 		)
 		assertEquals(1_791_054_300.0, recent.nextBefore)
