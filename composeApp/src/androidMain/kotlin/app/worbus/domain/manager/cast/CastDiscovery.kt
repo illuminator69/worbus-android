@@ -27,7 +27,7 @@ private const val SERVICE_TYPE = "_googlecast._tcp."
 
 // A Chromecast announces itself only every couple of minutes, so a single lost query — the Wi-Fi
 // interface not up yet, a switch dropping the first multicast — used to cost ~90s before the
-// speaker appeared. (Worbus for desktop hit exactly this; see its REQUERY_* constants.) Re-query fast while
+// speaker appeared. (Feishin hit exactly this; see its REQUERY_* constants.) Re-query fast while
 // we are likely still missing devices, then slowly, which also picks up anything powered on later.
 private const val REQUERY_FAST_MS = 3_000L
 private const val REQUERY_FAST_TRIES = 10

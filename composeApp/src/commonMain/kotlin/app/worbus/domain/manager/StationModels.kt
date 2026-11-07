@@ -666,7 +666,7 @@ data class AutoplayLook(
 	val autoDjTiming: Int,
 	/** Another device topped the bound station up in the last [STATION_ELSEWHERE_GRACE_MS]. */
 	val elsewhereRecent: Boolean = false,
-	/** A chip tap asked for this look: it decides paused too (S-035, Worbus for desktop's B-144). */
+	/** A chip tap asked for this look: it decides paused too (S-035, Feishin's B-144). */
 	val chipTap: Boolean = false
 )
 

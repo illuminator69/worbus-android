@@ -9,7 +9,7 @@ package app.worbus.ui.screens.discover
  * precedent was `MoodCharacter` (now `StationCharacter`), and it is a
  * cautionary one: the same three presets live here and in Worbus for desktop's
  * `audio-muse-source.ts` with matching numbers but different ids and labels, and
- * the two have already drifted — Worbus for desktop's auto-DJ escalates temperature per
+ * the two have already drifted — Feishin's auto-DJ escalates temperature per
  * pass and this client's `topUp` does not. Writing the ids down in one place
  * (`navi-connect/CLAUDE.md` §6) is the only thing standing between this table
  * and the same fate.

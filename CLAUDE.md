@@ -349,11 +349,15 @@ comes to the sandbox VM** or into any repository; its passwords live in an env f
 holds the format). The workstation's local release builds source the env file. Anywhere else a
 release build falls back to the debug key, and Gradle says so in one warning line: `Worbus release
 APK signed with the DEBUG key (SIGNING_* unset): not for distribution`. The VM's APKs are therefore
-debug-signed; the workstation's receiver re-signs a new-ID (`app.worbus.android`) APK with the
-release key only by a deliberate `vmfetch.py apk release`, which checks the result against the
-recorded fingerprint; its 30-second watcher never reads the release key. An old-ID (`paige.navic`)
-APK from an old branch is still re-signed with the debug key, so it updates the old Navic on the
-phone. CI (`build.yml`, §8) refuses to draft a release while the file says `unset` or when the built
+debug-signed. What the workstation's receiver does with such an APK is lane K's K2 change (planned,
+not on this branch, not verified from the VM): it is meant to re-sign a new-ID (`app.worbus.android`)
+APK with the release key only by a deliberate `vmfetch.py apk release`, checking the result against
+the recorded fingerprint, with its 30-second watcher never reading the release key, and to go on
+re-signing an old-ID (`paige.navic`) APK from an old branch with the debug key, so it updates the
+old Navic on the phone. Until K2 lands, treat the receiver's behaviour as whatever it does today.
+The warning line is written by `assembleRelease`'s first action (`doFirst`, from a Boolean captured
+while the script configures), so it is in the log of every such build, including one that reuses the
+configuration cache (`WorbusReleaseTest.releaseWithoutKeyWarns` holds the shape). CI (`build.yml`, §8) refuses to draft a release while the file says `unset` or when the built
 APK's certificate differs. Check any APK by hand:
 
 ```bash
@@ -383,7 +387,7 @@ the phone as an unexplained failure to update:
   (`apksigner verify` → `DOES NOT VERIFY — Missing META-INF/MANIFEST.MF`).
 
 ```bash
-$ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs \
+$ANDROID_HOME/build-tools/37.0.0/apksigner verify --print-certs \
     androidApp/build/outputs/apk/release/Worbus.apk
 keytool -list -v -keystore ~/.android/debug.keystore -storepass android | grep SHA-256
 ```
@@ -726,7 +730,7 @@ Rules, each with a reason:
   says `stopped` in its frames), and the songs that station added that are still to come are taken
   out. **A character**: autoplay on with it; a bound station that is stopped or on another
   character gets `signal character`, its songs still to come are swapped for a fresh batch at once,
-  and the top-up decision runs at once, **paused or not** (`AutoplayLook.chipTap`; Worbus for desktop's
+  and the top-up decision runs at once, **paused or not** (`AutoplayLook.chipTap`; Feishin's
   B-144). Starting any radio turns autoplay back on.
   **Who edits (S-035).** With `stationEdits` in `welcome.features` and the queue being the
   session's bound station (`chipEditsOnHub`: this device playing it, or controlling the device
@@ -1669,7 +1673,7 @@ Library Matches, Downloads and Saved queues are (I-026, I-039), wrapped at their
 the repos, so the ids are kept in step by hand and are written down in
 `navi-connect/CLAUDE.md` §6. The precedent was `MoodCharacter`, and it is a
 cautionary one: same three presets both sides, matching numbers, different ids,
-and the behaviour has already drifted (Worbus for desktop's auto-DJ escalates temperature
+and the behaviour has already drifted (Feishin's auto-DJ escalates temperature
 per pass; `RadioManager.topUp` did not; since I-040 both read the hub's catalogue
 instead). Change a row id here and there.
 
@@ -1723,7 +1727,7 @@ published concurrently, so last-write-wins is the entire conflict story.
 playing", whose recipe comes from `RadioManager.currentRecipe` — i.e. from whichever
 autoplay mode happens to be on — so `MixKind.GENRE` and `MixKind.ARTIST` were
 **unreachable from this client entirely**. `regenerate` could play them, `MixFormat`
-could label them and the hub validated them; they could only arrive from Worbus for desktop.
+could label them and the hub validated them; they could only arrive from Feishin.
 `ui/screens/mixes/MixFormSheet.kt` was the general path until P5 replaced it with the custom
 radio (§4; the paragraph below is its history): name, kind, and a seed
 picker that fits the kind. It makes four, **in Worbus for desktop's order and with Worbus for desktop's words**
@@ -1735,7 +1739,7 @@ engine), Genre ("A random run through one genre": the genre's NAME in `seedId` a
 character). An `artist` mix is the artist page's radio (`artistRadioPlan`, shared with
 `startArtistRadio`): a station from up to five of their songs with the engine, Navidrome's
 similar songs after them without it; it used to shuffle the artist's own songs. A genre
-recipe is drawn by name, trying `seedName` after `seedId`, because Worbus for desktop wrote the genre's
+recipe is drawn by name, trying `seedName` after `seedId`, because Feishin wrote the genre's
 id there before B-150 (`genreSeedNames`). `similar`, `fingerprint` and `adaptive` still play
 (as stations when the engine is there: `similar` a track radio on Balanced, the other two
 Your mix) and are no longer made. A station-backed mix has no preview: it is built as it

@@ -693,7 +693,7 @@ class HubAuthTest {
 		assertEquals("typed", auth.bearer())
 	}
 
-	// ---- Worbus for desktop review C1's pattern: "the hub is set up" never means "a token is typed" ---- //
+	// ---- Feishin review C1's pattern: "the hub is set up" never means "a token is typed" ---- //
 
 	@Test
 	fun signed_in_device_without_token_has_the_hub_layer() {

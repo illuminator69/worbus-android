@@ -37,7 +37,7 @@ data class Mix(
 	/**
 	 * What the recipe is seeded from, in the seed kind's own vocabulary: a Navidrome
 	 * song / album / artist id for [MixKind.SIMILAR] and [MixKind.ARTIST], a genre
-	 * name for [MixKind.GENRE] (an older desktop app wrote the genre's id here and the name in
+	 * name for [MixKind.GENRE] (an older Feishin wrote the genre's id here and the name in
 	 * [seedName]: [genreSeedNames]), and nothing at all for the seedless kinds, which
 	 * seed from listening history rather than from a thing.
 	 */
@@ -120,7 +120,7 @@ object MixKind {
 /**
  * The names a `genre` recipe may hold its genre under, in the order to try them: `seedId`, which
  * is the name (what both clients write since B-150), then `seedName`, for an older
- * Worbus for desktop recipe whose `seedId` was the genre's Navidrome id. A genre is drawn by name.
+ * Feishin recipe whose `seedId` was the genre's Navidrome id. A genre is drawn by name.
  */
 /** Whether [mix] is a custom radio: an `artist` mix of more than one artist (P5). */
 /**

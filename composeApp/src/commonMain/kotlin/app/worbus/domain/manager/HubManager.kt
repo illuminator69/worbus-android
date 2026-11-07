@@ -1186,7 +1186,7 @@ class HubManager(
 			// local DB) so the mirrored queue length + order MATCH the hub's —
 			// otherwise dropping un-synced songs shifts the index, so the shown
 			// "current song" is wrong and a jump sends the wrong index (which
-			// made Worbus for desktop restart the queue).
+			// made Feishin restart the queue).
 			val resolved = resolveRemoteTracks(session.tracks)
 			val idx = session.index.coerceIn(0, (resolved.size - 1).coerceAtLeast(0))
 			remoteUiBase = PlayerUiState(

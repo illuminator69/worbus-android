@@ -18,3 +18,32 @@ CLAUDE.md	paige.navic	the package move's own sentences, and the old-ID APK route
 CLAUDE.md	old Navic	the old app the owner's phone still has, signed with the old debug key
 .gitignore	/Navic Redesign.dc.html	ignores a local design file on the workstation by its existing name
 composeApp/src/androidHostTest/kotlin/app/worbus/WorbusReleaseTest.kt	"Navic" !in workflow	the test's own needle
+# History (design §4): a sentence that says which client did something, or which review or bug item was whose, keeps the name it had then.
+composeApp/src/androidHostTest/kotlin/app/worbus/domain/manager/HubBearerGuardTest.kt	Feishin's review C1	history: who did what, or an old bug or review, named as it was then
+composeApp/src/androidMain/kotlin/app/worbus/domain/manager/cast/CastDeviceBridge.kt	This is a port of Feishin's `CastDeviceBridge`	history: who did what, or an old bug or review, named as it was then
+composeApp/src/androidMain/kotlin/app/worbus/domain/manager/cast/CastDeviceBridge.kt	how Navic won every race and Feishin logged `superseded`	history: who did what, or an old bug or review, named as it was then
+composeApp/src/androidMain/kotlin/app/worbus/domain/manager/cast/CastDeviceBridge.kt	// Feishin has always routed reconnects through its claim check	history: who did what, or an old bug or review, named as it was then
+composeApp/src/androidMain/kotlin/app/worbus/domain/manager/cast/CastDeviceBridge.kt	Never load-playing-then-pause: in Feishin the async play	history: who did what, or an old bug or review, named as it was then
+composeApp/src/androidMain/kotlin/app/worbus/domain/manager/cast/CastDeviceBridge.kt	"not ours". Feishin fixed this	history: who did what, or an old bug or review, named as it was then
+composeApp/src/androidMain/kotlin/app/worbus/domain/manager/cast/CastDiscovery.kt	(Feishin hit exactly this;	history: who did what, or an old bug or review, named as it was then
+composeApp/src/androidMain/kotlin/app/worbus/domain/manager/cast/CastPayloads.kt	and in Feishin a 0 landing	history: who did what, or an old bug or review, named as it was then
+composeApp/src/androidMain/kotlin/app/worbus/shared/MediaPlayer.android.kt	swiping Navic away paused Feishin	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/domain/manager/HubAuth.kt	(Feishin's review C1:	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/domain/manager/HubAuth.kt	(as Feishin's R29)	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/domain/manager/HubManager.kt	made Feishin restart the queue	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/domain/models/Mix.kt	an older Feishin wrote the genre's id	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/domain/models/Mix.kt	* Feishin recipe whose `seedId`	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/domain/manager/StationModels.kt	S-035, Feishin's B-144	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonTest/kotlin/app/worbus/domain/manager/StationDriverTest.kt	S-035 (Feishin's B-144)	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/ui/screens/savedqueues/SavedQueueFormat.kt	that arrived from Feishin before it stopped writing them	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/domain/manager/SyncManager.kt	/** Feishin showed the real cover	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonTest/kotlin/app/worbus/ui/screens/mixes/MixRecipesTest.kt	in step with Feishin (B-149, B-150, 2026-10-17)	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonTest/kotlin/app/worbus/ui/screens/mixes/MixRecipesTest.kt	// Feishin's form wrote Navidrome's genre id	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonTest/kotlin/app/worbus/domain/manager/HubAuthTest.kt	---- Feishin review C1's pattern	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/domain/manager/LbPageLink.kt	ruling R16 (one rule with Feishin)	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonTest/kotlin/app/worbus/domain/manager/LbPageLinkTest.kt	contract lane F (Feishin) tests too	history: who did what, or an old bug or review, named as it was then
+composeApp/src/commonMain/kotlin/app/worbus/ui/screens/discover/DiscoverRows.kt	the two have already drifted — Feishin's auto-DJ	history: who did what, or an old bug or review, named as it was then
+CLAUDE.md	`AutoplayLook.chipTap`; Feishin's	history: who did what, or an old bug or review, named as it was then
+CLAUDE.md	the behaviour has already drifted (Feishin's auto-DJ	history: who did what, or an old bug or review, named as it was then
+CLAUDE.md	they could only arrive from Feishin.	history: who did what, or an old bug or review, named as it was then
+CLAUDE.md	because Feishin wrote the genre's	history: who did what, or an old bug or review, named as it was then

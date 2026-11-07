@@ -80,7 +80,7 @@ class HubBearerGuardTest {
 
 	@Test
 	fun hubSetUpIsAskedThroughHasCredentialOnly() {
-		// Worbus for desktop's review C1: three checks still read "a token is typed" as "the hub is set up", and a
+		// Feishin's review C1: three checks still read "a token is typed" as "the hub is set up", and a
 		// signed-in device (no token) lost moods, the lb-bot index mirror and AudioMuse.
 		val offenders = sources.filter { it.name != "HubAuth.kt" }.flatMap { f ->
 			f.readLines().mapIndexedNotNull { i, line ->

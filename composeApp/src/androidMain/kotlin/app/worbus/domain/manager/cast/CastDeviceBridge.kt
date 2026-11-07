@@ -142,7 +142,7 @@ private data class BridgeTrack(
 /**
  * A Chromecast registered with the hub as its own virtual receiver.
  *
- * This is a port of Worbus for desktop's `CastDeviceBridge` (`feishin/src/main/features/core/cast/index.ts`),
+ * This is a port of Feishin's `CastDeviceBridge` (`feishin/src/main/features/core/cast/index.ts`),
  * and intentionally so: the safeguards in here are not speculative hardening, they are the residue
  * of bugs already found in the field and written up in `SESSION-2026-08-08-v1.15.1-merge.md`.
  * Where this diverges from that file, it is a bug.
@@ -418,8 +418,8 @@ internal class CastDeviceBridge(
 			// Back through arbitration, not straight to connectOnce(). The hub closes the previous
 			// socket with 4003 on ANY re-registration of a device id (hub.py `_register`), so a
 			// blind reconnect evicts whoever took the speaker while we were away — which is exactly
-			// how Worbus won every race and Worbus for desktop logged `superseded` each time this socket blipped.
-			// Worbus for desktop has always routed reconnects through its claim check; this is the missing half.
+			// how Navic won every race and Feishin logged `superseded` each time this socket blipped.
+			// Feishin has always routed reconnects through its claim check; this is the missing half.
 			// Checked AFTER the backoff, so it reads the freshest device list the hub has sent us.
 			if (claimedElsewhere()) {
 				Logger.i(TAG, "$friendlyName: claimed by another client while we were away — standing down")
@@ -561,7 +561,7 @@ internal class CastDeviceBridge(
 					releasing = false
 					tracks = msg["tracks"]?.jsonArray?.toTracks() ?: emptyList()
 					index = msg["index"]?.jsonPrimitive?.int ?: 0
-					// Honour `play`. Never load-playing-then-pause: in Worbus for desktop the async play
+					// Honour `play`. Never load-playing-then-pause: in Feishin the async play
 					// could land after the pause, leaving audio running under a store that read
 					// PAUSED — and since engines act on status *changes*, every later pause,
 					// ours or the user's, became a no-op.
@@ -1283,7 +1283,7 @@ private fun kotlinx.serialization.json.JsonPrimitive.contentOrNullSafe(): String
  * Comparing whole URLs looked equivalent and was not. The URL carries a salted auth token and
  * transcoding parameters, so rotating credentials, changing the bitrate setting, or simply having
  * been published by the other client all produce a different string for the same song — and every
- * ownership check that depended on it silently answered "not ours". Worbus for desktop fixed this
+ * ownership check that depended on it silently answered "not ours". Feishin fixed this
  * (`streamIdentity` in `cast/index.ts`); this is the same rule, which CLAUDE.md §3 already states
  * as the rule for both bridges.
  */

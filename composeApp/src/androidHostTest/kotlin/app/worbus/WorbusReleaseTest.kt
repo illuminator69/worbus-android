@@ -58,7 +58,13 @@ class WorbusReleaseTest {
 		val build = sourceFile("../androidApp/build.gradle.kts").readText()
 		val line = "Worbus release APK signed with the DEBUG key (SIGNING_* unset): not for distribution"
 		assertEquals(1, Regex(Regex.escape(line)).findAll(build).count(), "the warning is written once, verbatim")
-		val block = Regex("""if \(isTaskRelease && !hasReleaseSigning\) \{\s*logger\.warn\("([^"]+)"\)""").find(build)
-		assertEquals(line, block?.groupValues?.get(1), "the warning is printed only for a release task without the key")
+		// Configuration cache is on (gradle.properties): a warning printed while the build script
+		// configures vanishes on a cache hit. So it must be written by a task action (doFirst), from a
+		// Boolean captured at configuration time, and by the lifecycle task that always runs.
+		assertEquals(1, Regex(Regex.escape("logger.warn(")).findAll(build).count(), "the only logger.warn is the debug-key line")
+		val hook = Regex(
+			"""tasks\.matching \{[^}]*"assembleRelease"[^}]*}\.configureEach \{\s*val (\w+) = isTaskRelease && !hasReleaseSigning\s*doFirst \{\s*if \(\1\) logger\.warn\("([^"]+)"\)\s*}\s*}"""
+		).find(build)
+		assertEquals(line, hook?.groupValues?.get(2), "the warning is printed by assembleRelease's doFirst, only for a release task without the key")
 	}
 }

@@ -56,8 +56,14 @@ extensions.configure<ApplicationExtension> {
 		// Worbus P5 (design §6.6): the release key lives only on the workstation, so a release built
 		// anywhere else is debug-signed. Say so once, so such an APK is never taken for a release one.
 		// The real key's certificate is recorded in release-cert.sha256 (build.yml checks it).
-		if (isTaskRelease && !hasReleaseSigning) {
-			logger.warn("Worbus release APK signed with the DEBUG key (SIGNING_* unset): not for distribution")
+		// The line is written by assembleRelease's first action, not while the script configures: a
+		// configuration-cache hit skips configuration, and the build log of every such build must carry it.
+		// Only the Boolean captured here reaches the action, so nothing of the project is kept for it.
+		tasks.matching { it.name == "assembleRelease" }.configureEach {
+			val debugSigned = isTaskRelease && !hasReleaseSigning
+			doFirst {
+				if (debugSigned) logger.warn("Worbus release APK signed with the DEBUG key (SIGNING_* unset): not for distribution")
+			}
 		}
 
 		getByName("release") {

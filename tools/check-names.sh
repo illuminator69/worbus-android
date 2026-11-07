@@ -33,12 +33,26 @@ while IFS= read -r line || [ -n "$line" ]; do
 	globs+=("$glob"); texts+=("$text")
 done < "$allow_file"
 
+# `git grep` exits 0 on a match, 1 on none and 128 (or more) on an error, such as a <rev> that does not
+# resolve: that is a usage error here (exit 2), never "no hits". The greps run in this shell (not in a
+# pipeline or a process substitution), so that the exit reaches the caller.
+if [ -n "$rev" ] && ! git rev-parse --verify --quiet "$rev^{commit}" >/dev/null; then
+	echo "check-names: '$rev' is not a commit in this repository" >&2; exit 2
+fi
+found=""
+for mode in fixed words; do
+	rc=0
+	if [ "$mode" = fixed ]; then
+		out=$(git grep -n -I -F -e 'paige.navic' -e 'paige/navic' -e 'org.jeffvli' ${rev:+"$rev"} -- .) || rc=$?
+	else
+		out=$(git grep -n -I -w -e 'Navic' -e 'Feishin' ${rev:+"$rev"} -- .) || rc=$?
+	fi
+	if [ "$rc" -gt 1 ]; then echo "check-names: git grep failed (exit $rc)" >&2; exit 2; fi
+	[ -z "$out" ] || found+="$out"$'\n'
+done
+# `git grep` prints <rev>:<path>:<line>:<text> for a rev; strip the rev so both read the same.
 hits() {
-	# `git grep` prints <rev>:<path>:<line>:<text> for a rev; strip the rev so both read the same.
-	{
-		git grep -n -I -F -e 'paige.navic' -e 'paige/navic' -e 'org.jeffvli' ${rev:+"$rev"} -- . || true
-		git grep -n -I -w -e 'Navic' -e 'Feishin' ${rev:+"$rev"} -- . || true
-	} | if [ -n "$rev" ]; then sed "s|^$rev:||"; else cat; fi | sort -u
+	printf '%s' "$found" | if [ -n "$rev" ]; then sed "s|^$rev:||"; else cat; fi | sort -u
 }
 
 bad=0; total=0; allowed=0

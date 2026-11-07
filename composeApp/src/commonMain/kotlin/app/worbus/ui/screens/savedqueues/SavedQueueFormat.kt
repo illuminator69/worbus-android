@@ -43,7 +43,7 @@ fun queueKindLabel(kind: String): String = when (kind) {
  * Names of the shape "Queue · 12 tracks" that older builds SYNTHESIZED and then stored as a real
  * source name. They go stale as soon as the queue is edited and they duplicate the subtitle word for
  * word. Nothing writes them any more; this hides the ones already in the history (including the ones
- * that arrived from Worbus for desktop before it stopped writing them).
+ * that arrived from Feishin before it stopped writing them).
  */
 private val SYNTHESIZED_NAME =
 	Regex("""^(Album|Journey|Manual|Mood Flow|Playlist|Queue|Radio) · \d+ (songs?|tracks?)$""")

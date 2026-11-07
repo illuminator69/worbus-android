@@ -68,7 +68,7 @@ class SyncManager(
 		 */
 		val LB_BOT_NEWEST_DEBOUNCE_PLACED = 20.seconds
 
-		/** Worbus for desktop showed the real cover about ten seconds after landing; allow for slower. */
+		/** Feishin showed the real cover about ten seconds after landing; allow for slower. */
 		val ARTWORK_RESYNC_DELAYS = listOf(15.seconds, 45.seconds)
 
 		/** How often to ask Navidrome whether a scan ran. One tiny request. */
