@@ -55,8 +55,9 @@ class WorbusIdentityTest {
 	@Test
 	fun appIdsVersionAndApkNames() {
 		assertEquals(".debug", gradleString("applicationIdSuffix"))
-		assertEquals("0.5.0", gradleString("versionName"))
-		assertTrue(Regex("""\bversionCode\s*=\s*61\b""").containsMatchIn(appBuild), "versionCode must be 61")
+		assertEquals("0.6.0", gradleString("versionName"))
+		assertTrue(Regex("""\bversionCode\s*=\s*62\b""").containsMatchIn(appBuild), "versionCode must be 62")
+		assertTrue("0.6.0 (abc1234)" in sourceFile("../.github/ISSUE_TEMPLATE/bug_report.yml").readText(), "the bug report template's version placeholder is the current one")
 		assertTrue("resValue(\"string\", \"app_name\", \"Worbus (Dev)\")" in appBuild, "the debug build is named Worbus (Dev)")
 		assertTrue("\"Worbus.apk\"" in appBuild && "\"Worbus.fdroid.apk\"" in appBuild, "the APKs are Worbus.apk and Worbus.fdroid.apk")
 		val launcher = sourceFile("../androidApp/src/main/res/values/strings.xml").readText()
@@ -78,7 +79,7 @@ class WorbusIdentityTest {
 
 	@Test
 	fun userAgentNamesWorbus() {
-		assertEquals("Worbus-Android/0.5.0", userAgent())
+		assertEquals("Worbus-Android/0.6.0", userAgent())
 		assertEquals("Worbus-Android/${gradleString("versionName")}", userAgent())
 		val agents = mainSources().flatMap { f ->
 			Regex("""agent\s*=\s*([^\n}]+)""").findAll(f.readText()).map { "${f.name}: ${it.groupValues[1].trim()}" }.toList()

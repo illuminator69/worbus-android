@@ -60,7 +60,7 @@ val gitCommit: String = try {
 }
 
 // Worbus P5: the version name is androidApp's (one place to change it); BuildInfo carries it so the
-// shared module can name it in its User-Agent (`Worbus-Android/0.5.0`).
+// shared module can name it in its User-Agent (`Worbus-Android/0.6.0`).
 val appVersionName: String = providers.fileContents(rootProject.layout.projectDirectory.file("androidApp/build.gradle.kts"))
 	.asText.get()
 	.let { Regex("""\bversionName\s*=\s*"([^"]+)"""").find(it)?.groupValues?.get(1) }

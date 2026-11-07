@@ -53,6 +53,52 @@ class WorbusReleaseTest {
 		assertTrue("Navic" !in workflow && "navic" !in workflow, "build.yml still names the old app")
 	}
 
+	/**
+	 * P6 N3: the release carries a `SHA256SUMS` beside the APK. It is written AFTER the certificate check (a
+	 * wrong-key APK is never summed, let alone published) and attached by the same `gh release create`.
+	 */
+	@Test
+	fun releaseAttachesChecksums() {
+		val job = releaseJob()
+		val check = job.indexOf("release-cert.sha256")
+		val sums = job.indexOf("""sha256sum "Worbus-${'$'}{GITHUB_REF_NAME}.apk" > SHA256SUMS""")
+		val draft = job.indexOf("gh release create")
+		assertTrue(sums >= 0, "no step writes SHA256SUMS from the release APK")
+		assertTrue(sums > check, "SHA256SUMS is written after the certificate check")
+		assertTrue(draft > sums, "SHA256SUMS is written before the release is drafted")
+		val create = job.substring(draft)
+		assertTrue(Regex("""gh release create\s+"\${'$'}GITHUB_REF_NAME"\s+"\./Worbus-\${'$'}\{GITHUB_REF_NAME}\.apk"\s+SHA256SUMS""").containsMatchIn(create),
+			"the draft release attaches the APK and SHA256SUMS")
+	}
+
+	/** P6 N3: upstream's four phone screenshots are gone; the slot stays until the real shots land (C2). */
+	@Test
+	fun noUpstreamScreenshots() {
+		val dir = java.io.File("../fastlane/metadata/android/en-US/images/phoneScreenshots")
+		assertTrue(dir.isDirectory, "the phoneScreenshots folder is kept (a .gitkeep holds it until C2)")
+		assertEquals(emptyList(), dir.listFiles().orEmpty().map { it.name }.filter { it.endsWith(".jpg") }, "an upstream screenshot is still there")
+	}
+
+	/** P6 N3: F-Droid-style changelog for versionCode 62, two lines: the new icon, the checksums file. */
+	@Test
+	fun changelogForThisVersion() {
+		val changelog = sourceFile("../fastlane/metadata/android/en-US/changelogs/62.txt").readText()
+		assertEquals(2, changelog.lines().filter { it.isNotBlank() }.size, "62.txt is two lines: the new icon, the checksums file")
+		assertTrue("SHA256SUMS" in changelog, "62.txt names the checksums file")
+	}
+
+	/** P6 N3 (ruling R6): the README shows the umbrella's shots by raw URL, and keeps no copy of upstream's. */
+	@Test
+	fun readmeShowsTheUmbrellasScreenshots() {
+		val readme = sourceFile("../README.md").readText()
+		for (n in 1..4) {
+			assertTrue("https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/android-$n.png" in readme, "README does not show android-$n.png")
+		}
+		assertTrue("docs/screenshots/navic" !in readme, "README still shows a navic-gaps screenshot")
+		assertTrue("Obtainium" !in readme, "README still sends people to Obtainium")
+		assertTrue(!java.io.File("../docs/screenshots").exists(), "navic-gaps' own screenshots are still there with nothing to reference them")
+	}
+
 	@Test
 	fun releaseWithoutKeyWarns() {
 		val build = sourceFile("../androidApp/build.gradle.kts").readText()

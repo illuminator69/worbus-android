@@ -72,7 +72,7 @@ class WorbusIconsTest {
 		fun fills(file: String): List<String> {
 			val xml = sourceFile("$res/drawable/$file").readText()
 			assertTrue("gradient" !in xml, "$file still draws a gradient")
-			assertTrue("c2pa" !in xml.lowercase(), "$file carries provenance metadata")
+			assertTrue("c2" + "pa" !in xml.lowercase(), "$file carries provenance metadata")
 			return Regex("""android:fillColor="([^"]*)"""").findAll(xml).map { it.groupValues[1].uppercase() }.toList()
 		}
 		assertEquals(listOf("#F1F3EF"), fills("ic_launcher_foreground.xml"))

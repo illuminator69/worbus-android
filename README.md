@@ -29,14 +29,14 @@ Without a Worbus Server it is an ordinary Navidrome client. With one, it is a cl
 end for **lb-bot**, which knows what your library is missing.
 
 <p align="center">
-  <img src="docs/screenshots/navic-home.webp" width="190"
-       alt="Home: mood chips, a Continue listening pill over 20 saved queues, Recently added and Fresh rows, and a mini-player reading Playing on another device" />
-  <img src="docs/screenshots/navic-discography.webp" width="190"
-       alt="An artist's discography: filters by release type and ownership, each album marked Owned, Partly owned with a progress bar, or Missing" />
-  <img src="docs/screenshots/navic-album.webp" width="190"
-       alt="A partly owned album washed in its cover's colours, with an 8 tracks missing card and a Fill gaps button" />
-  <img src="docs/screenshots/navic-album-missing-tracks.webp" width="190"
-       alt="The same card unfolded: the eight missing tracks listed, the release they were measured against, and Re-check and Open in lb-bot" />
+  <img src="https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/android-1.png" width="190"
+       alt="Home, the first screen of the app" />
+  <img src="https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/android-2.png" width="190"
+       alt="An artist page with the albums the library is missing shown beside the ones it has" />
+  <img src="https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/android-3.png" width="190"
+       alt="A missing album's page, before any sources are fetched" />
+  <img src="https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/android-4.png" width="190"
+       alt="The device picker, with the other Worbus app in it" />
 </p>
 
 - **Its own UI.** Three tabs and a **+** button. **Home** has a pill to resume a saved queue,

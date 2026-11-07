@@ -6,7 +6,8 @@ name: Build
 # KEYSTORE_PASSWORD): it says so in the log and stops green, and releases stay workstation-built.
 # Worbus P5 (design §6.6): before drafting, the built APK's certificate must be the release key's,
 # whose SHA-256 is recorded in androidApp/release-cert.sha256; while that file says `unset`, or on a
-# mismatch, the job fails and nothing is drafted. Nothing here publishes anywhere but this repository.
+# mismatch, the job fails and nothing is drafted. Worbus P6: after that check the job writes SHA256SUMS
+# for the APK and attaches it beside the APK. Nothing here publishes anywhere but this repository.
 
 on:
   push:
@@ -150,12 +151,20 @@ jobs:
           fi
           echo "The APK's certificate is the release key's (${want})."
 
+      # Written only after the certificate check above, so a wrong-key APK is never summed.
+      - name: Write SHA256SUMS
+        if: steps.signing.outputs.ok == 'true'
+        run: |
+          set -euo pipefail
+          sha256sum "Worbus-${GITHUB_REF_NAME}.apk" > SHA256SUMS
+          cat SHA256SUMS
+
       - name: Create draft release on this repository
         if: steps.signing.outputs.ok == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "./Worbus-${GITHUB_REF_NAME}.apk" \
+          gh release create "$GITHUB_REF_NAME" "./Worbus-${GITHUB_REF_NAME}.apk" SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
             --draft --generate-notes

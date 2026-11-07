@@ -1,0 +1,2 @@
+The launcher icon is now a single-colour Worbus disc, in two choices: Ink and Paper.
+Each release now carries a SHA256SUMS file to check your download against.

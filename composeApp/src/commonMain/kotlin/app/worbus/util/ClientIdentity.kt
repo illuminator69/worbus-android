@@ -8,7 +8,7 @@ import app.worbus.generated.BuildInfo
  */
 const val CLIENT_NAME = "Worbus-Android"
 
-/** `Worbus-Android/0.5.0`, the one User-Agent every HTTP client of this app sends. */
+/** `Worbus-Android/0.6.0`, the one User-Agent every HTTP client of this app sends. */
 fun userAgent(): String = "$CLIENT_NAME/${BuildInfo.VERSION_NAME}"
 
 /** The name a device has until the user types one: the phone's model, else `Worbus`. */

@@ -25,7 +25,7 @@ front end.
 | Branch | **`navi-connect`** (not `master`) |
 | App ID | **`app.worbus.android`**; debug `app.worbus.android.debug` ("Worbus (Dev)"). Permanent: a new ID is a new app |
 | Packages | `app.worbus` (composeApp), `app.worbus.androidApp` (the app module), `app.worbus.icons` (Valkyrie), `app.worbus.generated` (BuildInfo); resources `worbus.composeapp.generated.resources` (`rootProject.name = "Worbus"`) |
-| Version | `0.5.0`, versionCode 61 (`androidApp/build.gradle.kts`; BuildInfo reads the name from there) |
+| Version | `0.6.0`, versionCode 62 (`androidApp/build.gradle.kts`; BuildInfo reads the name from there) |
 | Release key | lives only on the workstation; its certificate's SHA-256 is `androidApp/release-cert.sha256` (§3) |
 | Upstream base | ssalggnikool/Navic **`v1.0.0-alpha59`** |
 | Divergence | ~264 files, +33.6k / −3.5k (before the package move) |
@@ -2416,7 +2416,9 @@ git push origin navi-connect
   release on this repository, only when the four signing secrets (`KEYSTORE`, `KEY_ALIAS`,
   `KEY_PASSWORD`, `KEYSTORE_PASSWORD`) exist; without them it logs a notice and does nothing. Before
   drafting, it compares the APK's certificate with `androidApp/release-cert.sha256` and fails on
-  `unset` or a mismatch (Worbus P5, §3). Releases are tagged `v0.5.0` and on. `checks.yml` validates
+  `unset` or a mismatch (Worbus P5, §3); then it writes `SHA256SUMS` (`sha256sum Worbus-<tag>.apk`, so
+  the file holds the bare name) and attaches it to the draft beside the APK (Worbus P6,
+  `releaseAttachesChecksums`). Releases are tagged `v0.5.0` and on. `checks.yml` validates
   the Gradle wrapper. Upstream's `publish.yml` (TestFlight, AltStore) and `mirror.yml` (Codeberg) are
   deleted. Issues go to the umbrella's tracker (`ISSUE_TEMPLATE/config.yml`, blank issues off). The
   fork's README is at the repo root, which GitHub prefers over `.github/README.md`.
