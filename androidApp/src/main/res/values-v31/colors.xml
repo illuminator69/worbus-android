@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<!-- Material You's light primary and tertiary (tone 40), from the wallpaper. -->
+	<!-- Material You's light primary (tone 40), from the wallpaper: the wave and the arcs in one colour. -->
 	<color name="worbus_splash_wave">@android:color/system_accent1_600</color>
-	<color name="worbus_splash_arc">@android:color/system_accent3_600</color>
+	<color name="worbus_splash_arc">@android:color/system_accent1_600</color>
 </resources>

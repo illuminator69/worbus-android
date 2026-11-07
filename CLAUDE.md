@@ -2290,8 +2290,10 @@ true of invented *album art*, and not of an icon naming the kind.
   hand here. The splash is the platform's own (Android 12+, no androidx splashscreen library): `values-v31`'s
   `Theme.Worbus` sets `worbus_splash_icon` (an animated vector, 760 ms), the duration and a white / black
   background. The art read `?attr/colorPrimary` / `?attr/colorTertiary`, which a platform theme does not
-  define, so the vector reads `@color/worbus_splash_wave` / `_arc`, the wallpaper's Material You tones on 31+
-  (`values-v31`, `values-night-v31`). `ic_worbus` (the disc in one colour) is the notifications' small icon and
+  define, so the vector reads `@color/worbus_splash_wave` / `_arc`. Since P6 the wave and the arcs are one
+  colour, the wallpaper's Material You primary tone on 31+ (`system_accent1_600` in `values-v31`, `_200` in
+  `values-night-v31`; in `values`, which nothing below 31 reads, the arc is `@color/worbus_splash_wave`;
+  `splashArcsFollowTheWave`). `ic_worbus` (the disc in one colour) is the notifications' small icon and
   Android Auto's attribution icon; `brand/ic_worbus.xml` is the same glyph as `Icons.Brand.Worbus`.
   `WorbusIconsTest` holds all of it.
 - **The `Form` family is gone and is not to come back.** Upstream deleted `Form`, `FormRow`,

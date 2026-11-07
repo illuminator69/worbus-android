@@ -132,6 +132,25 @@ class WorbusIconsTest {
 		assertTrue("splashscreen" !in versions, "no androidx splashscreen dependency")
 	}
 
+	/**
+	 * P6 N2: the splash draws wave and arcs in one colour, the wallpaper's. In every `colors.xml` that
+	 * defines them the arc resolves to what the wave resolves to: the wave's own value in `values`
+	 * (`@color/worbus_splash_wave`, read by nothing below API 31), Material You's primary tone in the
+	 * `-v31` files (600 by day, 200 at night).
+	 */
+	@Test
+	fun splashArcsFollowTheWave() {
+		fun value(dir: String, name: String): String =
+			Regex("""<color name="$name">([^<]+)</color>""").find(sourceFile("$res/$dir/colors.xml").readText())?.groupValues?.get(1)
+				?: error("$dir/colors.xml has no $name")
+		assertEquals("#72A58F", value("values", "worbus_splash_wave").uppercase(), "the wave keeps its value")
+		assertEquals("@color/worbus_splash_wave", value("values", "worbus_splash_arc"))
+		assertEquals("@android:color/system_accent1_600", value("values-v31", "worbus_splash_wave"))
+		assertEquals("@android:color/system_accent1_600", value("values-v31", "worbus_splash_arc"))
+		assertEquals("@android:color/system_accent1_200", value("values-night-v31", "worbus_splash_wave"))
+		assertEquals("@android:color/system_accent1_200", value("values-night-v31", "worbus_splash_arc"))
+	}
+
 	@Test
 	fun brandIconIsWorbus() {
 		for (gone in listOf("$res/drawable/ic_navic.xml", "src/commonMain/valkyrieResources/brand/ic_navic.xml",
