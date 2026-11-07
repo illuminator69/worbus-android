@@ -7,8 +7,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /*
- * Worbus P5, N3: the launcher icons and the splash (design §6.5). The picker's two entries are Kelp
- * and clay (the default) and Tidepool; each is an activity alias with its own adaptive icon. The
+ * Worbus P5, N3: the launcher icons and the splash (design §6.5); P6 N1 made the icons monochrome. The
+ * picker's two entries are Ink (the default alias) and Paper (the `Tidepool` alias); each is an activity alias with its own adaptive icon. The
  * splash is the 760 ms animated vector, set in the existing values-v31 theme with no androidx
  * splashscreen library, so it may name no theme attribute (ruling R9). JVM-only, run from composeApp/.
  */
@@ -42,32 +42,68 @@ class WorbusIconsTest {
 		Regex("""<color name="$name">([^<]+)</color>""").find(sourceFile("$res/values/colors.xml").readText())?.groupValues?.get(1)
 			?: error("values/colors.xml has no $name")
 
+	/**
+	 * Review Focus 1 (Worbus P6): the launcher icon vanishes after an update when an alias is renamed,
+	 * removed or has its `android:enabled` flipped. The names, the order and the flags are exactly 0.5.0's.
+	 */
 	@Test
-	fun iconVariantsAreKelpAndTidepool() {
+	fun iconAliasesUnchangedFromV050() {
 		assertEquals(listOf("Default" to "MainActivityDefault", "Tidepool" to "MainActivityTidepool"),
 			AppIconVariant.entries.map { it.name to it.activityName })
-		assertEquals(listOf("Kelp and clay", "Tidepool"), AppIconVariant.entries.map { englishString(it.label.key) })
-
-		val kelp = aliasTag("MainActivityDefault")
-		assertEquals("true", attr(kelp, "enabled"))
-		assertEquals("@mipmap/ic_launcher", attr(kelp, "icon"))
-		assertEquals("@mipmap/ic_launcher_round", attr(kelp, "roundIcon"))
-		val tidepool = aliasTag("MainActivityTidepool")
-		assertEquals("false", attr(tidepool, "enabled"))
-		assertEquals("@mipmap/ic_launcher_tidepool", attr(tidepool, "icon"))
-		assertEquals("@mipmap/ic_launcher_tidepool_round", attr(tidepool, "roundIcon"))
+		assertEquals(2, Regex("""<activity-alias\b""").findAll(manifest).count(), "the manifest declares exactly two aliases")
+		assertEquals("true", attr(aliasTag("MainActivityDefault"), "enabled"))
+		assertEquals("false", attr(aliasTag("MainActivityTidepool"), "enabled"))
 		assertTrue("Inverted" !in manifest, "the manifest still names the inverted icon")
+	}
+
+	/** P6 N1: the two picker entries read Ink and Paper; the string keys, like the enum, did not move. */
+	@Test
+	fun pickerLabelsAreInkAndPaper() {
+		assertEquals(listOf("Ink", "Paper"), AppIconVariant.entries.map { englishString(it.label.key) })
+	}
+
+	/**
+	 * P6 N1: each launcher foreground is one flat colour, Paper (`#F1F3EF`) for the Ink icon and Ink
+	 * (`#18211F`) for the Paper icon. The gradient this replaced reads its colours from a nested
+	 * `<gradient>` and has no `android:fillColor` attribute, so it cannot pass.
+	 */
+	@Test
+	fun launcherForegroundsAreMono() {
+		fun fills(file: String): List<String> {
+			val xml = sourceFile("$res/drawable/$file").readText()
+			assertTrue("gradient" !in xml, "$file still draws a gradient")
+			assertTrue("c2pa" !in xml.lowercase(), "$file carries provenance metadata")
+			return Regex("""android:fillColor="([^"]*)"""").findAll(xml).map { it.groupValues[1].uppercase() }.toList()
+		}
+		assertEquals(listOf("#F1F3EF"), fills("ic_launcher_foreground.xml"))
+		assertEquals(listOf("#18211F"), fills("ic_launcher_foreground_paper.xml"))
+	}
+
+	/** P6 N1: the Ink icon is the default alias, the Paper icon the second; each has its adaptive icon and legacy webp. */
+	@Test
+	fun launcherIconsAreInkAndPaper() {
+		val ink = aliasTag("MainActivityDefault")
+		assertEquals("@mipmap/ic_launcher", attr(ink, "icon"))
+		assertEquals("@mipmap/ic_launcher_round", attr(ink, "roundIcon"))
+		val paper = aliasTag("MainActivityTidepool")
+		assertEquals("@mipmap/ic_launcher_paper", attr(paper, "icon"))
+		assertEquals("@mipmap/ic_launcher_paper_round", attr(paper, "roundIcon"))
 
 		for (file in listOf("ic_launcher.xml", "ic_launcher_round.xml")) {
 			assertEquals(Triple("@color/ic_launcher_background", "@drawable/ic_launcher_foreground", "@drawable/ic_launcher_monochrome"), layers(file))
 		}
-		for (file in listOf("ic_launcher_tidepool.xml", "ic_launcher_tidepool_round.xml")) {
-			assertEquals(Triple("@color/ic_launcher_background_tidepool", "@drawable/ic_launcher_foreground_tidepool", "@drawable/ic_launcher_monochrome"), layers(file))
+		for (file in listOf("ic_launcher_paper.xml", "ic_launcher_paper_round.xml")) {
+			assertEquals(Triple("@color/ic_launcher_background_paper", "@drawable/ic_launcher_foreground_paper", "@drawable/ic_launcher_monochrome"), layers(file))
 		}
 		assertEquals("#18211F", color("ic_launcher_background").uppercase())
-		assertEquals("#172326", color("ic_launcher_background_tidepool").uppercase())
-		for (webp in listOf("ic_launcher", "ic_launcher_round", "ic_launcher_tidepool", "ic_launcher_tidepool_round")) {
+		assertEquals("#F1F3EF", color("ic_launcher_background_paper").uppercase())
+		assertTrue(Regex("""ic_launcher_background_tidepool""").find(sourceFile("$res/values/colors.xml").readText()) == null, "the old Tidepool background is still there")
+		for (webp in listOf("ic_launcher", "ic_launcher_round", "ic_launcher_paper", "ic_launcher_paper_round")) {
 			assertTrue(sourceFile("$res/mipmap-xxhdpi/$webp.webp").length() > 0)
+		}
+		for (gone in listOf("$res/drawable/ic_launcher_foreground_tidepool.xml", "$res/mipmap-anydpi-v26/ic_launcher_tidepool.xml",
+			"$res/mipmap-anydpi-v26/ic_launcher_tidepool_round.xml", "$res/mipmap-xxhdpi/ic_launcher_tidepool.webp", "$res/mipmap-xxhdpi/ic_launcher_tidepool_round.webp")) {
+			assertTrue(!java.io.File(gone).exists(), "$gone is still there")
 		}
 	}
 

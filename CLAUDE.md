@@ -2278,10 +2278,14 @@ true of invented *album art*, and not of an icon naming the kind.
   Sheets: the shared `ModalBottomSheet` wrapper takes its show / hide times from it (so the
   player and queue scenes too); only the times, the one-motion opening is unchanged.
 - **The launcher icons and the splash are Worbus's own (P5, design §6.5).** The picker's two entries are
-  `AppIconVariant.Default` (**Kelp and clay**) and `Tidepool`, stored by position, each an `activity-alias`
-  (`MainActivityDefault`, `MainActivityTidepool`) with its adaptive icon in `mipmap-anydpi-v26/` (a colour
-  background, `ic_launcher_foreground[_tidepool]`, the shared `ic_launcher_monochrome` for Android 13's themed
-  icons). The legacy `mipmap-xxhdpi/*.webp` and fastlane's `icon.png` are rendered on the workstation by
+  `AppIconVariant.Default` (shown as **Ink**: the `#F1F3EF` disc on `#18211F`) and `Tidepool` (shown as **Paper**:
+  the `#18211F` disc on `#F1F3EF`; Worbus P6 made the art monochrome and relabelled the two, nothing else), stored by
+  position, each an `activity-alias` (`MainActivityDefault`, `MainActivityTidepool`; **the alias names, the enum
+  names and the `android:enabled` flags are 0.5.0's and never change**: renaming or disabling the enabled one
+  makes the app vanish from the launcher after an update, `iconAliasesUnchangedFromV050`) with its adaptive icon in
+  `mipmap-anydpi-v26/` (a colour background, `ic_launcher_foreground[_paper]`, one flat `fillColor` each, the shared
+  `ic_launcher_monochrome` for Android 13's themed icons). The string keys `option_app_icon_default` /
+  `option_app_icon_tidepool` kept their names; only their values are Ink and Paper. The legacy `mipmap-xxhdpi/*.webp` and fastlane's `icon.png` are rendered on the workstation by
   `worbus-icons/tools/make_icons.py` (ImageMagick) and committed as they come; regenerate them there, never by
   hand here. The splash is the platform's own (Android 12+, no androidx splashscreen library): `values-v31`'s
   `Theme.Worbus` sets `worbus_splash_icon` (an animated vector, 760 ms), the duration and a white / black

@@ -77,7 +77,7 @@
 			</intent-filter>
 		</activity>
 
-		<!-- app icon activities: Kelp and clay (the default) and Tidepool (AppIconVariant) -->
+		<!-- app icon activities: Ink (the default) and Paper (AppIconVariant.Tidepool; the alias names are 0.5.0's and must not change) -->
 		<activity-alias
 			android:name="${applicationId}.MainActivityDefault"
 			android:enabled="true"
@@ -96,9 +96,9 @@
 			android:name="${applicationId}.MainActivityTidepool"
 			android:enabled="false"
 			android:exported="true"
-			android:icon="@mipmap/ic_launcher_tidepool"
+			android:icon="@mipmap/ic_launcher_paper"
 			android:label="@string/app_name"
-			android:roundIcon="@mipmap/ic_launcher_tidepool_round"
+			android:roundIcon="@mipmap/ic_launcher_paper_round"
 			android:targetActivity=".MainActivity">
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />

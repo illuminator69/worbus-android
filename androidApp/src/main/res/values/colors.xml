@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<!-- Worbus P5: the launcher's backgrounds, Kelp and clay (default) and Tidepool. -->
+	<!-- Worbus P6: the launcher's backgrounds, Ink (default alias: Paper disc on Ink) and Paper (Ink disc on Paper). -->
 	<color name="ic_launcher_background">#18211F</color>
-	<color name="ic_launcher_background_tidepool">#172326</color>
+	<color name="ic_launcher_background_paper">#F1F3EF</color>
 
 	<!-- The splash (Android 12+, values-v31/themes.xml): pure white, pure black at night. -->
 	<color name="worbus_splash_background">#FFFFFF</color>
