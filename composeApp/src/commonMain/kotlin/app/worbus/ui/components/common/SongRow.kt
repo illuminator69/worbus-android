@@ -1,0 +1,245 @@
+package app.worbus.ui.components.common
+
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
+import kotlinx.collections.immutable.persistentListOf
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.info_unknown_album
+import worbus.composeapp.generated.resources.info_unknown_year
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import app.worbus.data.database.entities.DownloadEntity
+import app.worbus.data.database.entities.DownloadStatus
+import app.worbus.di.LocalNavStack
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.manager.RadioManager
+import app.worbus.domain.models.DomainExplicitStatus
+import app.worbus.domain.models.DomainSong
+import app.worbus.domain.models.creditText
+import app.worbus.icons.Icons
+import app.worbus.icons.filled.Star
+import app.worbus.icons.outlined.Check
+import app.worbus.icons.outlined.DownloadOff
+import app.worbus.icons.outlined.Offline
+import app.worbus.shared.MediaPlayerViewModel
+import app.worbus.ui.components.dialogs.QueueDuplicateDialog
+import app.worbus.ui.components.sheets.SongSheet
+import app.worbus.ui.navigation.Screen
+import app.worbus.ui.screens.playlist.dialogs.PlaylistUpdateDialog
+import app.worbus.ui.util.InlineExplicitIcon
+import app.worbus.ui.util.buildSongInfoString
+
+@Composable
+fun SongRow(
+	modifier: Modifier = Modifier,
+	song: DomainSong,
+	selected: Boolean = false,
+	onClick: (() -> Unit),
+	onLongClick: (() -> Unit),
+	isOnline: Boolean = false,
+	onDismissRequest: () -> Unit,
+	onRemoveStar: () -> Unit,
+	onAddStar: () -> Unit,
+	onShare: () -> Unit,
+	starredState: Boolean,
+	download: DownloadEntity? = null,
+	onDownload: () -> Unit,
+	onCancelDownload: () -> Unit,
+	onDeleteDownload: () -> Unit,
+	onPlayNext: () -> Unit,
+	onAddToQueue: () -> Unit,
+	rating: Int,
+	onSetRating: (Int) -> Unit,
+	/**
+	 * Null means "the shared translucent one". It used to default to an opaque
+	 * `surface`, which on a washed page paints a flat slab over the gradient —
+	 * the rows read as uncoloured cards while the page behind them follows the
+	 * artwork. [SongRowDefaults.containerColor] has existed for exactly this and
+	 * was passed by the album page alone; every other list took the opaque
+	 * default. Resolved below, because it depends on `isCurrentTrack`.
+	 */
+	containerColor: Color? = null,
+	width: Dp = 400.dp,
+	/** A short row (the artist page's Frequently played, P4 round 2): the status column sizes to its
+	 *  content instead of holding the tall grid row's height. */
+	compact: Boolean = false
+) {
+	val preferenceManager = koinInject<PreferenceManager>()
+	val player = koinInject<MediaPlayerViewModel>()
+	val radioManager = koinInject<RadioManager>()
+	// steadyState, not uiState: this row is rendered once per visible song in every list in the
+	// app, and only reads currentSong/isPaused — collecting the playhead too would recompose all
+	// of them ~5x a second for the whole of playback.
+	val playerState by player.steadyState.collectAsStateWithLifecycle()
+	val sonicAvailable by radioManager.sonicSimilarityAvailable.collectAsStateWithLifecycle()
+
+	val backStack = LocalNavStack.current
+	var playlistDialogShown by rememberSaveable { mutableStateOf(false) }
+	var duplicateQueueDialogShown by rememberSaveable { mutableStateOf(false) }
+	var duplicateQueueDialogShownPlayNext by rememberSaveable { mutableStateOf(false) }
+
+	val isDownloaded = download?.status == DownloadStatus.DOWNLOADED
+	val isCurrentTrack = playerState.currentSong?.id == song.id
+	val canPlay = isOnline || isDownloaded
+
+	ListItem(
+		modifier = modifier
+			.width(width)
+			.combinedClickable (
+				onClick = onClick,
+				onLongClick = onLongClick
+			),
+		colors = ListItemDefaults.colors(
+			containerColor = containerColor ?: SongRowDefaults.containerColor(isCurrentTrack)
+		),
+		headlineContent = {
+			Text(
+				text = buildAnnotatedString {
+					append(song.title)
+					if (song.explicitStatus == DomainExplicitStatus.Explicit) {
+						append(" ")
+						appendInlineContent("InlineExplicitIcon")
+					}
+				},
+				inlineContent = InlineExplicitIcon,
+				maxLines = 2
+			)
+		},
+		supportingContent = {
+			Column {
+				MarqueeText(
+					text = buildString {
+						append(song.albumTitle ?: stringResource(Res.string.info_unknown_album))
+						append(" • ")
+						append(song.creditText)
+						append(" • ")
+						append(song.year ?: stringResource(Res.string.info_unknown_year))
+					}
+				)
+				if (song.userRating != null && song.userRating != 0) {
+					SmallRatingRow(rating = song.userRating)
+				}
+			}
+		},
+		leadingContent = {
+			CoverArt(
+				coverArtId = song.coverArtId,
+				fallbackAlbumId = song.albumId,
+				modifier = Modifier.size(50.dp),
+				shape = preferenceManager.coverArtShape.decreasedShape
+			)
+		},
+		trailingContent = {
+			// No duration here: this row already spends its supporting line on
+			// album • artist • year, and the lists it serves are browsing surfaces.
+			SongRowStatus(
+				modifier = if (compact) Modifier else Modifier.height(83.dp),
+				isStarred = starredState,
+				canPlay = canPlay,
+				downloadStatus = download?.status,
+				downloadProgress = download?.progress ?: 0f,
+				isCurrentTrack = isCurrentTrack,
+				isPlaying = !playerState.isPaused
+			)
+		}
+	)
+
+	if (selected) {
+		SongSheet(
+			onDismissRequest = onDismissRequest,
+			song = song,
+			starred = starredState,
+			rating = rating,
+			onSetStarred = { starred ->
+				if (starred) onAddStar() else onRemoveStar()
+			},
+			onShare = onShare,
+			onPlayNext = {
+				if (player.uiState.value.queue.any { it.id == song.id } && !preferenceManager.shushQueueDuplicateDialog) {
+					duplicateQueueDialogShown = true
+					duplicateQueueDialogShownPlayNext = true
+				} else {
+					onPlayNext()
+				}
+			},
+			onAddToQueue = {
+				if (player.uiState.value.queue.any { it.id == song.id } && !preferenceManager.shushQueueDuplicateDialog) {
+					duplicateQueueDialogShown = true
+					duplicateQueueDialogShownPlayNext = false
+				} else {
+					onAddToQueue()
+				}
+			},
+			onTrackInfo = dropUnlessResumed {
+				backStack.add(Screen.SongDetailSheet(song.id))
+			},
+			onViewAlbum = song.albumId?.let { albumId ->
+				dropUnlessResumed {
+					backStack.add(
+						Screen.CollectionDetail(
+							collectionId = albumId,
+							tab = "library"
+						)
+					)
+				}
+			},
+			onAddToPlaylist = {
+				playlistDialogShown = true
+			},
+			onStartRadio = {
+				radioManager.startRadio(song)
+			},
+			// Sonic journey from the now-playing track to this one. Only offered
+			// when the AudioMuse plugin is present and something else is playing.
+			onStartJourney = playerState.currentSong?.takeIf {
+				sonicAvailable && it.id != song.id
+			}?.let { nowPlaying ->
+				{ radioManager.startJourney(nowPlaying.id, song.id) }
+			},
+			downloadStatus = download?.status,
+			onDownload = onDownload,
+			onCancelDownload = onCancelDownload,
+			onDeleteDownload = onDeleteDownload,
+			onSetRating = onSetRating
+		)
+	}
+
+	if (playlistDialogShown) {
+		PlaylistUpdateDialog(
+			songs = persistentListOf(song),
+			onDismissRequest = { playlistDialogShown = false }
+		)
+	}
+
+	if (duplicateQueueDialogShown) {
+		QueueDuplicateDialog(
+			onDismissRequest = {
+				duplicateQueueDialogShown = false
+				onDismissRequest()
+			},
+			onConfirm = {
+				if (duplicateQueueDialogShownPlayNext) onPlayNext() else onAddToQueue()
+			}
+		)
+	}
+}

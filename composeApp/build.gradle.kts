@@ -22,7 +22,7 @@ configurations.all {
 }
 
 valkyrie {
-	packageName = "paige.navic.icons"
+	packageName = "app.worbus.icons"
 	generateAtSync = true
 	outputDirectory = layout.buildDirectory.dir("generated/sources/valkyrie")
 
@@ -69,7 +69,7 @@ val generateBuildInfo = tasks.register("generateBuildInfo", Sync::class) {
 	from(
 		resources.text.fromString(
 			"""
-			|package paige.navic.generated
+			|package app.worbus.generated
 			|
 			|object BuildInfo {
 			|	const val FDROID = $fdroid
@@ -80,7 +80,7 @@ val generateBuildInfo = tasks.register("generateBuildInfo", Sync::class) {
 		)
 	) {
 		rename { "BuildInfo.kt" }
-		into("paige/navic/generated")
+		into("app/worbus/generated")
 	}
 
 	into(layout.buildDirectory.dir("generated/buildInfo/commonMain/kotlin"))
@@ -102,7 +102,7 @@ kotlin.sourceSets.commonMain {
 
 kotlin {
 	android {
-		namespace = "paige.navic"
+		namespace = "app.worbus"
 		compileSdk = libs.versions.android.compileSdk.get().toInt()
 		minSdk = libs.versions.android.minSdk.get().toInt()
 

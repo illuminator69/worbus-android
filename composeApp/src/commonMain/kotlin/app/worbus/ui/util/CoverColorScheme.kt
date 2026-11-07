@@ -1,0 +1,675 @@
+package app.worbus.ui.util
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import kotlin.math.abs
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kmpalette.generatePalette
+import com.kmpalette.loader.NetworkLoader
+import com.kmpalette.loader.rememberNetworkLoader
+import com.kmpalette.palette.graphics.Palette.Swatch
+import com.materialkolor.PaletteStyle
+import com.materialkolor.dynamicColorScheme
+import com.materialkolor.dynamiccolor.ColorSpec
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.http.Url
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import org.koin.compose.koinInject
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.manager.SessionManager
+import app.worbus.domain.models.settings.ThemeMode
+import app.worbus.shared.MediaPlayerViewModel
+import app.worbus.util.CoverPlaceholder
+import app.worbus.util.Logger
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
+
+/**
+ * One client for ALL cover-art palette extraction. Built OUTSIDE composition on
+ * purpose: constructing an [HttpClient] inside a `@Composable` allocated a fresh
+ * client — and its connection pool + engine threads — on every recomposition, and
+ * nothing ever closed them.
+ */
+internal val paletteHttpClient: HttpClient by lazy {
+	HttpClient {
+		install(HttpTimeout) {
+			requestTimeoutMillis = 60_000
+			connectTimeoutMillis = 60_000
+			socketTimeoutMillis = 60_000
+		}
+	}
+}
+
+/**
+ * Derived Material schemes, keyed by the inputs that produce them.
+ *
+ * [CoverSeedStore] stops the artwork being re-downloaded and re-quantised, but the step AFTER
+ * it — materialKolor's HCT/CAM16 derivation of ~30 colour roles from the seed — is a `remember`
+ * inside `rememberDynamicColorScheme`, so it dies with the composition that made it. That matters
+ * because `RootBottomBar` (and so the mini-player, which reads the now-playing cover) is built
+ * fresh inside EVERY screen's own Scaffold: navigating anywhere tore its composition down and paid
+ * for the whole derivation again on the UI thread, mid-transition, for a song that hadn't changed.
+ *
+ * Small, because the key is (seed, brightness, style) and a session only plays so many covers.
+ * Main-thread only, like [CoverSeedStore].
+ */
+private const val SCHEME_CACHE_MAX = 64
+private data class SchemeKey(
+	val seed: Color,
+	/** The neutral/surface seed — a scheme's backgrounds and its accent come from different swatches. */
+	val neutral: Color,
+	val isDark: Boolean,
+	val style: PaletteStyle
+)
+private val schemeCache = object {
+	private val entries = mutableMapOf<SchemeKey, ColorScheme>()
+
+	operator fun get(key: SchemeKey): ColorScheme? = entries[key]
+
+	operator fun set(key: SchemeKey, scheme: ColorScheme) {
+		entries[key] = scheme
+		while (entries.size > SCHEME_CACHE_MAX) {
+			entries.remove(entries.keys.first())
+		}
+	}
+}
+
+/** The pixel size the palette is extracted from. Quantisation sees no more than this anyway. */
+internal const val PALETTE_PX = 128
+
+/** How many times a palette fetch is attempted before the cover is left unresolved. */
+private const val PALETTE_ATTEMPTS = 3
+private const val PALETTE_RETRY_DELAY_MS = 400L
+
+/** A palette swatch as the pure colour rules take it ([deriveCoverSeeds]). */
+private fun Swatch.toSample(): SwatchSample =
+	SwatchSample(rgb = rgb, hue = hsl[0], saturation = hsl[1], lightness = hsl[2], population = population)
+
+/**
+ * The seeds the wash shows (audit L4a-03). [fetched] is the previous cover's seeds, kept as a BRIDGE
+ * while a new cover's are on their way, so the colour eases from the old one instead of flashing
+ * through the neutral default. It is only a bridge while a cover is coming: with no cover
+ * ([paletteKey] null: the queue cleared, a radio, a coverless song, Navidrome's generic avatar) or
+ * once this cover's fetch failed ([fetchFailedFor]), the previous cover no longer colours the page.
+ */
+internal fun <T> seedsForWash(paletteKey: String?, cached: T?, fetched: T?, fetchFailedFor: String?): T? = when {
+	paletteKey == null -> null
+	cached != null -> cached
+	fetchFailedFor == paletteKey -> null
+	else -> fetched
+}
+
+/**
+ * A cover's [CoverSeeds], fetched from [uri] and quantised: the one fetch every colour path uses
+ * (the page's own, and [CoverSeedPrefetcher]'s ahead of need). Retried, and each failure LOGGED.
+ * This used to be `runCatching { … }.getOrNull() ?: return@LaunchedEffect`: silent, and permanent
+ * for the life of the composable, because the effect's key never changes again. A single flaky
+ * fetch therefore pinned one screen to the unresolved state while a sheet opened seconds later — a
+ * fresh composable, a fresh attempt — showed the right colours for the same cover.
+ *
+ * The Ktor fetch suspends off the caller's thread on its own, but the quantisation afterwards is
+ * plain CPU work, so it runs on [Dispatchers.Default]. [CoverSeedFetch.Failed] when every attempt
+ * failed; [CoverSeedFetch.Unextractable] when the image came and the palette found nothing in it.
+ */
+internal suspend fun fetchCoverSeeds(loader: NetworkLoader, uri: String): CoverSeedFetch {
+	for (attempt in 0 until PALETTE_ATTEMPTS) {
+		if (attempt > 0) delay(PALETTE_RETRY_DELAY_MS * attempt)
+		val outcome = runCatching {
+			val bitmap = loader.load(Url(uri))
+			withContext(Dispatchers.Default) {
+				// Every pixel, for the page (`readCover`): the palette has already dropped near-black
+				// ones and every "skin tone" before anything is counted, and is kept for the dark
+				// page's accent alone.
+				val pixels = IntArray(bitmap.width * bitmap.height).also { bitmap.readPixels(it) }
+				deriveCoverSeeds(
+					swatches = bitmap.generatePalette().swatches.map { it.toSample() },
+					reading = readCover(pixels, bitmap.width, bitmap.height)
+				)
+			}
+		}
+		if (outcome.isSuccess) return coverSeedFetchOf(outcome.getOrNull())
+		val error = outcome.exceptionOrNull()
+		if (error is CancellationException) throw error
+		Logger.w("CoverColorScheme", "palette fetch failed for $uri (attempt ${attempt + 1})", error)
+	}
+	return CoverSeedFetch.Failed
+}
+
+/**
+ * What a cover-colour fetch came back with. An image whose palette gives no seeds (all black) is an
+ * answer, [Unextractable], not a failure: asking again gives the same nothing (fix round P6).
+ */
+sealed interface CoverSeedFetch {
+	data class Seeds(val seeds: CoverSeeds) : CoverSeedFetch
+	data object Unextractable : CoverSeedFetch
+	data object Failed : CoverSeedFetch
+}
+
+/** A fetched image's derived seeds as a [CoverSeedFetch]: none is [CoverSeedFetch.Unextractable]. */
+internal fun coverSeedFetchOf(derived: CoverSeeds?): CoverSeedFetch =
+	derived?.let { CoverSeedFetch.Seeds(it) } ?: CoverSeedFetch.Unextractable
+
+/** A readable Material scheme derived from artwork plus the extracted seed color. */
+data class CoverColors(
+	val scheme: ColorScheme,
+	val seed: Color,
+	/**
+	 * The artwork's MOST POPULOUS colour, raw. This is what the cover "is" to the eye at a
+	 * glance — the sleeve's field colour, not the detail printed on it — so it is what any
+	 * BACKGROUND derived from the cover should follow. Distinct from [seed] (pulled partway
+	 * toward the vivid swatch) and from the accent behind `scheme.primary` (the vivid swatch
+	 * itself): a navy sleeve with a green squiggle on it has a navy dominant and a green accent.
+	 */
+	val dominant: Color,
+	/** Resolved page brightness — follows the ARTWORK's luminance, not the app theme. */
+	val isDark: Boolean,
+	/**
+	 * True only once a palette is actually in hand. False means [dominant] and [scheme] are a
+	 * stand-in (the app's scheme, or the colour we navigated from) and must not be treated as a
+	 * statement about this artwork — see the note in [rememberCoverColorScheme].
+	 */
+	val resolved: Boolean,
+	/**
+	 * False when the user has turned cover theming off. Everything here is then the app's own
+	 * scheme, and a caller that paints its OWN surface from [seed] (the detail screens' hero wash,
+	 * the blurred backdrop) must skip it — those don't read [scheme], so the gate can't reach them.
+	 */
+	val themed: Boolean
+)
+
+/**
+ * Builds a readable Material 3 [ColorScheme] from a cover-art / artist image's
+ * dominant color (Apple-Music-style art theming). kmpalette extracts the seed,
+ * materialKolor derives the full scheme — so on-colors stay legible over
+ * unpredictable artwork. Generalizes the now-playing sheet's `colorSchemeForCurrentSong`.
+ *
+ * Extraction is async: [CoverColors.seed]/[scheme] start at a neutral default and
+ * update once the (downsized) image loads. Caches by [coverArtId] via remember.
+ */
+@Composable
+fun rememberCoverColorScheme(
+	coverArtId: String?,
+	isDark: Boolean = true,
+	initialSeed: Color? = null,
+	// When false, the scheme keeps the passed [isDark] (app) brightness instead of following
+	// the artwork's luminance. Used by the library home, whose page brightness should stay put
+	// (only the accent hues adapt to the now-playing song) rather than flipping per cover.
+	followArtworkBrightness: Boolean = true,
+	/**
+	 * An ABSOLUTE image URL to quantise instead of a Navidrome cover id.
+	 *
+	 * The external artist/album pages show art that has no Navidrome cover id at
+	 * all — it comes straight from the Cover Art Archive
+	 * ([app.worbus.domain.manager.LbBotManager.caaCoverUrl]). Passing that URL
+	 * as `coverArtId` does not work and fails *silently in the expensive
+	 * direction*: it would be run through `getCoverArtUrl`, producing
+	 * `…/rest/getCoverArt?id=https%3A%2F%2Fcoverartarchive.org%2F…`, which
+	 * Navidrome cannot resolve — three retried fetches and `resolved = false`
+	 * for the life of the composable.
+	 *
+	 * When set, this is the fetch URL and also the cache key, which is safe
+	 * because [CoverSeedStore] is keyed by a plain string either way. The
+	 * placeholder check is skipped: it identifies Navidrome's generic artist
+	 * glyph by cover id and means nothing for a foreign URL.
+	 */
+	paletteUrl: String? = null
+): CoverColors {
+	val themingOn = coverThemingEnabled()
+	val sessionManager = koinInject<SessionManager>()
+	// Navidrome serves a flat grey person-glyph PNG for every artist with no picture, under a
+	// perfectly valid cover id (see [CoverPlaceholder]). It is a served image, so quantising it
+	// answers "this artist is grey" for all ~26 of them at once. `CoverArt` has always refused to
+	// DRAW it; refusing to THEME off it is the same rule, and it has to be here rather than at the
+	// call sites because the artist page, `ArtistSheet` and the now-playing chrome all feed ids in.
+	val hasArt = themingOn && (
+		paletteUrl != null ||
+			(coverArtId != null && !CoverPlaceholder.isPlaceholder(coverArtId))
+		)
+	// What identifies this artwork in the caches. A foreign URL is its own key.
+	val paletteKey = paletteUrl ?: coverArtId
+	// 128px, asked for as a PARAMETER: `getCoverArtUrl` already carries the user's cover-art
+	// quality, so appending `&size=128` gave `…&size=4096&size=128` and Subsonic honoured the
+	// FIRST — every palette extraction pulled and quantised a 4096px JPEG over a bare Ktor client
+	// with a 60s timeout, which is what made the unresolved state below a routine sight.
+	val coverUri = remember(coverArtId, paletteUrl, hasArt) {
+		when {
+			!hasArt -> null
+			paletteUrl != null -> paletteUrl
+			else -> coverArtId?.let { sessionManager.getCoverArtUrl(it, size = PALETTE_PX) }
+		}
+	}
+	val networkLoader = rememberNetworkLoader(paletteHttpClient)
+	// ONE extraction per cover, and every colour below is read off that one palette — so a cover
+	// resolves in a single step. (Running the wash and the accent as two separate
+	// `DominantColorState`s made covers visibly change colour TWICE; kmpalette's `PaletteState`
+	// wrapper never resolved at all. Loading the bitmap and building the palette directly is both
+	// simpler and the thing we can actually reason about.)
+	//
+	// The store is read IN COMPOSITION, so a cover whose colours are known (from an earlier visit,
+	// an earlier run, or the prefetcher) is resolved in the first frame of the page that wears it.
+	val store = koinInject<CoverSeedStore>()
+	val cached = if (hasArt) paletteKey?.let { store[it] } else null
+	// What a fetch here brought. NOT keyed on the cover id: the previous cover's seeds stay put
+	// until the new one's are ready, so changing to a cover not yet stored eases from the old
+	// colour instead of flashing through the neutral default.
+	var fetched by remember { mutableStateOf<CoverSeeds?>(null) }
+	// The cover whose fetch failed: no bridge for it (audit L4a-03).
+	var fetchFailedFor by remember { mutableStateOf<String?>(null) }
+
+	LaunchedEffect(coverUri, paletteKey) {
+		val id = paletteKey ?: return@LaunchedEffect
+		val uri = coverUri ?: return@LaunchedEffect
+		// Looked at again here, not only in composition: the store is not Compose state, so seeds
+		// the prefetcher wrote after this composition read it would otherwise never be seen.
+		store[id]?.let {
+			fetched = it
+			return@LaunchedEffect
+		}
+		val result = (fetchCoverSeeds(networkLoader, uri) as? CoverSeedFetch.Seeds)?.seeds
+		if (result == null) {
+			// Failed or unextractable: either way this cover has no colours to bridge to.
+			fetchFailedFor = id
+			return@LaunchedEffect
+		}
+		store.put(id, result)
+		fetched = result
+	}
+	val seeds = seedsForWash(paletteKey.takeIf { hasArt }, cached, fetched, fetchFailedFor)
+
+	val appScheme = MaterialTheme.colorScheme
+	val fallback = appScheme.surface
+	/**
+	 * Did extraction actually answer? Everything below used to run regardless, and an unresolved
+	 * cover was not neutral — it was a FABRICATED scheme. With no palette the dominant falls back
+	 * to `MaterialTheme.colorScheme.surface`, `vivid` is null, so the accent seed became that
+	 * near-white surface run through [boostedAccent] (saturation x1.6) and then through
+	 * `dynamicColorScheme` under `PaletteStyle.Content` — which was chosen on `coverUri != null`,
+	 * not on having a palette. The surface's own faint M3 cast was therefore amplified into an
+	 * obvious accent: measured on device, `#faf8fe` produced a dusty ROSE page while a navy/teal
+	 * sleeve was playing. Worse, `fallback` reads the ENCLOSING theme, so inside a washed screen an
+	 * unresolved cover seeded itself from the previous wash and drifted further each time.
+	 *
+	 * An unresolved cover is not a colour. It is an absence, and the app's own scheme is what an
+	 * absence should look like.
+	 */
+	val resolved = themingOn && seeds != null
+	// `initialSeed` is a real colour — the screen we navigated FROM (see [AmbientColorHolder]) — so
+	// a cover still being fetched eases from something meaningful rather than from nothing. But it
+	// is a BRIDGE to a pending resolve, not evidence about THIS artwork (hence `resolved` stays
+	// false), and it only earns its place while artwork is actually on its way: with nothing to
+	// fetch — no cover id, or Navidrome's generic avatar — nothing will ever replace it, and an
+	// artist with no picture sat permanently in the colour of whatever album you opened it from.
+	val hasSeedSource = themingOn && (resolved || (initialSeed != null && coverUri != null))
+	// The most POPULOUS colour, by family (see `dominantByColorFamily` in CoverSeeds.kt — NOT `dominantSwatch`).
+	// It decides page BRIGHTNESS — a mostly-black cover has to give a dark page — and, since the
+	// scheme's neutrals are seeded from it below, every background. On its own it's still a poor
+	// accent: on a black-and-yellow sleeve it's the black, not the yellow the cover reads as.
+	val dominant = remember(seeds, initialSeed, fallback, themingOn, coverUri) {
+		if (!themingOn) fallback
+		else seeds?.dominant?.let(::Color)
+			?: initialSeed?.takeIf { coverUri != null }
+			?: fallback
+	}
+	// The most populous COLOURFUL swatch: washed-out and near-black/near-white swatches are
+	// rejected, so what survives is the colour a human would name the cover by (the yellow).
+	// A genuinely greyscale cover has no survivor and falls back to the dominant, staying neutral
+	// rather than having a hue invented for it.
+	val vivid = seeds?.vivid?.let(::Color)
+	// What `primary` is seeded from: the vivid swatch on a dark page unless it is the page's own
+	// colour, else the most salient colour that is not (see [CoverSeeds.accent]).
+	val accent = seeds?.accent?.let(::Color) ?: vivid
+	// Page brightness FOLLOWS THE ARTWORK (Apple-Music style): a dark cover gives a dark
+	// immersive page (light text), a light cover a light page (dark text) — independent of
+	// the app theme mode (a dark album on a light page was the "doesn't match" mismatch).
+	// As the cover's pixels decided ([CoverSeeds.dark]: its tone, or a black background), never the
+	// vivid swatch: a bright accent on a dark cover must not flip the whole page to light.
+	val coverIsDark = if (!followArtworkBrightness) isDark
+		else seeds?.pageIsDark() ?: isDark
+	// Seeds read off the cover's pixels (codec 4, I-057) carry the page's colour and the L* its top
+	// lands at: the field's own, so a black background gives a black page and a white one a white
+	// page (`readCover`). Only on pages that follow the artwork: the now-playing sheet keeps its own
+	// brightness and washes as it always has.
+	val pageWash = seeds?.wash?.takeIf { followArtworkBrightness }?.let(::Color)
+	val pageWashL = seeds?.washL?.takeIf { followArtworkBrightness }
+	// Older seeds: the tone places the wash's lightness (`seedForTone`).
+	val pageTone = seeds?.tone?.takeIf { followArtworkBrightness }
+	// A light page whose dominant is dark, for seeds without a wash: the light part of such a cover is
+	// its colour (Mitski's peach frame round a near-black photo), so its wash and neutrals come from
+	// the vivid swatch. The pixels' field rule covers this case for seeds with one.
+	val lightFromVivid = pageWash == null && pageTone != null && !coverIsDark && vivid != null && dominant.luminance() < 0.5f
+	// Without a wash, the dominant colour pulled a third of the way toward the vivid one: a
+	// black-and-yellow cover then gives a dark page that is YELLOW-dark, not a flat grey one. The
+	// pixels' wash replaced that on pages that follow the artwork: a black background is black.
+	val washBase = when {
+		pageWash != null -> pageWash
+		vivid == null -> dominant
+		lightFromVivid -> vivid
+		else -> lerp(dominant, vivid, 0.35f)
+	}
+	val seed = when {
+		pageWashL != null -> seedForTopLstar(washBase, pageWashL, coverIsDark)
+		pageTone != null -> seedForTone(washBase, pageTone, coverIsDark)
+		else -> washBase
+	}
+	// What the scheme's neutrals (every background and card) are seeded from.
+	val neutralSeed = if (lightFromVivid) vivid else dominant
+	// The ACCENT (buttons, primary), saturation-boosted so even muted artwork yields an obvious
+	// cover colour rather than a washed near-grey `primary`.
+	val accentSeed = (accent ?: dominant).boostedAccent().forPage(coverIsDark)
+	// Content keeps colourful covers faithful AND leaves a true-greyscale cover naturally
+	// grey — it doesn't amplify chroma like Vibrant (which invented a teal from a B&W cover),
+	// so no Monochrome special-case is needed; a dark scheme already yields a bright `primary`.
+	// Gated on having an actual seed source, NOT on `coverUri != null`: a cover whose fetch is in
+	// flight or has failed has no colour to be faithful to, and Content on a near-white fallback is
+	// exactly what manufactured the rose accent above.
+	val style = if (hasSeedSource) PaletteStyle.Content else PaletteStyle.Monochrome
+	// Seed the SCHEME from the vivid swatch (saturation-boosted) so muted/dark artwork still
+	// yields an OBVIOUS cover accent (Symfonium-like) rather than a washed near-grey `primary`.
+	//
+	// The non-composable `dynamicColorScheme` behind our own [schemeCache], rather than
+	// `rememberDynamicColorScheme`: its remember dies with the composition, and the mini-player's
+	// composition is destroyed on every navigation, so the HCT derivation was being repeated on
+	// the UI thread mid-transition for a cover that hadn't changed. The trailing `.copy` used to
+	// sit outside any remember too — and since ColorScheme has identity equality, that alone
+	// re-published LocalColorScheme (and so invalidated the whole subtree) at every
+	// `NavicTheme(coverColors.scheme)` call site, on every recomposition.
+	//
+	// materialKolor gives LIGHT schemes a near-neutral (almost black) onSurface, so light
+	// pages read as "just black text". Tint the content colours toward the cover's `primary`
+	// so text carries the artwork's hue on light AND dark pages (matching the queue's look).
+	//
+	// The SURFACES are seeded separately, from the dominant colour: materialKolor builds the
+	// background/`onSurface` family out of `neutral`/`neutralVariant`, so handing it the dominant
+	// swatch makes every background the cover's own field colour while the accent stays vivid. One
+	// seed for both put the page in the hue of whatever detail happened to be the most colourful
+	// thing on the sleeve — a navy record with a green squiggle on it gave a green page. Deriving
+	// the neutrals rather than tinting them by hand is also what keeps `onSurface` legible over
+	// them, which hand-blending a surface toward a cover colour does not.
+	val scheme = if (!hasSeedSource) appScheme else remember(accentSeed, neutralSeed, coverIsDark, style) {
+		val key = SchemeKey(accentSeed, neutralSeed, coverIsDark, style)
+		schemeCache[key] ?: run {
+			val raw = dynamicColorScheme(
+				seedColor = accentSeed,
+				isDark = coverIsDark,
+				style = style,
+				neutral = neutralSeed,
+				neutralVariant = neutralSeed,
+				specVersion = ColorSpec.SpecVersion.SPEC_2021
+			)
+			raw.copy(
+				onSurface = lerp(raw.onSurface, raw.primary, 0.14f),
+				onSurfaceVariant = lerp(raw.onSurfaceVariant, raw.primary, 0.18f)
+			).also { schemeCache[key] = it }
+		}
+	}
+
+	return CoverColors(
+		scheme = scheme,
+		seed = seed,
+		dominant = dominant,
+		isDark = coverIsDark,
+		resolved = resolved,
+		themed = themingOn
+	)
+}
+
+/**
+ * Whether cover-derived theming is on at all.
+ *
+ * Upstream shipped this preference in alpha42 and read it in exactly two places —
+ * `ArtistDetailScreen` and `CollectionDetailScreen` — as
+ * `if (dynamicTheming) rememberColorSchemeFromCoverArt(...) else null`, feeding `NavicTheme`'s
+ * `colorScheme ?: chosenScheme`. That `null` WAS the off switch. The fork replaced both call sites
+ * with its own unconditional engine during the alpha58 merge, and `coverColors.scheme` is never
+ * null, so the toggle was left with no readers at all: flipping it in Settings did nothing.
+ *
+ * It is honoured here instead of at the call sites because the fork tints far more than upstream
+ * ever did — the library home, every browsing tab via `App.kt`'s `Washed`, the mini-player, the
+ * now-playing chrome and every sheet — and one gate in the engine covers all of them, including
+ * anything added later. Default is ON: the fork has always behaved that way, and a pref defaulting
+ * false would have silently un-themed everyone's app on update.
+ */
+@Composable
+private fun coverThemingEnabled(): Boolean = koinInject<PreferenceManager>().dynamicTheming
+
+/** App dark/light per the user's theme preference (matches the detail screens). */
+@Composable
+fun rememberAppIsDark(): Boolean {
+	val preferenceManager = koinInject<PreferenceManager>()
+	return when (preferenceManager.themeMode) {
+		ThemeMode.System -> isSystemInDarkTheme()
+		ThemeMode.Dark -> true
+		ThemeMode.Light -> false
+	}
+}
+
+/**
+ * Cover-derived theming bundle for an ambient surface (sheet / queue): the
+ * readable [scheme] to drive content colours via `NavicTheme`, the raw [seed],
+ * and [top] — the muted gradient-top colour (same formula as
+ * [app.worbus.ui.components.common.ArtAmbientBackground]) used as the sheet's
+ * opaque container colour so its drag-handle area blends with the wash.
+ */
+data class CoverAmbient(
+	val scheme: ColorScheme,
+	val seed: Color,
+	val top: Color,
+	val bottom: Color,
+	/** Content colour guaranteed to read over [top] — drive `NavicTheme(contentColor = …)`. */
+	val onAmbient: Color
+)
+
+/**
+ * A more vivid, "obvious" accent seed (Symfonium-style): raises saturation while PRESERVING
+ * the hue, so washed/dark artwork yields a clear cover accent instead of a near-grey `primary`.
+ * A true greyscale colour (no chroma) is returned unchanged, so B&W covers stay neutral.
+ */
+fun Color.boostedAccent(): Color {
+	val r = red; val g = green; val b = blue
+	val max = maxOf(r, g, b)
+	val min = minOf(r, g, b)
+	val delta = max - min
+	if (max <= 0f || delta < 0.04f) return this  // black or greyscale → leave neutral
+	var h = 60f * when (max) {
+		r -> ((g - b) / delta) % 6f
+		g -> (b - r) / delta + 2f
+		else -> (r - g) / delta + 4f
+	}
+	if (h < 0f) h += 360f
+	val newS = (delta / max * 1.6f).coerceAtMost(1f)   // punchier chroma
+	val newV = max.coerceIn(0.5f, 1f)                  // avoid near-black accents
+	val c = newV * newS
+	val x = c * (1f - abs((h / 60f) % 2f - 1f))
+	val m = newV - c
+	val (rr, gg, bb) = when {
+		h < 60f -> Triple(c, x, 0f)
+		h < 120f -> Triple(x, c, 0f)
+		h < 180f -> Triple(0f, c, x)
+		h < 240f -> Triple(0f, x, c)
+		h < 300f -> Triple(x, 0f, c)
+		else -> Triple(c, 0f, x)
+	}
+	return Color(rr + m, gg + m, bb + m)
+}
+
+/**
+ * On a dark page, the accent seed no lighter than CIE L* [DARK_ACCENT_SEED_MAX_L]. `PaletteStyle.Content`
+ * keeps a seed's own tone for `primary`, so a pale seed on a dark scheme came out white: The Bends' cream
+ * (boosted `#f0e38a`, L* 89) gave a `#fffdff` Play button where the owner asked for its beige. At L* 70
+ * it gives `#d4c86f`, L* 80, the tone every other dark page's `primary` sits at; a seed already darker
+ * (The Red Shoes, Loss of Life) is unchanged. Light pages are left alone.
+ */
+fun Color.forPage(isDark: Boolean): Color {
+	if (!isDark) return this
+	val lab = convert(ColorSpaces.CieLab)
+	if (lab.red <= DARK_ACCENT_SEED_MAX_L) return this
+	return Color(DARK_ACCENT_SEED_MAX_L, lab.green, lab.blue, colorSpace = ColorSpaces.CieLab).convert(ColorSpaces.Srgb)
+}
+
+const val DARK_ACCENT_SEED_MAX_L = 70f
+
+/**
+ * Page ambient wash for a cover [seed], eased toward white (light) / black (dark) but
+ * keeping enough of the cover colour that the page reads as a rich tint, not washed grey.
+ * Shared by the sheets and the album/artist detail screens so every surface matches.
+ */
+fun coverAmbientGradient(seed: Color, isDark: Boolean): Pair<Color, Color> {
+	val tuning = washTuning(isDark)
+	val target = if (isDark) Color.Black else Color.White
+	val top = lerp(seed, target, tuning.topMix).let { mixed ->
+		if (mixed.luminance() >= tuning.minLuminance) mixed
+		else lerp(mixed, Color.White, leastFractionAbove(tuning.minLuminance) { lerp(mixed, Color.White, it) })
+	}
+	if (tuning.bottomDepth <= 0f) return top to lerp(seed, target, tuning.bottomMix)
+	// A fixed lightness step below the top, toward a deeper shade of the seed: `lerp` is in Oklab,
+	// so lightness moves linearly with the fraction, and every cover — a pale one included, whose
+	// own seed may sit within the step of the top — gets the same depth in the cover's own hue.
+	val deep = lerp(seed, Color.Black, 0.5f)
+	val topL = top.convert(ColorSpaces.Oklab).red
+	val deepL = deep.convert(ColorSpaces.Oklab).red
+	val fraction = if (topL - deepL <= tuning.bottomDepth) 1f else tuning.bottomDepth / (topL - deepL)
+	val bottom = lerp(top, deep, fraction)
+	if (bottom.luminance() >= tuning.minLuminance) return top to bottom
+	// Too deep to read on: the most depth that stays above the floor.
+	val backOff = leastFractionAbove(tuning.minLuminance) { lerp(top, deep, fraction * (1f - it)) }
+	return top to lerp(top, deep, fraction * (1f - backOff))
+}
+
+/**
+ * The smallest fraction in 0..1 whose [colour] is at least [floor] luminance, for a [colour] that
+ * gets lighter as the fraction grows. Bisected: lightness is monotonic along an Oklab `lerp`.
+ */
+private inline fun leastFractionAbove(floor: Float, colour: (Float) -> Color): Float {
+	var low = 0f
+	var high = 1f
+	repeat(16) {
+		val mid = (low + high) / 2f
+		if (colour(mid).luminance() >= floor) high = mid else low = mid
+	}
+	return high
+}
+
+/**
+ * A content colour guaranteed to read over [background]: the scheme's `onSurface` or its
+ * inverse, whichever has the greater luminance distance from the painted ambient. The
+ * ambient wash is computed independently of the scheme's `surface`, so trusting `onSurface`
+ * alone can give low-contrast text on rich/mid-tone covers — this keeps text legible.
+ */
+fun onAmbientColor(background: Color, scheme: ColorScheme): Color {
+	val bg = background.luminance()
+	val onSurface = scheme.onSurface
+	val inverse = scheme.inverseOnSurface
+	return if (abs(onSurface.luminance() - bg) >= abs(inverse.luminance() - bg)) onSurface else inverse
+}
+
+@Composable
+fun rememberCoverAmbient(
+	coverArtId: String?,
+	isDark: Boolean = rememberAppIsDark(),
+	initialSeed: Color? = null,
+	/** See [rememberCoverColorScheme]: an absolute URL for art with no Navidrome id. */
+	paletteUrl: String? = null
+): CoverAmbient {
+	val cover = rememberCoverColorScheme(
+		coverArtId,
+		isDark = isDark,
+		initialSeed = initialSeed,
+		paletteUrl = paletteUrl
+	)
+	// Brightness follows the artwork (cover.isDark), not the app theme passed in.
+	// Theming off: the sheet is the app's plain surface. `cover.seed` is that surface already, but
+	// the gradient would still ease it toward white/black and tint the sheet for no reason.
+	val (rawTop, rawBottom) = if (cover.themed) coverAmbientGradient(cover.seed, cover.isDark)
+		else cover.scheme.surface to cover.scheme.surface
+	// Ease the colours in as the seed resolves (kmpalette extraction is async) so
+	// the sheet wash fades from the neutral default to the cover colour instead of
+	// popping instantly. Matches the detail screens' `animateColorAsState`.
+	val top by animateColorAsState(rawTop, tween(WASH_MS))
+	val bottom by animateColorAsState(rawBottom, tween(WASH_MS))
+	return CoverAmbient(
+		scheme = cover.scheme,
+		seed = cover.seed,
+		top = top,
+		bottom = bottom,
+		onAmbient = onAmbientColor(top, cover.scheme)
+	)
+}
+
+/**
+ * The CURRENTLY-PLAYING song's cover id, and nothing else. Collects ONLY the cover id,
+ * distinct — so callers recompose on SONG change, not on every ~4 Hz progress tick. Critical:
+ * this is read at the App root, so a full `uiState` collect there would re-theme the whole app
+ * every tick (unusable lag).
+ */
+@Composable
+fun rememberNowPlayingCoverArtId(): String? {
+	val player = koinInject<MediaPlayerViewModel>()
+	val coverArtId by remember(player) {
+		player.uiState
+			.map { it.currentSong?.coverArtId }
+			.distinctUntilChanged()
+	}.collectAsStateWithLifecycle(player.uiState.value.currentSong?.coverArtId)
+	return coverArtId
+}
+
+/** Whether the player has restored the last session's queue (`MediaPlayerViewModel.restored`). */
+@Composable
+fun rememberPlayerRestored(): Boolean {
+	val player = koinInject<MediaPlayerViewModel>()
+	val restored by player.restored.collectAsStateWithLifecycle()
+	return restored
+}
+
+/**
+ * [CoverAmbient] for the CURRENTLY-PLAYING song's cover — for surfaces not tied
+ * to a specific item (queue, device picker, mood / sort sheets).
+ */
+@Composable
+fun rememberNowPlayingCoverAmbient(): CoverAmbient =
+	rememberCoverAmbient(rememberNowPlayingCoverArtId())
+
+/**
+ * Background brush for every browsing tab: the plain themed surface. (An earlier cover-tinted
+ * "dynamic home background" was removed — it was too laggy on scroll; [Modifier.
+ * libraryAmbientBackground] is the cheap version of that idea, a drawn gradient with no blur.)
+ * Kept as a single helper so all the tabs share one background source. The home uses the wash
+ * instead of this.
+ */
+@Composable
+fun rememberLibraryTabBackground(): Brush = SolidColor(MaterialTheme.colorScheme.surface)
+
+/**
+ * The browsing pages' scheme and wash both come from [app.worbus.ui.components.common.
+ * BrowsingAmbient] now, which runs the album page's pipeline.
+ *
+ * What used to be here — `rememberNowPlayingScheme` plus a `rememberLibraryWashedScheme` that
+ * replaced `surface`/`background` with a flat 32% mix toward the cover's dominant — is gone. It
+ * held the APP's light/dark brightness while every detail page followed the artwork's, so the same
+ * sleeve was rendered two different ways depending on which screen you were looking at; and being
+ * a single flat colour it could not carry a gradient. Both were deliberate at the time: the flat
+ * surface existed because a *drawn* background leaves anything painting `surface` sitting on it as
+ * a slab. Following the artwork's brightness is what retires that constraint, since the scheme's
+ * own neutrals then sit in the same tonal register as the gradient behind them.
+ */

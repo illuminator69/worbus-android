@@ -1,0 +1,156 @@
+package app.worbus.ui.screens.playlist.components
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.dropUnlessResumed
+import kotlinx.collections.immutable.toPersistentList
+import kotlinx.coroutines.launch
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.count_songs
+import worbus.composeapp.generated.resources.notice_deleted_download
+import worbus.composeapp.generated.resources.notice_download_started
+import org.jetbrains.compose.resources.pluralStringResource
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import org.koin.compose.koinInject
+import app.worbus.data.database.entities.DownloadStatus
+import app.worbus.di.LocalNavStack
+import app.worbus.domain.manager.DownloadManager
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.manager.SnackBarManager
+import app.worbus.domain.models.DomainPlaylist
+import app.worbus.ui.components.common.LibraryRow
+import app.worbus.ui.components.common.LibraryRowCover
+import app.worbus.ui.components.common.SegmentedListItemDefaults.segmentedShapes
+import app.worbus.domain.manager.AlbumModeSmartPlaylists
+import app.worbus.domain.manager.NativeApiManager
+import app.worbus.domain.models.displayName
+import app.worbus.ui.components.sheets.CollectionSheet
+import app.worbus.ui.navigation.Screen
+import app.worbus.ui.screens.playlist.dialogs.PlaylistDownloadDialog
+import app.worbus.ui.screens.playlist.dialogs.PlaylistUpdateDialog
+
+@Composable
+fun PlaylistListScreenListItem(
+	modifier: Modifier = Modifier,
+	/** Where the row sits in the list, for its rounded segment's corners. */
+	index: Int,
+	count: Int,
+	playlist: DomainPlaylist,
+	selected: Boolean,
+	onPlayNext: () -> Unit,
+	onAddToQueue: () -> Unit,
+	onSelect: () -> Unit,
+	onDeselect: () -> Unit,
+	onSetShareId: (String) -> Unit,
+	onSetDeletionId: (String) -> Unit
+) {
+	val backStack = LocalNavStack.current
+	val preferenceManager = koinInject<PreferenceManager>()
+	val snackBarManager = koinInject<SnackBarManager>()
+	val scope = rememberCoroutineScope()
+
+	var playlistDialogShown by rememberSaveable { mutableStateOf(false) }
+	val downloadManager = koinInject<DownloadManager>()
+	val nativeApi = koinInject<NativeApiManager>()
+	val albumMode = koinInject<AlbumModeSmartPlaylists>()
+
+	Box(modifier) {
+		// The Library's row (P5 round 2): Recents' look, the cover, the name, its size and comment.
+		LibraryRow(
+			title = playlist.name ?: "[unknown playlist]",
+			line = listOfNotNull(
+				pluralStringResource(Res.plurals.count_songs, playlist.songCount, playlist.songCount),
+				playlist.comment?.ifBlank { null }
+			).joinToString(" • "),
+			shapes = segmentedShapes(index, count),
+			art = { LibraryRowCover(playlist.coverArtId, playlist.name) },
+			onClick = dropUnlessResumed {
+				scope.launch {
+					backStack.add(Screen.CollectionDetail(playlist.id, ""))
+				}
+			},
+			onLongClick = onSelect
+		)
+		// One probe per opened sheet, not per row (it ran for every row on screen until P5 round 2).
+		// Fails soft: an unreachable native API hides the edit row rather than offering an edit
+		// that cannot load.
+		var hasRules by remember(playlist.id) { mutableStateOf(false) }
+		var autoDownloadShown by remember { mutableStateOf(false) }
+		if (selected) LaunchedEffect(playlist.id) {
+			// An album-mode playlist is an ordinary playlist on the server, so
+			// Navidrome rightly answers that it has no rules — its recipe is stored
+			// locally. Checked first, and it costs no network call.
+			hasRules = albumMode.isAlbumMode(playlist.id) ||
+				nativeApi.fetchPlaylistRules(playlist.id).getOrNull() != null
+		}
+		if (selected) {
+			// Read only while its sheet is open (row 8): every tile used to watch the download
+			// table for a status nothing but the sheet shows.
+			// Null until it answers: no "Download" offered for a playlist already on the device.
+			val downloadStatus: DownloadStatus? by remember(downloadManager, playlist.id, playlist.songs.size) {
+				downloadManager.getCollectionDownloadStatus(playlist.songs.map { it.id })
+			}.collectAsState(initial = null)
+			CollectionSheet(
+				onDismissRequest = onDeselect,
+				collection = playlist,
+				onShare = { onSetShareId(playlist.id) },
+				onDelete = { onSetDeletionId(playlist.id) },
+				onPlayNext = onPlayNext,
+				onAddToQueue = onAddToQueue,
+				onAddAllToPlaylist = { playlistDialogShown = true },
+				downloadStatus = downloadStatus,
+				onDownloadAll = {
+					scope.launch {
+						downloadManager.downloadCollection(playlist)
+						snackBarManager.notify(Res.string.notice_download_started)
+					}
+				},
+				onCancelDownloadAll = {
+					scope.launch {
+						playlist.songs.forEach { downloadManager.cancelDownload(it.id) }
+					}
+				},
+				onDeleteDownloadAll = {
+					scope.launch {
+						downloadManager.deleteDownloadedCollection(playlist)
+						snackBarManager.notify(Res.string.notice_deleted_download)
+					}
+				},
+				// Reachable from the list at last: this sheet never passed it, so
+				// auto-download could only be set from inside the playlist.
+				onAutoDownload = { autoDownloadShown = true },
+				// Only a smart playlist has rules, and only Navidrome knows which is
+				// which. Probed once when the sheet opens rather than per row — a
+				// list of forty playlists must not be forty native-API calls.
+				onEditRules = if (hasRules) {
+					{ backStack.add(Screen.SmartPlaylistEditor(playlist.id)) }
+				} else null
+			)
+		}
+
+		if (playlistDialogShown) {
+			PlaylistUpdateDialog(
+				songs = playlist.songs.toPersistentList(),
+				onDismissRequest = { playlistDialogShown = false }
+			)
+		}
+
+		if (autoDownloadShown) {
+			PlaylistDownloadDialog(
+				playlistId = playlist.id,
+				playlistName = playlist.displayName,
+				onDismissRequest = { autoDownloadShown = false }
+			)
+		}
+	}
+}

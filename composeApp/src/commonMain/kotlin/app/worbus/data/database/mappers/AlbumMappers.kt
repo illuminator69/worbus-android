@@ -1,0 +1,114 @@
+package app.worbus.data.database.mappers
+
+import app.worbus.data.database.entities.AlbumEntity
+import app.worbus.data.database.relations.AlbumWithSongs
+import app.worbus.domain.models.DomainAlbum
+import app.worbus.domain.models.DomainAlbumInfo
+import dev.zt64.subsonic.api.model.Album as ApiAlbum
+import dev.zt64.subsonic.api.model.AlbumInfo as ApiAlbumInfo
+
+fun ApiAlbum.toEntity(
+	artistIdOverride: String? = null,
+	artistNameOverride: String? = null
+) = AlbumEntity(
+	albumId = this.id,
+	name = this.name,
+	// TODO: figure out why this can be null and how to handle it
+	artistId = artistIdOverride ?: this.artistId ?: "unknown artist",
+	artistName = artistNameOverride ?: this.artistName,
+	coverArtId = this.coverArtId,
+	songCount = this.songCount,
+	duration = this.duration,
+	year = this.year,
+	genre = this.genre,
+	starredAt = this.starredAt,
+	userRating = this.userRating,
+	musicBrainzId = this.musicBrainzId,
+	createdAt = this.createdAt,
+	lastPlayedAt = this.lastPlayedAt,
+	playCount = this.playCount,
+	genres = this.genres,
+	version = this.version,
+	isExternal = this.isExternal
+)
+
+/**
+ * An album row with NO songs (row 4a): what a whole-library list draws. A caller that needs the
+ * songs (a long press's sheet, a download) reads the album again with them
+ * (`AlbumRepository.getAlbumWithSongs`).
+ */
+fun AlbumEntity.toDomainModel() = DomainAlbum(
+	id = albumId,
+	name = name,
+	artistId = artistId,
+	artistName = artistName,
+	coverArtId = coverArtId,
+	songCount = songCount,
+	duration = duration,
+	year = year,
+	genre = genre,
+	starredAt = starredAt,
+	userRating = userRating,
+	musicBrainzId = musicBrainzId,
+	createdAt = createdAt,
+	lastPlayedAt = lastPlayedAt,
+	playCount = playCount,
+	genres = genres,
+	version = version,
+	songs = emptyList(),
+	isExternal = isExternal
+)
+
+fun AlbumWithSongs.toDomainModel() = DomainAlbum(
+	id = album.albumId,
+	name = album.name,
+	artistId = album.artistId,
+	artistName = album.artistName,
+	coverArtId = album.coverArtId,
+	songCount = album.songCount,
+	duration = album.duration,
+	year = album.year,
+	genre = album.genre,
+	starredAt = album.starredAt,
+	userRating = album.userRating,
+	musicBrainzId = album.musicBrainzId,
+	createdAt = album.createdAt,
+	lastPlayedAt = album.lastPlayedAt,
+	playCount = album.playCount,
+	genres = album.genres,
+	version = album.version,
+	songs = songs
+		.map { it.toDomainModel() }
+		.sortedWith(compareBy({ it.discNumber ?: 0 }, { it.trackNumber ?: 0 })),
+	isExternal = album.isExternal
+)
+
+fun DomainAlbum.toEntity() = AlbumEntity(
+	albumId = this.id,
+	name = this.name,
+	artistId = this.artistId,
+	artistName = this.artistName,
+	coverArtId = this.coverArtId,
+	songCount = this.songCount,
+	duration = this.duration,
+	year = this.year,
+	genre = this.genre,
+	starredAt = this.starredAt,
+	userRating = this.userRating,
+	musicBrainzId = this.musicBrainzId,
+	createdAt = this.createdAt,
+	lastPlayedAt = this.lastPlayedAt,
+	playCount = this.playCount,
+	genres = this.genres,
+	version = this.version,
+	isExternal = this.isExternal
+)
+
+fun ApiAlbumInfo.toDomainModel() = DomainAlbumInfo(
+	musicBrainzId = musicBrainzId,
+	largeImageUrl = largeImageUrl,
+	mediumImageUrl = mediumImageUrl,
+	smallImageUrl = smallImageUrl,
+	lastFmUrl = lastFmUrl,
+	notes = notes
+)

@@ -1,0 +1,175 @@
+package app.worbus.data.database.dao
+
+import androidx.room3.Dao
+import androidx.room3.Insert
+import androidx.room3.OnConflictStrategy
+import androidx.room3.Query
+import androidx.room3.Transaction
+import kotlinx.coroutines.flow.Flow
+import app.worbus.data.database.entities.ArtistEntity
+import app.worbus.util.Logger
+
+@Dao
+interface ArtistDao {
+	@Query("SELECT * FROM ArtistEntity ORDER BY name COLLATE NOCASE ASC")
+	suspend fun getArtistsAlphabeticalByName(): List<ArtistEntity>
+
+	/**
+	 * Every artist, the most played first: the sum of their albums' play counts (P5, the custom
+	 * radio's pick screen), then by name. An artist with no album played is among the last.
+	 */
+	@Query("""
+		SELECT a.* FROM ArtistEntity a
+		LEFT JOIN (SELECT artistId, SUM(playCount) AS plays FROM AlbumEntity GROUP BY artistId) p
+		ON p.artistId = a.artistId
+		ORDER BY COALESCE(p.plays, 0) DESC, a.name COLLATE NOCASE ASC
+	""")
+	suspend fun getArtistsMostPlayed(): List<ArtistEntity>
+
+	@Query("SELECT * FROM ArtistEntity ORDER BY RANDOM()")
+	suspend fun getArtistsRandom(): List<ArtistEntity>
+
+	@Query("SELECT * FROM ArtistEntity WHERE starredAt IS NOT NULL ORDER BY starredAt DESC")
+	suspend fun getArtistsStarred(): List<ArtistEntity>
+
+	@Query("SELECT * FROM ArtistEntity ORDER BY name COLLATE NOCASE ASC")
+	fun getAllArtists(): Flow<List<ArtistEntity>>
+
+	@Query("SELECT * FROM ArtistEntity")
+	suspend fun getAllArtistsList(): List<ArtistEntity>
+
+	/**
+	 * The two most-shared cover IMAGE HASHES in the library, most shared first.
+	 *
+	 * Navidrome shapes an artist's cover id as `ar-<artist>_<imageHash>` — exactly one underscore —
+	 * so the hash of the image it will actually serve is already here, no fetching required. Every
+	 * artist with no artwork gets the same generic avatar and so the same hash, which is what
+	 * [app.worbus.util.CoverPlaceholder] recognises it by. The runner-up comes back too
+	 * because the rule needs it: the top hash counts only if it is a clear outlier.
+	 */
+	@Query("""
+		SELECT substr(coverArtId, instr(coverArtId, '_') + 1) AS hash, COUNT(*) AS artistCount
+		FROM ArtistEntity
+		WHERE coverArtId IS NOT NULL AND instr(coverArtId, '_') > 0
+		GROUP BY hash
+		ORDER BY artistCount DESC
+		LIMIT 2
+	""")
+	suspend fun coverImageHashCounts(): List<CoverHashCount>
+
+	@Query("SELECT * FROM ArtistEntity WHERE artistId = :artistId LIMIT 1")
+	suspend fun getArtistById(artistId: String): ArtistEntity?
+
+	@Query("SELECT EXISTS(SELECT 1 FROM ArtistEntity WHERE artistId = :artistId AND starredAt IS NOT NULL)")
+	suspend fun isArtistStarred(artistId: String): Boolean
+
+	// Row 10 (adapted from upstream ce5861ed … 33e28839): a star or a rating is ONE column written
+	// by id. It used to REPLACE the whole row from the domain object the screen held, which could
+	// be stale (or, since row 4a, a list row with no songs), and put back whatever it remembered.
+	// Each returns the rows it changed: 0 = no such row, and the caller then inserts as before.
+	@Query("UPDATE ArtistEntity SET starredAt = :starredAtMillis WHERE artistId = :artistId")
+	suspend fun setArtistStarredAt(artistId: String, starredAtMillis: Long?): Int
+
+	@Query("SELECT * FROM ArtistEntity WHERE name LIKE '%' || :query || '%' COLLATE NOCASE")
+	suspend fun searchArtistsList(query: String): List<ArtistEntity>
+
+	@Insert(onConflict = OnConflictStrategy.REPLACE)
+	suspend fun insertArtist(artist: ArtistEntity)
+
+	@Insert(onConflict = OnConflictStrategy.REPLACE)
+	suspend fun insertArtists(artists: List<ArtistEntity>)
+
+	@Insert(onConflict = OnConflictStrategy.IGNORE)
+	suspend fun insertArtistsIgnoringConflicts(artists: List<ArtistEntity>)
+
+	@Query("DELETE FROM ArtistEntity WHERE artistId = :artistId")
+	suspend fun deleteArtist(artistId: String)
+
+	@Query("DELETE FROM ArtistEntity")
+	suspend fun clearAllArtists()
+
+	@Query("SELECT artistId FROM ArtistEntity")
+	suspend fun getAllArtistIds(): List<String>
+
+	@Query("SELECT * FROM ArtistEntity WHERE artistId IN (:ids)")
+	suspend fun getArtistsByIds(ids: List<String>): List<ArtistEntity>
+
+	/** Every artist's id and name, for Search's typo-tolerant pass (P3, `LibraryFuzzyIndex`). */
+	@Query("SELECT artistId AS id, name AS name, NULL AS artist FROM ArtistEntity")
+	suspend fun searchNames(): List<SearchNameRow>
+
+	@Query("SELECT COUNT(*) FROM ArtistEntity")
+	suspend fun count(): Int
+
+	/**
+	 * Library artists whose Navidrome MusicBrainz tag is one of [mbids]: how Search tells which
+	 * MusicBrainz hit the library already holds (P3). By id, never by name: two artists share names.
+	 */
+	@Query("SELECT artistId, musicBrainzId FROM ArtistEntity WHERE musicBrainzId IN (:mbids)")
+	suspend fun idsByMusicBrainzId(mbids: List<String>): List<ArtistMbidRow>
+
+	/**
+	 * Every artist's id with its cover art id and nothing else: what a page of rows needs to
+	 * draw a picture beside each and to know which ids are pages that exist, in one query.
+	 */
+	@Query("SELECT artistId, coverArtId FROM ArtistEntity")
+	suspend fun getArtistArt(): List<ArtistArt>
+
+	/**
+	 * Exact (case-insensitive) name lookup, for turning a credit string into artist ids.
+	 *
+	 * A track's artist is a single string — "A feat. B" — and the bundled Subsonic client exposes
+	 * no per-artist array to go with it, so the featured names have to be resolved back to rows by
+	 * name. Deliberately exact rather than LIKE: a substring match would let "Pink" claim
+	 * "Pink Floyd".
+	 */
+	@Query("SELECT * FROM ArtistEntity WHERE name COLLATE NOCASE IN (:names)")
+	suspend fun getArtistsByNames(names: List<String>): List<ArtistEntity>
+
+	@Transaction
+	suspend fun updateAllArtists(remoteArtists: List<ArtistEntity>) {
+		val remoteIds = remoteArtists.map { it.artistId }.toSet()
+		getAllArtistIds().forEach { localId ->
+			if (localId !in remoteIds) {
+				Logger.w("ArtistDao", "artist $localId no longer exists remotely")
+				deleteArtist(localId)
+			}
+		}
+		insertArtists(remoteArtists)
+	}
+
+	@Transaction
+	suspend fun deleteObsoleteArtists(remoteIds: Set<String>) {
+		getAllArtistIds().forEach { localId ->
+			if (localId !in remoteIds) {
+				Logger.w("ArtistDao", "artist $localId no longer exists remotely")
+				deleteArtist(localId)
+			}
+		}
+	}
+}
+
+/** One row of [ArtistDao.coverImageHashCounts]: an image hash and how many artists carry it. */
+data class CoverHashCount(
+	val hash: String,
+	val artistCount: Int
+)
+
+/** One row of [ArtistDao.getArtistArt]. */
+data class ArtistArt(
+	val artistId: String,
+	val coverArtId: String?
+)
+
+/** One row of [ArtistDao.idsByMusicBrainzId]. */
+data class ArtistMbidRow(
+	val artistId: String,
+	val musicBrainzId: String?
+)
+
+/** A name to search, with the artist it is credited to where it has one: [ArtistDao.searchNames] and its twins. */
+data class SearchNameRow(
+	val id: String,
+	val name: String?,
+	val artist: String?
+)

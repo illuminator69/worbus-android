@@ -1,0 +1,119 @@
+package app.worbus.ui.components.sheets
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
+import kotlinx.coroutines.launch
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.action_not_now
+import worbus.composeapp.generated.resources.finder_default_name
+import worbus.composeapp.generated.resources.finder_older_at
+import worbus.composeapp.generated.resources.option_server_sign_in_as
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import app.worbus.domain.manager.Found
+import app.worbus.domain.manager.HubAuth
+import app.worbus.domain.manager.HubFinder
+import app.worbus.domain.manager.HubManager
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.manager.hubAddressHost
+import app.worbus.domain.manager.shownAddress
+import app.worbus.domain.manager.signInToFound
+import app.worbus.ui.components.common.SegmentedListButton
+import app.worbus.ui.components.common.SegmentedListButtonDefaults
+import app.worbus.ui.util.rememberNowPlayingCoverAmbient
+
+/*
+ * Worbus P3 (design §6.4): after a Navidrome sign-in that found exactly one Worbus Server, one sheet
+ * offers it: its name and address, Sign in as <account>, and Not now (asked once per server, or per
+ * address for an older one). Composed once in App.kt beside NewSheetHost, so it opens over Home after a
+ * login. A fork line: drop it and the offer never shows (the Server screen still lists what was found).
+ */
+@Composable
+fun FoundServerSheetHost() {
+	val finder = koinInject<HubFinder>()
+	val found by finder.prompt.collectAsState()
+	found?.let { FoundServerSheet(it, finder, onAnswered = { dismissed -> finder.answerPrompt(dismissed) }) }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FoundServerSheet(found: Found, finder: HubFinder, onAnswered: (dismissed: Boolean) -> Unit) {
+	val hubManager = koinInject<HubManager>()
+	val hubAuth = koinInject<HubAuth>()
+	val preferenceManager = koinInject<PreferenceManager>()
+	val account = hubAuth.accountName().orEmpty()
+	val sheetState = rememberBottomSheetState(
+		initialValue = SheetValue.Hidden,
+		enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+	)
+	val scope = rememberCoroutineScope()
+	val address = when (found) {
+		is Found.Server -> found.addresses.first()
+		is Found.OlderAt -> found.address
+		is Found.NotEncrypted -> return
+	}
+	// The sheet slides away first, then the answer is acted on.
+	val answer = { signIn: Boolean ->
+		scope.launch { sheetState.hide() }.invokeOnCompletion {
+			if (signIn) {
+				signInToFound(preferenceManager, hubManager.serverRecordStore, found, address) { hubManager.signInAndConnect() }
+				// Review M3: the login's look is done with; the Server screen does not show it as a home look.
+				finder.forgetResults()
+			}
+			onAnswered(!signIn)
+		}
+		Unit
+	}
+	val title = when (found) {
+		is Found.Server -> found.name.ifBlank { stringResource(Res.string.finder_default_name) }
+		else -> stringResource(Res.string.finder_default_name)
+	}
+	val line = when (found) {
+		is Found.OlderAt -> stringResource(Res.string.finder_older_at, hubAddressHost(address).orEmpty())
+		else -> shownAddress(address)
+	}
+	ModalBottomSheet(
+		onDismissRequest = { onAnswered(true) },
+		sheetState = sheetState,
+		ambient = rememberNowPlayingCoverAmbient(),
+		sheetTitle = title
+	) {
+		SheetHeader(title, line)
+		Column(
+			modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+			verticalArrangement = Arrangement.spacedBy(SegmentedListButtonDefaults.SegmentedGap)
+		) {
+			SegmentedListButton(
+				modifier = Modifier.fillMaxWidth(),
+				onClick = { answer(true) },
+				enabled = account.isNotBlank(),
+				colors = SegmentedListButtonDefaults.primaryColors(),
+				shapes = SegmentedListButtonDefaults.shapes(index = 0, count = 2)
+			) {
+				Text(stringResource(Res.string.option_server_sign_in_as, account))
+			}
+			SegmentedListButton(
+				modifier = Modifier.fillMaxWidth(),
+				onClick = { answer(false) },
+				shapes = SegmentedListButtonDefaults.shapes(index = 1, count = 2)
+			) {
+				Text(stringResource(Res.string.action_not_now))
+			}
+		}
+		Spacer(Modifier.height(20.dp))
+	}
+}

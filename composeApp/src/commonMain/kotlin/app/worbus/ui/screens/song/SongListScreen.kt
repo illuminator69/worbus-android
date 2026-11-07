@@ -1,0 +1,258 @@
+package app.worbus.ui.screens.song
+
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import app.worbus.ui.navigation.PersistentViewModelStoreOwner
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.title_songs
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
+import app.worbus.di.LocalBottomBarScrollManager
+import app.worbus.di.LocalPlatformContext
+import app.worbus.di.isLandscape
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.models.DomainSong
+import app.worbus.domain.models.DomainSongListType
+import app.worbus.domain.models.settings.BottomBarVisibilityMode
+import app.worbus.shared.MediaPlayerViewModel
+import app.worbus.ui.components.dialogs.QueueDuplicateDialog
+import app.worbus.ui.components.common.SegmentedListItemDefaults
+import app.worbus.ui.components.layouts.NestedTopBar
+import app.worbus.ui.components.layouts.PullToRefreshBox
+import app.worbus.ui.components.layouts.RootBottomBar
+import app.worbus.ui.components.layouts.RootTopBar
+import app.worbus.ui.core.UiState
+import app.worbus.ui.screens.share.dialogs.ShareDialog
+import app.worbus.ui.screens.song.components.SongListScreenSortButton
+import app.worbus.ui.screens.song.components.songListScreenContent
+import app.worbus.domain.repositories.SongListArtist
+import app.worbus.ui.screens.song.viewmodels.SongListViewModel
+import app.worbus.ui.util.withoutTop
+import app.worbus.ui.viewmodel.RootViewModel
+import kotlin.time.Duration
+
+/** The song list's view model, by the store-owner rule (see `albumListViewModel`), keyed on the artist. */
+@Composable
+fun songListViewModel(
+	nested: Boolean,
+	listType: DomainSongListType,
+	artistId: String? = null,
+	artistName: String? = null
+): SongListViewModel =
+	// Upstream's opt-out (alpha59), on the fork's key: as a root tab the list survives a tab
+	// switch (which clears the back stack); nested — an artist's "see all", a genre — it dies
+	// with its entry.
+	koinViewModel(
+		key = artistId,
+		parameters = {
+			val artist = artistId?.ifBlank { null }?.let { SongListArtist(it, artistName.orEmpty()) }
+			if (artist != null) parametersOf(listType, artist) else parametersOf(listType)
+		},
+		viewModelStoreOwner = if (nested) {
+			LocalViewModelStoreOwner.current!!
+		} else {
+			koinInject<PersistentViewModelStoreOwner>()
+		}
+	)
+
+@Composable
+fun SongListScreen(
+	nested: Boolean,
+	artistId: String? = null,
+	artistName: String? = null,
+	listType: DomainSongListType
+) {
+	val viewModel = songListViewModel(nested, listType, artistId, artistName)
+	val preferenceManager = koinInject<PreferenceManager>()
+	val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+	val actions: @Composable RowScope.() -> Unit = {
+		SongListSortAction(viewModel, nested)
+	}
+
+	Scaffold(
+		topBar = {
+			if (!nested) {
+				RootTopBar(
+					title = { Text(artistName ?: stringResource(Res.string.title_songs)) },
+					scrollBehavior = scrollBehavior,
+					actions = actions
+				)
+			} else {
+				NestedTopBar(
+					title = { Text(artistName ?: stringResource(Res.string.title_songs)) },
+					actions = actions
+				)
+			}
+		},
+		bottomBar = {
+			val scrollManager = LocalBottomBarScrollManager.current
+			if (!nested || preferenceManager.bottomBarVisibilityMode == BottomBarVisibilityMode.AllScreens) {
+				RootBottomBar(scrolled = scrollManager.isTriggered)
+			}
+		}
+	) { innerPadding ->
+		SongListBody(
+			viewModel = viewModel,
+			contentPadding = innerPadding,
+			scrollConnection = if (!nested) scrollBehavior.nestedScrollConnection else null
+		)
+	}
+}
+
+/** The song list's sort menu (with its filters). */
+@Composable
+fun SongListSortAction(viewModel: SongListViewModel, nested: Boolean) {
+	val selectedSorting by viewModel.selectedSorting.collectAsStateWithLifecycle()
+	val selectedReversed by viewModel.selectedReversed.collectAsStateWithLifecycle()
+	val selectedFilters by viewModel.selectedFilters.collectAsStateWithLifecycle()
+	SongListScreenSortButton(
+		nested = nested,
+		selectedSorting = selectedSorting,
+		onSetSorting = { viewModel.setSorting(it) },
+		selectedReversed = selectedReversed,
+		onSetReversed = { viewModel.setReversed(it) },
+		selectedFilters = selectedFilters,
+		onToggleFilter = { viewModel.toggleFilter(it) }
+	)
+}
+
+/**
+ * The song list itself (P5): hosted by [SongListScreen] and by the Library's Songs chip, which
+ * passes a [listState] it keeps so a chip switch keeps the place.
+ */
+@Composable
+fun SongListBody(
+	viewModel: SongListViewModel,
+	contentPadding: PaddingValues,
+	modifier: Modifier = Modifier,
+	scrollConnection: NestedScrollConnection? = null,
+	listState: LazyListState = rememberLazyListState(),
+	/** A tap plays the list from that song (Liked) rather than the song alone (Songs). */
+	playFromList: Boolean = false,
+	/** Rows above the songs (Liked's Shuffle and Play), given the songs shown. */
+	header: (LazyListScope.(List<DomainSong>) -> Unit)? = null
+) {
+	val preferenceManager = koinInject<PreferenceManager>()
+	val player = koinInject<MediaPlayerViewModel>()
+	val songsState by viewModel.songsState.collectAsStateWithLifecycle()
+	val selectedSong by viewModel.selectedSong.collectAsStateWithLifecycle()
+	val starred by viewModel.starred.collectAsStateWithLifecycle()
+	val selectedSongRating by viewModel.selectedSongRating.collectAsStateWithLifecycle()
+	val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
+
+	var shareId by remember { mutableStateOf<String?>(null) }
+	var shareExpiry by remember { mutableStateOf<Duration?>(null) }
+	var songToQueue by remember { mutableStateOf<DomainSong?>(null) }
+
+	val rootViewModel = koinViewModel<RootViewModel>()
+	LaunchedEffect(Unit) {
+		rootViewModel.events.collect { event ->
+			if (event is RootViewModel.Event.ScrollToTop) {
+				listState.animateScrollToItem(0)
+			}
+		}
+	}
+
+	PullToRefreshBox(
+		modifier = modifier
+			.padding(top = contentPadding.calculateTopPadding()),
+		finished = songsState !is UiState.Loading,
+		onRefresh = { viewModel.refreshSongs(true) },
+		key = songsState
+	) {
+		LazyColumn(
+			modifier = if (scrollConnection != null)
+				Modifier.fillMaxSize().nestedScroll(scrollConnection)
+			else Modifier.fillMaxSize(),
+			contentPadding = contentPadding.withoutTop(),
+			verticalArrangement = if ((songsState as? UiState.Success)?.data?.isEmpty() == true)
+				Arrangement.Center
+			// The Library's rows, 3 dp apart (each row is a rounded segment, Item.kt).
+			else Arrangement.spacedBy(SegmentedListItemDefaults.SegmentedGap),
+			state = listState
+		) {
+			header?.invoke(this, songsState.data.orEmpty())
+			songListScreenContent(
+				state = songsState,
+				selectedSongIsStarred = starred,
+				selectedSongRating = selectedSongRating,
+				selectedSong = selectedSong,
+				onUpdateSelection = { viewModel.selectSong(it) },
+				onClearSelection = { viewModel.clearSelection() },
+				onSetShareId = { newShareId ->
+					shareId = newShareId
+				},
+				onSetStarred = { viewModel.starSong(it) },
+				onPlayNext = { song ->
+					if (player.uiState.value.queue.any { it.id == song.id } && !preferenceManager.shushQueueDuplicateDialog) {
+						songToQueue = song
+					} else {
+						player.playNextSingle(song)
+					}
+				},
+				onAddToQueue = { song ->
+					if (player.uiState.value.queue.any { it.id == song.id } && !preferenceManager.shushQueueDuplicateDialog) {
+						songToQueue = song
+					} else {
+						player.addToQueueSingle(song)
+					}
+				},
+				onPlaySong = { song ->
+					val songs = songsState.data.orEmpty()
+					if (playFromList) player.playNow(songs, songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0))
+					else player.playNow(song)
+				},
+				onSetRating = { viewModel.rateSelectedSong(it) },
+				onDownload = { viewModel.downloadSong(it) },
+				allDownloads = allDownloads,
+				onCancelDownload = { viewModel.cancelDownload(it.id) },
+				onDeleteDownload = { viewModel.deleteDownload(it.id) }
+			)
+		}
+	}
+
+	ShareDialog(
+		id = shareId,
+		onIdClear = { shareId = null },
+		expiry = shareExpiry,
+		onExpiryChange = { shareExpiry = it }
+	)
+
+	if (songToQueue != null) {
+		QueueDuplicateDialog(
+			onDismissRequest = { songToQueue = null },
+			onConfirm = {
+				songToQueue?.let { player.addToQueueSingle(it) }
+			}
+		)
+	}
+}

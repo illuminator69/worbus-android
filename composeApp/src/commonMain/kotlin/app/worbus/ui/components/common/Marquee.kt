@@ -1,0 +1,187 @@
+package app.worbus.ui.components.common
+
+import app.worbus.ui.util.rememberReducedMotion
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlinx.collections.immutable.PersistentMap
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.coroutines.delay
+import org.koin.compose.koinInject
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.models.settings.MarqueeSpeed
+import kotlin.time.Duration.Companion.seconds
+
+@Composable
+fun MarqueeText(
+	text: String,
+	style: TextStyle = LocalTextStyle.current,
+	modifier: Modifier = Modifier,
+	/**
+	 * False: the line's start with an ellipsis, as under reduced motion. The queue scrolls only the
+	 * current song's row (row 11, the idea of upstream `ecde4c76`): every row of a long queue ran
+	 * its own endless animation, and a scroll composed them by the dozen.
+	 */
+	scrolls: Boolean = true
+) {
+	val preferenceManager = koinInject<PreferenceManager>()
+	if (scrolls && preferenceManager.marqueeSpeed != MarqueeSpeed.Disabled && !rememberReducedMotion()) {
+		Marquee(modifier) {
+			Text(text, maxLines = 1, style = style)
+		}
+	} else {
+		Text(text, modifier = modifier, maxLines = 1, style = style, overflow = TextOverflow.Ellipsis)
+	}
+}
+
+@Composable
+fun MarqueeText(
+	text: AnnotatedString,
+	style: TextStyle = LocalTextStyle.current,
+	inlineContent: PersistentMap<String, InlineTextContent> = persistentMapOf(),
+	modifier: Modifier = Modifier,
+	/**
+	 * Drag to read instead of scrolling on its own.
+	 *
+	 * For text whose parts are individually tappable: a line that is auto-scrolling moves the tap
+	 * target out from under the finger, which made a featured artist's name in the now-playing
+	 * credits effectively impossible to hit. Everywhere else auto-scroll is still the right
+	 * behaviour and stays the default.
+	 */
+	manualScroll: Boolean = false
+) {
+	val preferenceManager = koinInject<PreferenceManager>()
+	// Under reduced motion the line does not scroll on its own (it jump-cut between its ends once a
+	// second, audit L1-03): its start, with an ellipsis. Dragging it is still offered where it was.
+	val reduced = rememberReducedMotion()
+	if (manualScroll || (preferenceManager.marqueeSpeed != MarqueeSpeed.Disabled && !reduced)) {
+		Marquee(modifier, manualScroll = manualScroll) {
+			Text(text, maxLines = 1, style = style, inlineContent = inlineContent)
+		}
+	} else {
+		Text(
+			text,
+			modifier = modifier,
+			maxLines = 1,
+			style = style,
+			overflow = TextOverflow.Ellipsis,
+			inlineContent = inlineContent
+		)
+	}
+}
+
+@Composable
+private fun Marquee(
+	modifier: Modifier = Modifier,
+	edgeWidth: Dp = 16.dp,
+	manualScroll: Boolean = false,
+	content: @Composable () -> Unit
+) {
+	val preferenceManager = koinInject<PreferenceManager>()
+	val scrollState = rememberScrollState()
+	val edgeWidthPx = with(LocalDensity.current) { edgeWidth.toPx() }
+
+	LaunchedEffect(scrollState.maxValue, manualScroll) {
+		if (manualScroll) return@LaunchedEffect
+		if (scrollState.maxValue == 0) return@LaunchedEffect
+
+		while (true) {
+			delay(1.seconds)
+
+			scrollState.animateScrollTo(
+				value = scrollState.maxValue,
+				animationSpec = tween(preferenceManager.marqueeSpeed.value)
+			)
+
+			delay(1.seconds)
+
+			scrollState.animateScrollTo(
+				value = 0,
+				animationSpec = tween(preferenceManager.marqueeSpeed.value)
+			)
+		}
+	}
+
+	Box(
+		modifier = modifier
+			.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+			.drawWithContent {
+				drawContent()
+
+				val startFadeAlpha = (scrollState.value / edgeWidthPx).coerceIn(0f, 1f)
+				val endFadeAlpha =
+					((scrollState.maxValue - scrollState.value) / edgeWidthPx).coerceIn(0f, 1f)
+
+				if (startFadeAlpha > 0f) {
+					drawFadingEdge(
+						isStart = true,
+						width = edgeWidthPx,
+						alpha = startFadeAlpha
+					)
+				}
+
+				if (endFadeAlpha > 0f) {
+					drawFadingEdge(
+						isStart = false,
+						width = edgeWidthPx,
+						alpha = endFadeAlpha
+					)
+				}
+			}
+	) {
+		Row(
+			modifier = Modifier.horizontalScroll(scrollState, enabled = manualScroll)
+		) {
+			content()
+		}
+	}
+}
+
+private fun ContentDrawScope.drawFadingEdge(
+	isStart: Boolean,
+	width: Float,
+	alpha: Float
+) {
+	val gradientColors = listOf(Color.Black, Color.Transparent)
+
+	val startX = if (isStart) 0f else size.width - width
+	val endX = if (isStart) width else size.width
+
+	val startPoint = if (isStart) Offset(startX, 0f) else Offset(endX, 0f)
+	val endPoint = if (isStart) Offset(endX, 0f) else Offset(startX, 0f)
+
+	drawRect(
+		brush = Brush.linearGradient(
+			colors = gradientColors,
+			start = startPoint,
+			end = endPoint
+		),
+		topLeft = Offset(startX, 0f),
+		size = Size(width, size.height),
+		blendMode = BlendMode.DstOut,
+		alpha = alpha
+	)
+}

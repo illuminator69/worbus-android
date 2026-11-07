@@ -1,0 +1,768 @@
+package app.worbus.ui.screens.collection
+
+import app.worbus.data.database.entities.bySongId
+import app.worbus.ui.util.WASH_MS
+import app.worbus.ui.screens.collection.components.GapBox
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalUriHandler
+import kotlinx.coroutines.delay
+import kotlin.time.Clock
+import app.worbus.ui.util.Fold
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.notice_refreshed_playlist
+import worbus.composeapp.generated.resources.notice_refresh_failed_playlist
+import worbus.composeapp.generated.resources.notice_refreshing_playlist
+import kotlinx.coroutines.launch
+import app.worbus.domain.manager.SnackBarManager
+import app.worbus.util.Logger
+import androidx.compose.runtime.rememberCoroutineScope
+import worbus.composeapp.generated.resources.info_no_songs
+import worbus.composeapp.generated.resources.title_disc_number
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
+import app.worbus.di.LocalBottomBarScrollManager
+import app.worbus.di.LocalPlatformContext
+import app.worbus.data.database.entities.DownloadStatus
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.models.DomainAlbum
+import app.worbus.di.LocalNavStack
+import app.worbus.domain.manager.AlbumLeave
+import app.worbus.domain.manager.AlbumMatchTarget
+import app.worbus.domain.manager.AlbumModeSmartPlaylists
+import app.worbus.domain.manager.LbBotManager
+import app.worbus.domain.manager.albumLeave
+import app.worbus.domain.manager.NativeApiManager
+import app.worbus.domain.models.DomainPlaylist
+import app.worbus.domain.models.displayName
+import app.worbus.ui.navigation.Screen
+import app.worbus.ui.screens.playlist.dialogs.PlaylistDownloadDialog
+import app.worbus.domain.models.DomainSongCollection
+import app.worbus.domain.models.settings.BottomBarVisibilityMode
+import app.worbus.domain.models.settings.ThemeMode
+import app.worbus.icons.Icons
+import app.worbus.icons.outlined.Album
+import app.worbus.icons.outlined.Note
+import app.worbus.shared.MediaPlayerViewModel
+import app.worbus.ui.components.common.CoverAmbientBackground
+import app.worbus.ui.components.common.ContentUnavailable
+import app.worbus.ui.components.layouts.PullToRefreshBox
+import app.worbus.ui.components.layouts.RootBottomBar
+import app.worbus.ui.core.UiState
+import app.worbus.ui.screens.collection.components.CollectionDetailScreenFooterRow
+import app.worbus.ui.screens.collection.components.CollectionDetailScreenHeadingRow
+import app.worbus.ui.screens.collection.components.CollectionDetailScreenHeadingRowButtons
+import app.worbus.ui.screens.collection.components.CollectionDetailScreenSongRow
+import app.worbus.ui.screens.collection.components.CollectionDetailScreenSongRowDropdown
+import app.worbus.ui.screens.collection.components.CollectionDetailScreenTopBar
+import app.worbus.ui.components.sheets.AboutSheet
+import app.worbus.ui.screens.collection.components.collectionDetailScreenAboutRow
+import app.worbus.ui.screens.collection.components.collectionDetailScreenMoreByArtistRow
+import app.worbus.ui.screens.collection.components.collectionDetailScreenSimilarAlbumsRow
+import app.worbus.ui.screens.collection.viewmodels.CollectionDetailViewModel
+import app.worbus.ui.screens.share.dialogs.ShareDialog
+import app.worbus.ui.theme.NavicTheme
+import app.worbus.di.ForceSystemBars
+import app.worbus.di.isLandscape
+import app.worbus.ui.util.AmbientColorHolder
+import app.worbus.ui.util.coverAmbientGradient
+import app.worbus.ui.util.onAmbientColor
+import app.worbus.ui.util.rememberCoverColorScheme
+import app.worbus.ui.util.withoutTop
+import kotlin.time.Duration
+import app.worbus.ui.components.snackbars.ErrorSnackBar
+
+@Composable
+fun CollectionDetailScreen(
+	collectionId: String,
+	tab: String,
+	/** Opened from an album sheet's "Fill gaps": the gaps box starts unfolded. */
+	openGaps: Boolean = false
+) {
+	val preferenceManager = koinInject<PreferenceManager>()
+
+	val viewModel = koinViewModel<CollectionDetailViewModel>(
+		key = collectionId,
+		parameters = { parametersOf(collectionId) }
+	)
+
+	val player = koinInject<MediaPlayerViewModel>()
+	val playerState by player.steadyState.collectAsStateWithLifecycle()
+
+	val collectionState by viewModel.collectionState.collectAsState()
+	val collection = collectionState.data
+	val selection by viewModel.selectedSong.collectAsState()
+	val selectedAlbum by viewModel.selectedAlbum.collectAsState()
+	val isOnline by viewModel.isOnline.collectAsState()
+	val starred by viewModel.starred.collectAsState()
+
+	var shareId by remember { mutableStateOf<String?>(null) }
+	var shareExpiry by remember { mutableStateOf<Duration?>(null) }
+
+	val albumInfoState by viewModel.albumInfoState.collectAsState()
+	// lb-bot's editorial About and the similar-albums shelf. Both null until they
+	// answer and null forever when lb-bot is absent, in which case neither renders
+	// — §7: the surface is invisible, never an error.
+	val meta by viewModel.meta.collectAsStateWithLifecycle()
+	val aboutRefreshable by viewModel.aboutRefreshable.collectAsStateWithLifecycle()
+	val similar by viewModel.similar.collectAsStateWithLifecycle()
+	val aboutOpen by viewModel.aboutOpen.collectAsStateWithLifecycle()
+	val albumGap by viewModel.gap.collectAsStateWithLifecycle()
+	val gapBox by viewModel.gapBox.collectAsStateWithLifecycle()
+	val selectedSongIsStarred by viewModel.selectedSongIsStarred.collectAsStateWithLifecycle()
+	val selectedSongRating by viewModel.selectedSongRating.collectAsStateWithLifecycle()
+	val selectedAlbumIsStarred by viewModel.selectedAlbumIsStarred.collectAsStateWithLifecycle()
+	val selectedAlbumRating by viewModel.selectedAlbumRating.collectAsStateWithLifecycle()
+	val otherAlbums by viewModel.otherAlbums.collectAsState()
+	val similarAlbums by viewModel.similarAlbums.collectAsState()
+	val allDownloads by viewModel.allDownloads.collectAsState()
+	val downloadsBySong = remember(allDownloads) { allDownloads.bySongId() }
+	val downloadStatus by viewModel.collectionDownloadStatus()
+		.collectAsState(DownloadStatus.NOT_DOWNLOADED)
+
+	val rating by viewModel.rating.collectAsStateWithLifecycle()
+
+	// The disc-sorted album and its per-disc grouping, computed once per collection.
+	//
+	// Both used to be built inside the LazyColumn's content lambda, which re-runs whenever this
+	// screen recomposes (a download-progress tick, a selection, a starred flag). Worse, the
+	// "does this album have more than one disc" check re-ran `groupBy` over every song a SECOND
+	// time, once per group. None of it depends on anything but the collection.
+	val sortedAlbum = remember(collection) {
+		(collection as? DomainAlbum)?.let { album ->
+			album.copy(
+				songs = album.songs.sortedWith(
+					compareBy({ it.discNumber }, { it.trackNumber })
+				)
+			)
+		}
+	}
+	val discGroups = remember(sortedAlbum) {
+		sortedAlbum?.songs?.groupBy { it.discNumber }?.entries?.toList().orEmpty()
+	}
+	val multipleDiscs = discGroups.size > 1
+
+	val titleAlpha by remember {
+		derivedStateOf {
+			if (viewModel.listState.firstVisibleItemIndex >= 1) return@derivedStateOf 1f
+			val height =
+				viewModel.listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == 0 }?.size?.toFloat()
+					?: 0f
+			if (height > 0f) {
+				val threshold = height * 0.4f
+				((viewModel.listState.firstVisibleItemScrollOffset.toFloat() - threshold) / (height - threshold)).coerceIn(
+					0f,
+					1f
+				)
+			} else {
+				0f
+			}
+		}
+	}
+
+	// Apple-Music-style art theming, following the app's light/dark mode: a light
+	// cover gives a light page in light mode and a dark page in dark mode — instead
+	// of forcing dark everywhere. (Once the ambient matches the theme, the global
+	// status-bar handling is already correct, so no per-screen override is needed.)
+	val appIsDark = when (preferenceManager.themeMode) {
+		ThemeMode.System -> isSystemInDarkTheme()
+		ThemeMode.Dark -> true
+		ThemeMode.Light -> false
+	}
+	// Carry the ambient colour across navigation (album→artist etc.): start at the
+	// colour we came from, and publish ours for the next screen.
+	val ambientHolder = koinInject<AmbientColorHolder>()
+	val initialSeed = remember { ambientHolder.last }
+	val coverColors = rememberCoverColorScheme(
+		collection?.coverArtId,
+		isDark = appIsDark,
+		initialSeed = initialSeed
+	)
+	LaunchedEffect(coverColors.seed) { ambientHolder.last = coverColors.seed }
+	// The seed is always valid (neutral surface until extraction completes), so
+	// easing toward the real cover colour gives a smooth Apple-Music-style bleed-in
+	// with no late colour pop — background + hero fade ease together off `animatedSeed`.
+	// STABLE (per-song) ambient colours drive the theme + text colour, so the crossfade below
+	// never re-derives the scheme or flips LocalContentColor every frame (recomposition storm).
+	// With cover theming off there is no hero wash at all: the page is the app's own surface, and
+	// the blurred backdrop below is skipped. `coverColors.seed` is the plain surface then, and
+	// `coverAmbientGradient` would still ease it toward white/black — i.e. paint a tint nobody
+	// asked for.
+	val (washTop, washBottom) = coverAmbientGradient(coverColors.seed, coverColors.isDark)
+	val stableTop = if (coverColors.themed) washTop else MaterialTheme.colorScheme.surface
+	val onAmbient = onAmbientColor(stableTop, coverColors.scheme)
+	// The BACKGROUND wash eases between songs; kept as a State and read in the draw phase
+	// (drawWithCache, below), so per-frame updates never recompose the content tree.
+	val animatedSeed = animateColorAsState(coverColors.seed, animationSpec = tween(WASH_MS))
+		// Status-bar icons follow the (cover-driven) page brightness.
+		ForceSystemBars(coverColors.isDark)
+
+	// Auto-download is offered from two places now — the overflow menu and the
+	// download button beside Play — so the flag lives here rather than inside either
+	// of them. Playlists only: an album has no policy to set.
+	var autoDownloadShown by rememberSaveable { mutableStateOf(false) }
+	val autoDownload: (() -> Unit)? = if (collection is DomainPlaylist) {
+		{ autoDownloadShown = true }
+	} else null
+
+	// Whether this playlist is a SMART one, which nothing local can answer: the
+	// Subsonic sync that fills `PlaylistEntity` cannot see criteria and there is no
+	// `isSmart` column, so Navidrome's native API is the only source. One small GET
+	// per playlist page, and it fails soft — an unreachable native API hides the
+	// row rather than offering an edit that cannot load.
+	val nativeApi = koinInject<NativeApiManager>()
+	val albumMode = koinInject<AlbumModeSmartPlaylists>()
+	val snackBarManager = koinInject<SnackBarManager>()
+	val scope = rememberCoroutineScope()
+	val backStack = LocalNavStack.current
+	var hasRules by remember(collection?.id) { mutableStateOf(false) }
+	// An album-mode playlist is an ordinary playlist on the server, so Navidrome
+	// correctly answers that it has no rules — its recipe is stored locally. Checked
+	// first, and without a network call.
+	val albumModeHere = collection is DomainPlaylist && albumMode.isAlbumMode(collection.id)
+	LaunchedEffect(collection?.id, collection is DomainPlaylist, albumModeHere) {
+		val playlist = collection as? DomainPlaylist ?: return@LaunchedEffect
+		hasRules = albumModeHere ||
+			nativeApi.fetchPlaylistRules(playlist.id).getOrNull() != null
+	}
+	// "Fix album match" (I-022). Offered for an album; the sheet's row hides itself unless the
+	// hub offers the route. The sheet is not composed here: it lives above the pages
+	// (`AlbumMatchHost`), because this page is left when a retag gives the album a new id.
+	val lbBot = koinInject<LbBotManager>()
+	// The gaps box's inputs: lb-bot's record for the group, this device's ledger row for it, and a
+	// clock while a result row is showing (it folds away after GAP_RESULT_HOLD_MS).
+	val gapRecords by lbBot.gaps.collectAsState()
+	val ledger by lbBot.ledger.collectAsState()
+	val canFixAlbumMatch by lbBot.albumOverridesSupported.collectAsState()
+	val lbWebUrl by lbBot.webUrl.collectAsState()
+	val downloads by lbBot.downloads.collectAsState()
+	val uriHandler = LocalUriHandler.current
+	val gapRecord = albumGap?.groupId?.let { gapRecords[it] }
+	val gapFill = albumGap?.groupId?.ifBlank { null }?.let { id -> ledger.firstOrNull { it.key == id } }
+	var gapClock by remember { mutableLongStateOf(Clock.System.now().toEpochMilliseconds()) }
+	LaunchedEffect(gapFill?.finishedAt) {
+		val finished = gapFill?.finishedAt ?: return@LaunchedEffect
+		val left = finished + GAP_RESULT_HOLD_MS - Clock.System.now().toEpochMilliseconds()
+		gapClock = Clock.System.now().toEpochMilliseconds()
+		if (left > 0) {
+			delay(left)
+			gapClock = Clock.System.now().toEpochMilliseconds()
+		}
+	}
+	val gapStage = gapStage(
+		GapInput(
+			gap = gapRecord,
+			mirroredMissing = albumGap?.missing ?: 0,
+			fill = gapFill,
+			view = gapBox.view,
+			committed = gapBox.committed,
+			searchAsked = gapBox.searchAsked,
+			now = gapClock,
+			downloadsOn = downloads.isOn
+		)
+	)
+	// A safe source is chosen for the user when the sources land (recommended, the artist found in
+	// the folder, the folder read as this album); anything less waits for a tap.
+	val preselect = (gapStage as? GapStage.Choosing)?.preselected
+	LaunchedEffect(preselect) {
+		if (preselect != null && gapBox.selected == null) viewModel.selectGapSource(preselect, fetchListing = false)
+	}
+	// Opened to fill its gaps: unfold once, on the first visit to this entry.
+	var gapsOpened by rememberSaveable { mutableStateOf(false) }
+	LaunchedEffect(openGaps) {
+		if (openGaps && !gapsOpened) {
+			gapsOpened = true
+			viewModel.setGapView(GapView.TRACKS)
+		}
+	}
+	val fixAlbumMatch: (() -> Unit)? = if (collection is DomainAlbum) {
+		{
+			lbBot.openAlbumMatch(
+				AlbumMatchTarget(
+					albumId = collection.id,
+					title = collection.name.orEmpty(),
+					artistName = collection.artistName.orEmpty(),
+					artistId = collection.artistId,
+					coverArtId = collection.coverArtId
+				)
+			)
+		}
+	} else null
+
+	// A retag changes the album's Navidrome id. When a job lb-bot was asked for on THIS album
+	// ends, this page is showing an id that is dead and leaves it — on the job's own state, so
+	// it happens whether or not the sheet that started the job is still open (`albumLeave`).
+	// "This album" is decided on ids: the one the job was started for against the one this page
+	// shows. A page opened only after the job had ended follows it too, but only once Room no
+	// longer holds its id: an old id Room still holds is an album in its own right.
+	val albumJobs by lbBot.albumJobs.collectAsState()
+	val missing by viewModel.missing.collectAsState()
+	// When this page was OPENED, kept with its back-stack entry (as the artist page keeps its
+	// own): a page that sat under another one while the job ran is not composed then, and a
+	// plain `remember` gave it a new time on return — "opened later", so it waited for Room to
+	// drop the id, which a page that reads Room once never sees.
+	val onScreenSince = rememberSaveable(collectionId) { Clock.System.now().toEpochMilliseconds() }
+	val endedHere = albumJobs.values.lastOrNull { !it.unfinished && it.albumId == collectionId }
+	LaunchedEffect(collectionId, endedHere?.rowId, endedHere?.endedAtMs, missing) {
+		val job = endedHere ?: return@LaunchedEffect
+		// This page's own entry, found by the id it shows.
+		val index = backStack.indexOfLast { (it as? Screen.CollectionDetail)?.collectionId == collectionId }
+		when (val leave = albumLeave(job, collectionId, onScreenSince, missing)) {
+			AlbumLeave.Stay -> Unit
+			AlbumLeave.Reread -> viewModel.refreshCollection(true)
+			// Room holds the album under its new id: the manager pulled it before saying so.
+			is AlbumLeave.ToAlbum ->
+				if (index >= 0) backStack[index] = Screen.CollectionDetail(leave.albumId, tab)
+			is AlbumLeave.ToArtist -> if (index >= 0) {
+				// Opened from the artist's own page: leaving this one is already there.
+				val beneath = (backStack.getOrNull(index - 1) as? Screen.ArtistDetail)?.artist
+				if (beneath == leave.artistId) backStack.removeAt(index)
+				else backStack[index] = Screen.ArtistDetail(leave.artistId)
+			}
+			// Never the last entry: there is always a tab under an album's page.
+			AlbumLeave.Back -> if (index > 0) backStack.removeAt(index)
+		}
+	}
+
+	val editRules: (() -> Unit)? = if (collection is DomainPlaylist && hasRules) {
+		{ backStack.add(Screen.SmartPlaylistEditor(collection.id)) }
+	} else null
+	// Only an album-mode playlist can be refreshed: a real smart playlist is kept
+	// current by Navidrome and has nothing to re-run.
+	val refreshRules: (() -> Unit)? = if (albumModeHere && collection is DomainPlaylist) {
+		{
+			scope.launch {
+				snackBarManager.notify(Res.string.notice_refreshing_playlist)
+				albumMode.refresh(
+					playlistId = collection.id,
+					name = collection.displayName,
+					isPublic = false
+				).onSuccess {
+					viewModel.refreshCollection(true)
+					snackBarManager.notify(Res.string.notice_refreshed_playlist)
+				}.onFailure { e ->
+					Logger.e("CollectionDetailScreen", "album-mode refresh failed", e)
+					snackBarManager.notify(Res.string.notice_refresh_failed_playlist)
+				}
+			}
+			Unit
+		}
+	} else null
+
+	NavicTheme(coverColors.scheme, contentColor = onAmbient) {
+	Scaffold(
+		containerColor = stableTop,
+		topBar = {
+			CollectionDetailScreenTopBar(
+				albumInfoState = albumInfoState,
+				collection = collection,
+				titleAlpha = titleAlpha,
+				onSetShareId = { shareId = it },
+				onDownloadAll = { viewModel.downloadAll() },
+				onCancelDownloadAll = { viewModel.cancelDownloadAll() },
+				onPlayNext = { if (collection != null) player.playNext(collection) },
+				onAddToQueue = { if (collection != null) player.addToQueue(collection) },
+				downloadStatus = downloadStatus,
+				rating = if (collection !is DomainPlaylist) rating else null,
+				onSetRating = if (collection !is DomainPlaylist) {
+					{ viewModel.rateAlbum(it) }
+				} else null,
+				starred = if (collection !is DomainPlaylist) starred else null,
+				onSetStarred = if (collection !is DomainPlaylist) {
+					{ viewModel.starAlbum(it) }
+				} else null,
+				refreshCollection = { viewModel.refreshCollection(false) },
+				onAutoDownload = autoDownload,
+				onEditRules = editRules,
+				onRefreshRules = refreshRules,
+				onRefreshAbout = if (aboutRefreshable) {
+					{ viewModel.refreshAbout() }
+				} else {
+					null
+				},
+				onFixAlbumMatch = fixAlbumMatch
+			)
+		},
+		bottomBar = {
+			val scrollManager = LocalBottomBarScrollManager.current
+			if (preferenceManager.bottomBarVisibilityMode == BottomBarVisibilityMode.AllScreens) {
+				// Fade the scrim to THIS page's bottom colour, not `surface`: on a light
+				// cover the scheme neutral is near-white and ended the page in a white band
+				// under the nav buttons. Same rule as the browsing pages, which get it from
+				// LocalCoverAmbientBottom.
+				RootBottomBar(
+					scrolled = scrollManager.isTriggered,
+					scrimColor = if (coverColors.themed) washBottom else null
+				)
+			}
+		}
+	) { contentPadding ->
+		Box(Modifier.fillMaxSize()) {
+			// The blurred cover art under this page's own gradient — the shared
+			// [CoverAmbientBackground], which the browsing pages use too.
+			if (coverColors.themed) CoverAmbientBackground(
+				coverArtId = collection?.coverArtId,
+				seed = coverColors.seed,
+				isDark = coverColors.isDark
+			)
+		PullToRefreshBox(
+			modifier = Modifier.fillMaxSize(),
+			finished = collectionState !is UiState.Loading,
+			onRefresh = { viewModel.refreshCollection(true) },
+			key = collectionState
+		) {
+			LazyColumn(
+				modifier = Modifier.fillMaxSize(),
+				horizontalAlignment = Alignment.CenterHorizontally,
+				// Keep the top inset now that the cover is a floating card (not a full-bleed
+				// image): the card must clear the status bar + top-bar buttons. The blurred-cover
+				// wash still fills the whole screen behind, via BlendBackground above.
+				contentPadding = contentPadding,
+				state = viewModel.listState
+			) {
+				if (collection == null) return@LazyColumn
+
+				item {
+					CollectionDetailScreenHeadingRow(
+						collection = collection,
+						tab = tab,
+						titleAlpha = 1f - titleAlpha
+					)
+				}
+
+				item {
+					CollectionDetailScreenHeadingRowButtons(
+						collection = collection,
+						onAutoDownload = autoDownload
+					)
+				}
+
+				// The gaps box (P4 round 2): the whole fill-gaps flow in place, from "3 tracks missing"
+				// to the result row, without leaving the album. Rolls in when the mirror answers and
+				// folds away once the album is whole.
+				item(key = "gap") {
+					Fold(visible = gapStage != GapStage.Absent && lbBot.supportsGapFilling) {
+						GapBox(
+							stage = gapStage,
+							ui = gapBox,
+							gap = gapRecord,
+							onWrongEdition = if (canFixAlbumMatch && collection is DomainAlbum) {
+								{
+									lbBot.openAlbumMatch(
+										AlbumMatchTarget(
+											albumId = gapRecord?.albumId?.ifBlank { null } ?: collection.id,
+											title = gapRecord?.album?.ifBlank { null } ?: collection.name.orEmpty(),
+											artistName = gapRecord?.artist?.ifBlank { null } ?: collection.artistName.orEmpty(),
+											artistId = collection.artistId,
+											coverArtId = collection.coverArtId
+										)
+									)
+								}
+							} else null,
+							onOpenInLbBot = albumGap?.groupId?.takeIf { lbWebUrl.isNotBlank() && it.isNotBlank() }?.let { groupId ->
+								{ runCatching { uriHandler.openUri("$lbWebUrl/#/gaps/$groupId") } }
+							},
+							onToggle = viewModel::toggleGap,
+							onFillGaps = viewModel::openGapSources,
+							fillOffered = gapFillOffered(downloads),
+							onBack = { viewModel.setGapView(GapView.TRACKS) },
+							onClose = { viewModel.setGapView(GapView.FOLDED) },
+							onSelect = { viewModel.selectGapSource(it, fetchListing = true) },
+							onRequest = viewModel::requestGap,
+							onAuto = viewModel::autoGap,
+							onSearchAgain = viewModel::searchGap,
+							onAllowMp3 = viewModel::allowMp3ForGap,
+							onCancel = viewModel::cancelGap,
+							onRecheck = viewModel::recheckGap,
+							onDismiss = viewModel::dismissGapFill
+						)
+					}
+				}
+
+				// The first album description this app has ever shown. What the
+				// page carried before is the ID3 `comment` tag by way of
+				// nothing at all: `getAlbumInfo2.notes` has been loaded on every
+				// album page since forever and read by no one. It is the
+				// fallback here, and lb-bot's Wikipedia text is the preferred
+				// source because it comes with an attribution and an article.
+				collectionDetailScreenAboutRow(
+					meta = meta,
+					fallbackNotes = (albumInfoState as? UiState.Success)?.data?.notes,
+					onOpen = { viewModel.openAbout() }
+				)
+
+				if (sortedAlbum != null) {
+					sortedAlbum.let { album ->
+						discGroups.forEach { group ->
+							if (group.key != null && multipleDiscs) {
+								item {
+									Row(
+										modifier = Modifier
+											.fillMaxWidth()
+											.padding(horizontal = 16.dp)
+											.padding(
+												top = if (group.key == 1) 0.dp else 12.dp,
+												bottom = 4.dp
+											)
+											.heightIn(min = 32.dp),
+										verticalAlignment = Alignment.CenterVertically
+									) {
+										Icon(
+											imageVector = Icons.Outlined.Album,
+											contentDescription = null,
+											tint = MaterialTheme.colorScheme.onSurfaceVariant,
+											modifier = Modifier.size(20.dp)
+										)
+
+										Spacer(modifier = Modifier.width(8.dp))
+
+										Text(
+											text = stringResource(
+												Res.string.title_disc_number,
+												group.key as Int
+											),
+											style = MaterialTheme.typography.titleMediumEmphasized,
+											fontWeight = FontWeight(600),
+											color = MaterialTheme.colorScheme.onSurfaceVariant
+										)
+									}
+								}
+							}
+							itemsIndexed(group.value) { index, song ->
+								val download = downloadsBySong[song.id]
+								Box {
+									CollectionDetailScreenSongRow(
+										song = song,
+										index = index,
+										count = group.value.count(),
+										isPlaylist = false,
+										onClick = {
+											if (playerState.currentSong?.id != song.id) {
+												player.playCollection(album, song)
+											} else {
+												player.togglePlay()
+											}
+										},
+										onLongClick = {
+											viewModel.selectSong(song)
+										},
+										onPlayNext = {
+											player.playNextSingle(song)
+										},
+										onAddToQueue = {
+											player.addToQueueSingle(song)
+										},
+										isStarred = if (selection?.id == song.id) selectedSongIsStarred else song.starredAt != null,
+										download = download,
+										isOffline = !isOnline
+									)
+									// Keyed on the ID, never on the DomainSong itself. `selection` is
+									// the snapshot taken when the row was long-pressed, and the list
+									// re-emits fresh instances whenever the collection is re-read — so a
+									// data-class equality check goes false the moment a rating or a star
+									// changes, and the sheet closes under the finger of the person who
+									// just used it.
+									CollectionDetailScreenSongRowDropdown(
+										expanded = selection?.id == song.id,
+										onDismissRequest = { viewModel.clearSelection() },
+										onRemoveStar = { viewModel.unstarSelectedSong() },
+										onAddStar = { viewModel.starSelectedSong() },
+										onShare = { shareId = song.id },
+										collection = collection,
+										song = song,
+										onRemoveFromPlaylist = { viewModel.removeFromPlaylist() },
+										starred = selectedSongIsStarred,
+										downloadStatus = download?.status,
+										onDownload = { viewModel.downloadSong(song) },
+										onCancelDownload = { viewModel.cancelDownload(song.id) },
+										onDeleteDownload = { viewModel.deleteDownload(song.id) },
+										onPlayNext = { player.playNextSingle(song) },
+										onAddToQueue = { player.addToQueueSingle(song) },
+										rating = selectedSongRating,
+										onSetRating = { viewModel.rateSelectedSong(it) }
+									)
+								}
+							}
+						}
+					}
+				} else {
+					itemsIndexed(collection.songs) { index, song ->
+						val download = downloadsBySong[song.id]
+						Box {
+							CollectionDetailScreenSongRow(
+								song = song,
+								index = index,
+								count = collection.songs.count(),
+								isPlaylist = true,
+								onClick = {
+									if (playerState.currentSong?.id != song.id) {
+										player.playCollection(collection, song)
+									} else {
+										player.togglePlay()
+									}
+								},
+								onLongClick = {
+									viewModel.selectSong(song)
+								},
+								onPlayNext = {
+									player.playNextSingle(song)
+								},
+								onAddToQueue = {
+									player.addToQueueSingle(song)
+								},
+								isStarred = if (selection?.id == song.id) selectedSongIsStarred else song.starredAt != null,
+								download = download,
+								isOffline = !isOnline
+							)
+							CollectionDetailScreenSongRowDropdown(
+								expanded = selection?.id == song.id,
+								onDismissRequest = { viewModel.clearSelection() },
+								onRemoveStar = { viewModel.unstarSelectedSong() },
+								onAddStar = { viewModel.starSelectedSong() },
+								onShare = { shareId = song.id },
+								collection = collection,
+								song = song,
+								onRemoveFromPlaylist = { viewModel.removeFromPlaylist() },
+								starred = selectedSongIsStarred,
+								downloadStatus = download?.status,
+								onDownload = { viewModel.downloadSong(song) },
+								onCancelDownload = { viewModel.cancelDownload(song.id) },
+								onDeleteDownload = { viewModel.deleteDownload(song.id) },
+								onPlayNext = { player.playNextSingle(song) },
+								onAddToQueue = { player.addToQueueSingle(song) },
+								rating = selectedSongRating,
+								onSetRating = { viewModel.rateSelectedSong(it) }
+							)
+						}
+					}
+				}
+
+				if (collection.songs.isEmpty()) {
+					item {
+						ContentUnavailable(
+							icon = Icons.Outlined.Note,
+							label = stringResource(Res.string.info_no_songs)
+						)
+					}
+				}
+
+				item { CollectionDetailScreenFooterRow(collection) }
+
+				// Deliberately above "More by this artist": that row is more of
+				// the same record's artist, this one is the reason to look up.
+				collectionDetailScreenSimilarAlbumsRow(
+					similar = similar,
+					libraryAlbums = similarAlbums,
+					selectedAlbum = selectedAlbum,
+					onSetShareId = { shareId = it },
+					onPlayNext = if (selectedAlbum != null) {
+						{ player.playNext(selectedAlbum as DomainSongCollection) }
+					} else null,
+					onAddToQueue = if (selectedAlbum != null) {
+						{ player.addToQueue(selectedAlbum as DomainSongCollection) }
+					} else null,
+					selectedAlbumRating = selectedAlbumRating,
+					selectedAlbumStarred = selectedAlbumIsStarred,
+					onSetAlbumRating = { viewModel.rateSelectedAlbum(it) },
+					onSetAlbumStarred = { viewModel.starSelectedAlbum(it) },
+					onSelect = { viewModel.selectAlbum(it) },
+					onDeselect = { viewModel.clearSelection() }
+				)
+
+				(collection as? DomainAlbum)?.artistName?.let { artistName ->
+					collectionDetailScreenMoreByArtistRow(
+						artistName = artistName,
+						artistAlbums = otherAlbums,
+						selectedAlbum = selectedAlbum,
+						onSetShareId = { shareId = it },
+						onPlayNext = if (selectedAlbum != null) {
+							{ player.playNext(selectedAlbum as DomainSongCollection) }
+						} else null,
+						onAddToQueue = if (selectedAlbum != null) {
+							{ player.addToQueue(selectedAlbum as DomainSongCollection) }
+						} else null,
+						selectedAlbumRating = selectedAlbumRating,
+						selectedAlbumStarred = selectedAlbumIsStarred,
+						onSetAlbumRating = { viewModel.rateSelectedAlbum(it) },
+						onSetAlbumStarred = { viewModel.starSelectedAlbum(it) },
+						onSelect = { viewModel.selectAlbum(it) },
+						onDeselect = { viewModel.clearSelection() },
+						tab = tab
+					)
+				}
+			}
+		}
+		}
+	}
+
+	}
+
+	if (aboutOpen) {
+		AboutSheet(
+			title = collection?.name ?: "",
+			meta = meta,
+			onDismissRequest = { viewModel.dismissAbout() },
+			// So the teaser opens the rest of ITSELF when lb-bot has nothing —
+			// the row now prefers `notes`, so that is what was on screen.
+			fallbackBio = (albumInfoState as? UiState.Success)?.data?.notes,
+			coverArtId = collection?.coverArtId
+		)
+	}
+
+	ErrorSnackBar(
+		error = (collectionState as? UiState.Error)?.error,
+		onClearError = { viewModel.clearError() }
+	)
+
+	ShareDialog(
+		id = shareId,
+		onIdClear = { shareId = null; viewModel.clearSelection() },
+		expiry = shareExpiry,
+		onExpiryChange = { shareExpiry = it }
+	)
+
+	if (autoDownloadShown && collection != null) {
+		PlaylistDownloadDialog(
+			playlistId = collection.id,
+			playlistName = collection.displayName,
+			onDismissRequest = { autoDownloadShown = false }
+		)
+	}
+}
+
+

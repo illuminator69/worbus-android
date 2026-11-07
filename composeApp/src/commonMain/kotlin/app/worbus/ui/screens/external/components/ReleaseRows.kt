@@ -1,0 +1,275 @@
+package app.worbus.ui.screens.external.components
+
+import app.worbus.ui.util.Fold
+import worbus.composeapp.generated.resources.releases_show_all
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.count_releases
+import worbus.composeapp.generated.resources.count_tracks
+import worbus.composeapp.generated.resources.info_source_partial
+import worbus.composeapp.generated.resources.release_tap_hint
+import worbus.composeapp.generated.resources.release_type_album
+import worbus.composeapp.generated.resources.release_type_compilation
+import worbus.composeapp.generated.resources.release_type_demo
+import worbus.composeapp.generated.resources.release_type_ep
+import worbus.composeapp.generated.resources.release_type_live
+import worbus.composeapp.generated.resources.release_type_remix
+import worbus.composeapp.generated.resources.release_type_single
+import worbus.composeapp.generated.resources.release_type_soundtrack
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import app.worbus.domain.manager.LbBotManager
+import app.worbus.domain.manager.LbFillEntry
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.ui.components.common.CoverArt
+import app.worbus.ui.components.common.MarqueeText
+import app.worbus.ui.components.common.RemoteCoverArt
+import app.worbus.ui.components.common.SegmentedListItem
+import app.worbus.ui.components.common.SegmentedListItemDefaults.segmentedShapes
+import app.worbus.ui.components.common.StatePill
+import app.worbus.ui.screens.artist.releaseState
+import app.worbus.ui.screens.artist.viewmodels.DiscographyEntry
+import app.worbus.ui.screens.artist.viewmodels.DiscographySection
+import app.worbus.ui.util.COVER_FADE_MS
+import app.worbus.ui.util.arrive
+import app.worbus.ui.util.rememberArrivalGate
+
+private val ArtSize = 56.dp
+
+/**
+ * The discography as rows (P4): a row per release with its cover, "year · N tracks", and a pill
+ * saying where it stands (`releaseState`: owned, partly owned, added and syncing, missing, or what
+ * the fill it has is doing). A partly-owned row counts what the library holds ("9 of 12 tracks")
+ * and draws it as a bar. Rows replace the carousel's tiles because the review is the point: a
+ * tile's corner button fetched an album with nothing read.
+ *
+ * As the owner's mockups lay it out (round 2): the pill at the row's end, where a column of them
+ * reads down the list; a running or failed request's longer sentence goes under the line instead,
+ * where it cannot crush the title. No chevron: the whole row is the target.
+ *
+ * The ledger is read once for the list. A row's fill is the ledger row keyed by its release-group,
+ * or, for a partly-owned row, by its gap's group id (a gap fill's key).
+ */
+@Composable
+fun ReleaseRows(
+	sections: List<DiscographySection>,
+	sectionTitle: @Composable (String) -> String,
+	onOpenEntry: (DiscographyEntry) -> Unit,
+	/** The release's own sheet; null where there is none (nothing owned on the page). */
+	onLongClick: ((DiscographyEntry) -> Unit)?,
+	/** The unowned artist page: each heading says what a tap does. */
+	tapHint: Boolean = false,
+	/** One heading per section; false where the caller has drawn the list's heading itself. */
+	headings: Boolean = true,
+	/** Each heading counts its releases ("Albums  5 releases"). */
+	countInHeading: Boolean = false,
+	/** Each row names its type ("Album · 2019 · 10 tracks"): a list that is not split by type. */
+	typeOf: ((DiscographyEntry) -> String)? = null,
+	/** False where every row would say the same thing (no lb-bot index: all owned). */
+	pills: Boolean = true
+) {
+	val lbBot = koinInject<LbBotManager>()
+	val ledger by lbBot.ledger.collectAsState()
+	val gate = rememberArrivalGate()
+	// The groups Show all has opened, by type.
+	var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
+	Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+		sections.forEach { section ->
+			Column {
+				if (headings) {
+					Row(
+						Modifier.padding(horizontal = 20.dp).padding(bottom = 6.dp),
+						verticalAlignment = Alignment.Bottom
+					) {
+						Text(
+							sectionTitle(section.type),
+							style = MaterialTheme.typography.titleMediumEmphasized,
+							fontWeight = FontWeight(600),
+							modifier = Modifier.weight(1f, fill = false)
+						)
+						val note = when {
+							countInHeading -> pluralStringResource(Res.plurals.count_releases, section.entries.size, section.entries.size)
+							tapHint -> stringResource(Res.string.release_tap_hint)
+							else -> null
+						}
+						if (note != null) {
+							Text(
+								note,
+								style = MaterialTheme.typography.bodySmall,
+								color = MaterialTheme.colorScheme.onSurfaceVariant,
+								modifier = Modifier.padding(start = 10.dp)
+							)
+						}
+					}
+				}
+				// B7 (audit L4b-06): the page is a scrolling Column, so every row drew at once (500
+				// releases, 500 rows and 500 cover requests). A group draws its first rows, and Show all
+				// folds the rest in; folded away, they are not composed at all.
+				val open = section.type in expanded
+				val first = visibleReleases(section.entries.size, expanded = false)
+				val count = visibleReleases(section.entries.size, open)
+				val row: @Composable (Int, DiscographyEntry) -> Unit = { index, entry ->
+					ReleaseRow(
+						entry = entry,
+						fill = fillFor(entry, ledger),
+						type = typeOf?.invoke(entry),
+						pills = pills,
+						index = index,
+						count = count,
+						onClick = { onOpenEntry(entry) },
+						onLongClick = onLongClick?.takeIf { entry.album != null }?.let { { it(entry) } },
+						modifier = Modifier.arrive(gate, entry.key, index)
+					)
+				}
+				Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+					section.entries.take(first).forEachIndexed { index, entry -> row(index, entry) }
+					if (section.entries.size > first) {
+						Fold(visible = open, tall = true) {
+							Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+								section.entries.drop(first).forEachIndexed { i, entry -> row(first + i, entry) }
+							}
+						}
+						if (!open) {
+							TextButton(
+								onClick = { expanded = expanded + section.type },
+								modifier = Modifier.padding(horizontal = 12.dp)
+							) {
+								Text(stringResource(Res.string.releases_show_all, section.entries.size))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+/** The ledger row for [entry]: by release-group, or by gap group for a partly-owned album. */
+private fun fillFor(entry: DiscographyEntry, ledger: List<LbFillEntry>): LbFillEntry? {
+	val gap = entry.gapGroupId
+	if (gap != null) ledger.firstOrNull { it.key == gap }?.let { return it }
+	val rgid = entry.release?.rgid.orEmpty()
+	return if (rgid.isBlank()) null else ledger.firstOrNull { it.key == rgid }
+}
+
+/** A group's rows drawn before Show all. */
+const val RELEASE_ROWS_FIRST = 40
+
+/** How many of a group's [count] rows are drawn: all once opened, else the first [limit]. */
+fun visibleReleases(count: Int, expanded: Boolean, limit: Int = RELEASE_ROWS_FIRST): Int =
+	if (expanded) count else minOf(count, limit)
+
+@Composable
+private fun ReleaseRow(
+	entry: DiscographyEntry,
+	fill: LbFillEntry?,
+	type: String?,
+	pills: Boolean,
+	index: Int,
+	count: Int,
+	onClick: () -> Unit,
+	onLongClick: (() -> Unit)?,
+	modifier: Modifier = Modifier
+) {
+	val preferenceManager = koinInject<PreferenceManager>()
+	val shape = preferenceManager.coverArtShape.decreasedShape
+	// The release's own length where lb-bot knows it, else the library album's; Room's count of a
+	// part-owned album is what it holds, not how long the release is.
+	val tracks = entry.totalTracks?.takeIf { it > 0 } ?: entry.album?.songCount?.takeIf { it > 0 }
+	val present = entry.presentTracks
+	val total = entry.totalTracks
+	val partly = entry.gapGroupId != null && present != null && total != null && total > 0
+	val pill = releaseState(entry, fill)
+	// A base state is one word and sits at the row's end; a request's sentence goes under the line.
+	val pillAtEnd = pills && fill == null
+	SegmentedListItem(
+		modifier = modifier.padding(horizontal = 16.dp, vertical = 1.5.dp),
+		onClick = onClick,
+		onLongClick = onLongClick,
+		shapes = segmentedShapes(index, count),
+		leadingContent = {
+			val album = entry.album
+			if (album != null) {
+				CoverArt(
+					coverArtId = album.coverArtId,
+					modifier = Modifier.size(ArtSize),
+					shape = shape,
+					crossfadeMs = COVER_FADE_MS,
+					placeholderName = entry.title
+				)
+			} else {
+				// From the Cover Art Archive, fetched with no Navidrome headers attached.
+				RemoteCoverArt(
+					url = LbBotManager.caaCoverUrl(entry.release?.rgid.orEmpty()).ifBlank { null },
+					modifier = Modifier.size(ArtSize),
+					shape = shape,
+					crossfadeMs = COVER_FADE_MS,
+					placeholderName = entry.title
+				)
+			}
+		},
+		supportingContent = {
+			Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+				val line = listOfNotNull(
+					type?.let { releaseTypeName(it) },
+					entry.year.takeIf { it.isNotBlank() },
+					when {
+						partly -> stringResource(Res.string.info_source_partial, present, total)
+						tracks != null -> pluralStringResource(Res.plurals.count_tracks, tracks, tracks)
+						else -> null
+					}
+				).joinToString(" · ")
+				if (line.isNotBlank()) Text(line, maxLines = 1, overflow = TextOverflow.Ellipsis)
+				// How much of a partly-owned album the library holds, from lb-bot's counts.
+				if (partly) {
+					LinearProgressIndicator(
+						progress = { present.toFloat() / total },
+						modifier = Modifier.width(120.dp),
+						drawStopIndicator = {}
+					)
+				}
+				if (pills && !pillAtEnd) StatePill(pill)
+			}
+		},
+		trailingContent = if (pillAtEnd) {
+			{ StatePill(pill) }
+		} else null
+	) {
+		MarqueeText(entry.title)
+	}
+}
+
+/** lb-bot's release type, singular, for a row's line. A type it adds later reads as itself. */
+@Composable
+fun releaseTypeName(type: String): String = when (type) {
+	"album" -> stringResource(Res.string.release_type_album)
+	"ep" -> stringResource(Res.string.release_type_ep)
+	"single" -> stringResource(Res.string.release_type_single)
+	"compilation" -> stringResource(Res.string.release_type_compilation)
+	"soundtrack" -> stringResource(Res.string.release_type_soundtrack)
+	"live" -> stringResource(Res.string.release_type_live)
+	"remix" -> stringResource(Res.string.release_type_remix)
+	"demo" -> stringResource(Res.string.release_type_demo)
+	else -> type.replaceFirstChar { it.uppercase() }
+}

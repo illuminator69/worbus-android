@@ -1,0 +1,147 @@
+package app.worbus.ui.screens.collection.components
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.lifecycle.compose.dropUnlessResumed
+import kotlinx.collections.immutable.toPersistentList
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.action_more
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import app.worbus.domain.manager.RadioManager
+import app.worbus.data.database.entities.DownloadStatus
+import app.worbus.di.LocalNavStack
+import app.worbus.ui.components.common.blur.LocalExpressiveBlur
+import app.worbus.ui.components.common.blur.expressiveBlurEffect
+import app.worbus.ui.navigation.Screen
+import app.worbus.domain.models.DomainAlbum
+import app.worbus.domain.models.DomainAlbumInfo
+import app.worbus.domain.models.DomainSongCollection
+import app.worbus.icons.Icons
+import app.worbus.icons.outlined.MoreVert
+import app.worbus.ui.components.layouts.NestedTopBar
+import app.worbus.ui.components.layouts.TopBarButton
+import app.worbus.ui.components.sheets.CollectionSheet
+import app.worbus.ui.core.UiState
+import app.worbus.ui.screens.playlist.dialogs.PlaylistUpdateDialog
+import app.worbus.domain.models.displayName
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CollectionDetailScreenTopBar(
+	collection: DomainSongCollection?,
+	albumInfoState: UiState<DomainAlbumInfo>,
+	titleAlpha: Float,
+	onSetShareId: (shareId: String?) -> Unit,
+	onDownloadAll: () -> Unit,
+	onCancelDownloadAll: () -> Unit,
+	onPlayNext: () -> Unit,
+	onAddToQueue: () -> Unit,
+	downloadStatus: DownloadStatus,
+	rating: Int?,
+	onSetRating: ((Int) -> Unit)?,
+	starred: Boolean?,
+	onSetStarred: ((Boolean) -> Unit)? = null,
+	refreshCollection: () -> Unit,
+	/**
+	 * Opens the auto-download settings. Owned by [CollectionDetailScreen] now
+	 * rather than by a flag in here, because the heading row's download button
+	 * offers the same thing and two composables cannot share a local.
+	 */
+	onAutoDownload: (() -> Unit)? = null,
+	/** Opens the rule editor. Null unless this really is a smart playlist. */
+	onEditRules: (() -> Unit)? = null,
+	/** Re-runs an album-mode playlist's stored recipe. Null for anything else. */
+	onRefreshRules: (() -> Unit)? = null,
+	/** Asks lb-bot for the album's About again. Null until the album's release-group is known. */
+	onRefreshAbout: (() -> Unit)? = null,
+	/** Opens "Fix album match". Null for a playlist; the sheet's row gates itself on the hub. */
+	onFixAlbumMatch: (() -> Unit)? = null
+) {
+	var playlistDialogShown by rememberSaveable { mutableStateOf(false) }
+	val backStack = LocalNavStack.current
+
+	NestedTopBar(
+		// Frost the wash under the bar (same Haze layer as the rest of the chrome) instead
+		// of fading in a solid surface slab. No-op when Expressive blur is off.
+		modifier = Modifier.expressiveBlurEffect(LocalExpressiveBlur.current),
+		// Transparent over the hero; as the title appears on scroll (titleAlpha 0→1) a
+		// *translucent* cover-scheme surface rides over the frost so the bar stays legible
+		// without becoming an opaque block. Capped at 0.7 so the wash keeps showing through.
+		colors = TopAppBarDefaults.topAppBarColors(
+			containerColor = MaterialTheme.colorScheme.surface.copy(alpha = titleAlpha * 0.7f)
+		),
+		title = {
+			Text(
+				text = collection?.name.orEmpty(),
+				maxLines = 1,
+				overflow = TextOverflow.Ellipsis,
+				modifier = Modifier.alpha(titleAlpha)
+			)
+		},
+		actions = {
+			Box {
+				var expanded by rememberSaveable { mutableStateOf(false) }
+				TopBarButton(onClick = {
+					expanded = true
+					refreshCollection()
+				}) {
+					Icon(
+						Icons.Outlined.MoreVert,
+						stringResource(Res.string.action_more)
+					)
+				}
+				if (expanded) {
+					val radioManager = koinInject<RadioManager>()
+					CollectionSheet(
+						onDismissRequest = { expanded = false },
+						collection = collection,
+						albumInfo = (albumInfoState as? UiState.Success)?.data,
+						onDownloadAll = onDownloadAll,
+						onCancelDownloadAll = onCancelDownloadAll,
+						downloadStatus = downloadStatus,
+						onShare = { onSetShareId(collection?.id) },
+						onPlayNext = onPlayNext,
+						onAddToQueue = onAddToQueue,
+						onAddAllToPlaylist = { playlistDialogShown = true },
+						onViewArtist =
+							if (collection is DomainAlbum)
+								dropUnlessResumed { backStack.add(Screen.ArtistDetail(collection.artistId)) }
+							else null,
+						rating = rating,
+						onSetRating = onSetRating,
+						starred = starred,
+						onSetStarred = if (onSetStarred != null && starred != null) { { onSetStarred(!starred) } } else null,
+						onAutoDownload = onAutoDownload,
+						onEditRules = onEditRules,
+						onRefreshRules = onRefreshRules,
+						onRefreshAbout = onRefreshAbout,
+						onFixAlbumMatch = onFixAlbumMatch,
+						onStartRadio = (collection as? DomainAlbum)?.let { album ->
+							{ radioManager.startAlbumRadio(album.id, album.name.orEmpty()) }
+						}
+					)
+				}
+			}
+		}
+	)
+
+	if (playlistDialogShown) {
+		PlaylistUpdateDialog(
+			songs = collection?.songs.orEmpty().toPersistentList(),
+			onDismissRequest = { playlistDialogShown = false }
+		)
+	}
+}

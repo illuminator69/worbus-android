@@ -1,0 +1,97 @@
+package app.worbus.data.database
+
+import androidx.room3.ColumnTypeConverters
+import androidx.room3.ConstructedBy
+import androidx.room3.Database
+import androidx.room3.RoomDatabase
+import androidx.room3.RoomDatabaseConstructor
+import app.worbus.data.database.dao.AlbumDao
+import app.worbus.data.database.dao.ArtistDao
+import app.worbus.data.database.dao.DownloadDao
+import app.worbus.data.database.dao.GenreDao
+import app.worbus.data.database.dao.LbIndexDao
+import app.worbus.data.database.dao.LyricDao
+import app.worbus.data.database.dao.PlaylistDao
+import app.worbus.data.database.dao.RadioDao
+import app.worbus.data.database.dao.SavedQueueDao
+import app.worbus.data.database.dao.SongDao
+import app.worbus.data.database.dao.SyncActionDao
+import app.worbus.data.database.entities.AlbumEntity
+import app.worbus.data.database.entities.ArtistEntity
+import app.worbus.data.database.entities.DownloadEntity
+import app.worbus.data.database.entities.GenreEntity
+import app.worbus.data.database.entities.LbIndexArtistEntity
+import app.worbus.data.database.entities.LbIndexMetaEntity
+import app.worbus.data.database.entities.LbIndexReleaseEntity
+import app.worbus.data.database.entities.LbResponseCacheEntity
+import app.worbus.data.database.entities.LyricEntity
+import app.worbus.data.database.entities.PlaylistEntity
+import app.worbus.data.database.entities.PlaylistSongCrossRef
+import app.worbus.data.database.entities.RadioEntity
+import app.worbus.data.database.entities.SavedQueueEntity
+import app.worbus.data.database.entities.SongEntity
+import app.worbus.data.database.entities.SyncActionEntity
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+@Database(
+	// NOTE: [DownloadEntity] is an entity of BOTH databases, so changing it changes THIS schema
+	// too. Forgetting to bump this version is exactly how you get Room's "changed schema but
+	// forgot to update the version number" identity-hash crash on launch.
+	//
+	// 22, above BOTH parents' 21: alpha59 bumped upstream to 21 for SyncActionEntity.time while
+	// this fork was already at 21 for SavedQueueEntity, so the two 21s are DIFFERENT schemas and
+	// a merged build sitting at 21 would match an installed database against the wrong one. The
+	// cache is rebuilt destructively on a version change by design — upstream writes no
+	// migrations for it — and saved queues are an offline cache that syncSavedQueues reconciles
+	// from the hub on reconnect.
+	//
+	// 23: the lb-bot index mirror (lb_index_artist / lb_index_release / lb_index_meta) and the
+	// lb_response_cache table. "Destructive by design" stops being free here: the mirror's first
+	// pull is ~10 pages of ~2 MB from lb-bot, and a wipe also throws away the whole cached library
+	// for a change that only ADDS tables. So 22 -> 23 is a real, purely additive migration
+	// (MIGRATION_CACHE_22_23, registered in PlatformModule.android.kt), and the
+	// destructive fallback stays only for versions with no path. If upstream bumps this database,
+	// renumber above both parents (the alpha59 "two 21s" rule) and keep this migration.
+	//
+	// 24: indices only (MIGRATION_CACHE_23_24, additive, both platform modules). Upstream's own
+	// 24, 25, 26 and 27 (beta01) are DIFFERENT schemas, so a future upstream merge goes to 28+.
+	version = 24,
+	entities = [
+		AlbumEntity::class,
+		GenreEntity::class,
+		PlaylistEntity::class,
+		PlaylistSongCrossRef::class,
+		SongEntity::class,
+		ArtistEntity::class,
+		RadioEntity::class,
+		LyricEntity::class,
+		SyncActionEntity::class,
+		DownloadEntity::class,
+		SavedQueueEntity::class,
+		LbIndexArtistEntity::class,
+		LbIndexReleaseEntity::class,
+		LbIndexMetaEntity::class,
+		LbResponseCacheEntity::class
+	]
+)
+@ColumnTypeConverters(Converters::class)
+@ConstructedBy(CacheDatabaseConstructor::class)
+abstract class CacheDatabase : RoomDatabase() {
+	abstract fun albumDao(): AlbumDao
+	abstract fun genreDao(): GenreDao
+	abstract fun downloadDao(): DownloadDao
+	abstract fun playlistDao(): PlaylistDao
+	abstract fun songDao(): SongDao
+	abstract fun artistDao(): ArtistDao
+	abstract fun radioDao(): RadioDao
+	abstract fun lyricDao(): LyricDao
+	abstract fun syncActionDao(): SyncActionDao
+	abstract fun savedQueueDao(): SavedQueueDao
+	abstract fun lbIndexDao(): LbIndexDao
+}
+
+@Suppress("KotlinNoActualForExpect")
+expect object CacheDatabaseConstructor : RoomDatabaseConstructor<CacheDatabase> {
+	override fun initialize(): CacheDatabase
+}

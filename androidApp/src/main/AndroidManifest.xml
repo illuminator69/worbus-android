@@ -114,7 +114,7 @@
 			android:theme="@style/Theme.Navic" />
 
 		<service
-			android:name="paige.navic.shared.PlaybackService"
+			android:name="app.worbus.shared.PlaybackService"
 			android:enabled="true"
 			android:exported="true"
 			android:foregroundServiceType="mediaPlayback">
@@ -132,7 +132,7 @@
 		     PlaybackService above is declared here while its class lives there.
 		     Not exported: it is started only by DownloadForegroundController. -->
 		<service
-			android:name="paige.navic.shared.DownloadService"
+			android:name="app.worbus.shared.DownloadService"
 			android:enabled="true"
 			android:exported="false"
 			android:foregroundServiceType="dataSync" />

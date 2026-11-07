@@ -1,0 +1,168 @@
+package app.worbus.ui.screens.song.viewmodels
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import app.worbus.domain.manager.ConnectivityManager
+import app.worbus.domain.manager.DownloadManager
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.manager.SessionManager
+import app.worbus.domain.models.DomainFilter
+import app.worbus.domain.models.DomainSong
+import app.worbus.domain.models.DomainSongListType
+import app.worbus.domain.models.toBitmask
+import app.worbus.domain.models.toDomainFilters
+import app.worbus.domain.repositories.SongListArtist
+import app.worbus.domain.repositories.SongRepository
+import app.worbus.ui.core.UiState
+
+class SongListViewModel(
+	initialListType: DomainSongListType = DomainSongListType.FrequentlyPlayed,
+	initialFilters: Set<DomainFilter>? = null,
+	/** One artist's songs; null for the library's. */
+	private val artist: SongListArtist? = null,
+	private val repository: SongRepository,
+	private val downloadManager: DownloadManager,
+	private val sessionManager: SessionManager,
+	private val preferenceManager: PreferenceManager,
+	connectivityManager: ConnectivityManager
+) : ViewModel() {
+	val songsState: StateFlow<UiState<ImmutableList<DomainSong>>>
+		field = MutableStateFlow<UiState<ImmutableList<DomainSong>>>(UiState.Loading())
+
+	val allDownloads = downloadManager.allDownloads
+		.stateIn(
+			scope = viewModelScope,
+			started = SharingStarted.Lazily,
+			initialValue = persistentListOf()
+		)
+
+	val selectedSong: StateFlow<DomainSong?>
+		field = MutableStateFlow(null)
+
+	val starred: StateFlow<Boolean>
+		field = MutableStateFlow(false)
+
+	val selectedSongRating: StateFlow<Int>
+		field = MutableStateFlow(0)
+
+	val selectedSorting: StateFlow<DomainSongListType>
+		field = MutableStateFlow(initialListType)
+
+	val selectedReversed: StateFlow<Boolean>
+		field = MutableStateFlow(false)
+
+	val selectedFilters: StateFlow<Set<DomainFilter>>
+		field = MutableStateFlow(
+			// An artist's songs start unfiltered: the Songs tab's saved filter is not this list's.
+			initialFilters ?: if (artist != null) emptySet() else preferenceManager.songFilters.toDomainFilters()
+		)
+
+	val isOnline = connectivityManager.isOnline
+
+	init {
+		viewModelScope.launch {
+			sessionManager.isLoggedIn.collect { if (it) refreshSongs(false) }
+		}
+	}
+
+	fun selectSong(song: DomainSong) {
+		viewModelScope.launch {
+			selectedSong.value = song
+			starred.value = repository.isSongStarred(song)
+			selectedSongRating.value = repository.getSongRating(song)
+		}
+	}
+
+	fun clearSelection() {
+		selectedSong.value = null
+	}
+
+	/** The read in flight: a newer sort or filter cancels it, so a slow older one never lands last. */
+	private var refreshing: Job? = null
+
+	fun refreshSongs(fullRefresh: Boolean) {
+		refreshing?.cancel()
+		refreshing = viewModelScope.launch {
+			repository.getSongsFlow(
+				fullRefresh,
+				selectedSorting.value,
+				selectedReversed.value,
+				selectedFilters.value,
+				artist
+			).collect {
+				songsState.value = it
+			}
+		}
+	}
+
+	fun starSong(isStarred: Boolean) {
+		viewModelScope.launch {
+			val selection = selectedSong.value ?: return@launch
+			runCatching {
+				if (isStarred) {
+					repository.starSong(selection)
+				} else {
+					repository.unstarSong(selection)
+				}
+				starred.value = isStarred
+				refreshSongs(false)
+			}
+		}
+	}
+
+	fun rateSelectedSong(rating: Int) {
+		viewModelScope.launch {
+			val selection = selectedSong.value ?: return@launch
+			runCatching {
+				repository.rateSong(selection, rating)
+				selectedSongRating.value = rating
+			}
+		}
+	}
+
+	fun setSorting(sorting: DomainSongListType) {
+		selectedSorting.value = sorting
+		refreshSongs(false)
+	}
+
+	fun setReversed(reversed: Boolean) {
+		selectedReversed.value = reversed
+		refreshSongs(false)
+	}
+
+	fun toggleFilter(filter: DomainFilter) {
+		val current = selectedFilters.value
+		val newFilters = if (current.contains(filter)) {
+			current - filter
+		} else {
+			current + filter
+		}
+		selectedFilters.value = newFilters
+		if (artist == null) preferenceManager.songFilters = newFilters.toBitmask()
+		refreshSongs(false)
+	}
+
+	fun clearError() {
+		songsState.value = UiState.Success(songsState.value.data ?: persistentListOf())
+	}
+
+	fun downloadSong(song: DomainSong) {
+		downloadManager.downloadSong(song)
+	}
+
+	fun cancelDownload(songId: String) {
+		downloadManager.cancelDownload(songId)
+	}
+
+	fun deleteDownload(songId: String) {
+		downloadManager.deleteDownload(songId)
+	}
+}

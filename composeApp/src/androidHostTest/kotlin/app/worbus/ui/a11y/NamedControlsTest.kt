@@ -1,0 +1,22 @@
+package app.worbus.ui.a11y
+
+import app.worbus.sourceFile
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertTrue
+
+/** M7 (audit L4a-11): the queue's handle and the mini header's device button have names. */
+class NamedControlsTest {
+	private val root = sourceFile("src/commonMain/kotlin/app/worbus/ui/screens/nowPlaying/staged")
+
+	@Test
+	fun theQueueHandleIsNamed() {
+		assertTrue("Res.string.staged_collapse_queue" in File(root, "StagedQueueLayer.kt").readText())
+	}
+
+	@Test
+	fun theMiniHeadersDeviceButtonIsNamed() {
+		val text = File(root, "StagedNowPlaying.kt").readText()
+		assertTrue(!Regex("""Icons\.Outlined\.Devices, contentDescription = null""").containsMatchIn(text))
+	}
+}

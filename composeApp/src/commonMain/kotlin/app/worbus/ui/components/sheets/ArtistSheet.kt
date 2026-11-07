@@ -1,0 +1,372 @@
+package app.worbus.ui.components.sheets
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.action_start_radio
+import worbus.composeapp.generated.resources.action_add_to_playlist
+import worbus.composeapp.generated.resources.action_add_to_queue
+import worbus.composeapp.generated.resources.action_cancel_download
+import worbus.composeapp.generated.resources.action_delete_download
+import worbus.composeapp.generated.resources.action_download
+import worbus.composeapp.generated.resources.action_fix_musicbrainz_match
+import worbus.composeapp.generated.resources.action_play_next
+import worbus.composeapp.generated.resources.action_refresh_about
+import worbus.composeapp.generated.resources.action_remove_star
+import worbus.composeapp.generated.resources.action_star
+import worbus.composeapp.generated.resources.action_view_on_lastfm
+import worbus.composeapp.generated.resources.action_view_on_musicbrainz
+import worbus.composeapp.generated.resources.count_albums
+import worbus.composeapp.generated.resources.info_click_to_retry
+import worbus.composeapp.generated.resources.info_download_failed
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import app.worbus.di.LocalPlatformContext
+import app.worbus.data.database.entities.DownloadStatus
+import app.worbus.domain.manager.LbBotManager
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.models.DomainArtist
+import app.worbus.icons.outlined.Swap
+import app.worbus.icons.Icons
+import app.worbus.icons.brand.Lastfm
+import app.worbus.icons.brand.Musicbrainz
+import app.worbus.icons.filled.Star
+import app.worbus.icons.outlined.Close
+import app.worbus.icons.outlined.Delete
+import app.worbus.icons.outlined.Download
+import app.worbus.icons.outlined.DownloadOff
+import app.worbus.icons.outlined.PlaylistAdd
+import app.worbus.icons.outlined.Queue
+import app.worbus.icons.outlined.QueuePlayNext
+import app.worbus.icons.outlined.Radio
+import app.worbus.icons.outlined.Refresh
+import app.worbus.icons.outlined.Star
+import app.worbus.ui.components.common.CoverArt
+import app.worbus.ui.components.common.MarqueeText
+import app.worbus.ui.util.rememberCoverAmbient
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ArtistSheet(
+	onDismissRequest: () -> Unit,
+	artist: DomainArtist,
+	onStartRadio: (() -> Unit)? = null,
+	onPlayNext: (() -> Unit)? = null,
+	onAddToQueue: (() -> Unit)? = null,
+	onAddAllToPlaylist: (() -> Unit)? = null,
+	onViewOnLastFm: ((String) -> Unit)? = null,
+	onViewOnMusicBrainz: ((String) -> Unit)? = null,
+	starred: Boolean? = null,
+	onSetStarred: ((Boolean) -> Unit)? = null,
+	downloadStatus: DownloadStatus? = null,
+	onDownloadAll: (() -> Unit)? = null,
+	onCancelDownloadAll: (() -> Unit)? = null,
+	onDeleteDownloadAll: (() -> Unit)? = null,
+	/** Opens the MusicBrainz match picker; the row shows only where the hub can store an override. */
+	onFixMusicBrainzMatch: (() -> Unit)? = null,
+	/** Asks lb-bot to look the About up again. The row shows only with the lb-bot layer on. */
+	onRefreshAbout: (() -> Unit)? = null,
+) {
+	val preferenceManager = koinInject<PreferenceManager>()
+	// The MusicBrainz artist this is: the user's override when they set one, else Navidrome's
+	// tag (I-019). Collected, so the link follows a pick made while the sheet is open.
+	val lbBot = koinInject<LbBotManager>()
+	val overrides by lbBot.artistOverrides.collectAsState()
+	val musicBrainzId = remember(overrides, artist.id, artist.musicBrainzId) {
+		lbBot.effectiveArtistMbid(artist.id, artist.musicBrainzId)
+	}
+	val canFixMatch by lbBot.artistOverridesSupported.collectAsState()
+	val platformContext = LocalPlatformContext.current
+	val contentPadding = PaddingValues(horizontal = 16.dp)
+	// Cover-scheme row colours (not the outer app/system theme) — see CollectionSheet.
+	val ambient = rememberCoverAmbient(artist.coverArtId)
+	val colors = ListItemDefaults.colors(
+		containerColor = Color.Transparent,
+		headlineColor = ambient.scheme.onSurface,
+		leadingIconColor = ambient.scheme.onSurfaceVariant,
+		supportingColor = ambient.scheme.onSurfaceVariant,
+		trailingIconColor = ambient.scheme.onSurface
+	)
+	ModalBottomSheet(
+		onDismissRequest = onDismissRequest,
+		dragHandle = null,
+		ambient = ambient,
+		contentWindowInsets = { BottomSheetDefaults.modalWindowInsets.add(WindowInsets(
+			left = 8.dp,
+			right = 8.dp
+		)) }
+	) {
+		Spacer(Modifier.height(16.dp))
+
+		ListItem(
+			leadingContent = {
+				CoverArt(
+					coverArtId = artist.coverArtId,
+					modifier = Modifier.size(50.dp),
+					shape = preferenceManager.coverArtShape.decreasedShape
+				)
+			},
+			headlineContent = {
+				// Upstream's headline: the sheet's onSurface, not the accent (I-039).
+				MarqueeText(artist.name, style = MaterialTheme.typography.bodyLarge)
+			},
+			supportingContent = {
+				Text(
+					text = artist.albumCount.let {
+						pluralStringResource(Res.plurals.count_albums, it, it)
+					}
+				)
+			},
+			colors = colors
+		)
+
+		HorizontalDivider(Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+
+		Column(Modifier.verticalScroll(rememberScrollState())) {
+			if (onStartRadio != null) {
+				ListItem(
+					content = { Text(stringResource(Res.string.action_start_radio)) },
+					leadingContent = { Icon(Icons.Outlined.Radio, null) },
+					onClick = {
+						platformContext.clickSound()
+						onStartRadio()
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+
+			if (onViewOnLastFm != null && artist.lastFmUrl != null) {
+				ListItem(
+					content = { Text(stringResource(Res.string.action_view_on_lastfm)) },
+					leadingContent = { Icon(Icons.Brand.Lastfm, null) },
+					onClick = {
+						platformContext.clickSound()
+						onViewOnLastFm(artist.lastFmUrl)
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+
+			if (onViewOnMusicBrainz != null && musicBrainzId.isNotBlank()) {
+				ListItem(
+					content = { Text(stringResource(Res.string.action_view_on_musicbrainz)) },
+					leadingContent = { Icon(Icons.Brand.Musicbrainz, null) },
+					onClick = {
+						platformContext.clickSound()
+						onViewOnMusicBrainz(musicBrainzId)
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+
+			if (onFixMusicBrainzMatch != null && canFixMatch && lbBot.isConfigured) {
+				ListItem(
+					content = { Text(stringResource(Res.string.action_fix_musicbrainz_match)) },
+					// Not View on MusicBrainz's logo: this changes the match (I-039).
+					leadingContent = { Icon(Icons.Outlined.Swap, null) },
+					onClick = {
+						platformContext.clickSound()
+						onFixMusicBrainzMatch()
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+
+			if (onRefreshAbout != null && lbBot.isConfigured) {
+				ListItem(
+					content = { Text(stringResource(Res.string.action_refresh_about)) },
+					leadingContent = { Icon(Icons.Outlined.Refresh, null) },
+					onClick = {
+						platformContext.clickSound()
+						onRefreshAbout()
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+
+			if (onPlayNext != null) {
+				ListItem(
+					content = { Text(stringResource(Res.string.action_play_next)) },
+					leadingContent = { Icon(Icons.Outlined.QueuePlayNext, null) },
+					onClick = {
+						platformContext.clickSound()
+						onPlayNext()
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+
+			if (onAddToQueue != null) {
+				ListItem(
+					content = { Text(stringResource(Res.string.action_add_to_queue)) },
+					leadingContent = { Icon(Icons.Outlined.Queue, null) },
+					onClick = {
+						platformContext.clickSound()
+						onAddToQueue()
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+
+			if (onAddAllToPlaylist != null) {
+				ListItem(
+					content = { Text(stringResource(Res.string.action_add_to_playlist)) },
+					leadingContent = { Icon(Icons.Outlined.PlaylistAdd, null) },
+					onClick = {
+						platformContext.clickSound()
+						onAddAllToPlaylist()
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+
+			if (starred != null && onSetStarred != null) {
+				ListItem(
+					content = {
+						Text(stringResource(if (starred) Res.string.action_remove_star else Res.string.action_star))
+					},
+					leadingContent = {
+						Icon(if (starred) Icons.Filled.Star else Icons.Outlined.Star, null)
+					},
+					onClick = {
+						platformContext.clickSound()
+						onSetStarred(!starred)
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+
+			if (downloadStatus != null) {
+				when (downloadStatus) {
+					DownloadStatus.DOWNLOADING -> {
+						ListItem(
+							content = { Text(stringResource(Res.string.action_cancel_download)) },
+							leadingContent = { Icon(Icons.Outlined.Close, null) },
+							onClick = {
+								platformContext.clickSound()
+								onCancelDownloadAll?.invoke()
+								onDismissRequest()
+							},
+							colors = colors,
+							contentPadding = contentPadding
+						)
+					}
+
+					DownloadStatus.DOWNLOADED -> {
+						ListItem(
+							content = { Text(stringResource(Res.string.action_delete_download)) },
+							leadingContent = { Icon(Icons.Outlined.Delete, null) },
+							onClick = {
+								platformContext.clickSound()
+								onDeleteDownloadAll?.invoke()
+								onDismissRequest()
+							},
+							colors = colors,
+							contentPadding = contentPadding
+						)
+					}
+
+					DownloadStatus.FAILED -> {
+						ListItem(
+							content = {
+								Text(
+									text = stringResource(Res.string.info_download_failed),
+									color = MaterialTheme.colorScheme.error
+								)
+							},
+							supportingContent = {
+								Text(
+									text = stringResource(Res.string.info_click_to_retry),
+									color = MaterialTheme.colorScheme.error,
+									style = MaterialTheme.typography.labelSmall
+								)
+							},
+							leadingContent = {
+								Icon(
+									Icons.Outlined.DownloadOff,
+									null,
+									tint = MaterialTheme.colorScheme.error
+								)
+							},
+							onClick = {
+								platformContext.clickSound()
+								onDownloadAll?.invoke()
+								onDismissRequest()
+							},
+							colors = colors,
+							contentPadding = contentPadding
+						)
+					}
+
+					else -> {
+						ListItem(
+							content = { Text(stringResource(Res.string.action_download)) },
+							leadingContent = { Icon(Icons.Outlined.Download, null) },
+							onClick = {
+								platformContext.clickSound()
+								onDownloadAll?.invoke()
+								onDismissRequest()
+							},
+							colors = colors,
+							contentPadding = contentPadding
+						)
+					}
+				}
+			} else if (onDownloadAll != null) {
+				ListItem(
+					content = { Text(stringResource(Res.string.action_download)) },
+					leadingContent = { Icon(Icons.Outlined.Download, null) },
+					onClick = {
+						platformContext.clickSound()
+						onDownloadAll()
+						onDismissRequest()
+					},
+					colors = colors,
+					contentPadding = contentPadding
+				)
+			}
+		}
+	}
+}

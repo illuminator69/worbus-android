@@ -15,7 +15,7 @@ val fdroid = System.getenv("FDROID") == "true" || providers.gradleProperty("fdro
 	.getOrElse(false)
 
 extensions.configure<ApplicationExtension> {
-	namespace = "paige.navic.androidApp"
+	namespace = "app.worbus.androidApp"
 	compileSdk = libs.versions.android.compileSdk.get().toInt()
 
 	buildFeatures {

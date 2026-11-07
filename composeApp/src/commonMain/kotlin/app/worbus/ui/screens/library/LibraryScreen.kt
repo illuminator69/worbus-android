@@ -1,0 +1,447 @@
+package app.worbus.ui.screens.library
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.title_search
+import worbus.composeapp.generated.resources.library_add_radio
+import worbus.composeapp.generated.resources.library_chip_mixes
+import worbus.composeapp.generated.resources.library_recents
+import worbus.composeapp.generated.resources.title_albums
+import worbus.composeapp.generated.resources.title_artists
+import worbus.composeapp.generated.resources.title_library
+import worbus.composeapp.generated.resources.title_new
+import worbus.composeapp.generated.resources.title_playlists
+import worbus.composeapp.generated.resources.title_radios
+import worbus.composeapp.generated.resources.title_rename_mix
+import worbus.composeapp.generated.resources.title_songs
+import worbus.composeapp.generated.resources.count_songs
+import worbus.composeapp.generated.resources.count_albums
+import worbus.composeapp.generated.resources.count_artists
+import worbus.composeapp.generated.resources.count_mixes
+import worbus.composeapp.generated.resources.count_playlists
+import worbus.composeapp.generated.resources.count_radios
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import app.worbus.di.LocalBottomBarScrollManager
+import app.worbus.di.LocalNavStack
+import app.worbus.di.LocalSnackBarState
+import app.worbus.data.database.entities.SavedQueueEntity
+import app.worbus.domain.manager.RadioManager
+import app.worbus.domain.manager.ShellController
+import app.worbus.domain.manager.SyncManager
+import app.worbus.domain.models.DomainAlbum
+import app.worbus.domain.models.DomainAlbumListType
+import app.worbus.domain.models.DomainArtist
+import app.worbus.domain.models.DomainArtistListType
+import app.worbus.domain.models.DomainPlaylist
+import app.worbus.domain.models.DomainSongCollection
+import app.worbus.domain.models.DomainSongListType
+import app.worbus.domain.models.Mix
+import app.worbus.icons.Icons
+import app.worbus.icons.outlined.Add
+import app.worbus.icons.outlined.Search
+import app.worbus.icons.outlined.Sort
+import app.worbus.shared.MediaPlayerViewModel
+import app.worbus.ui.components.common.PageChips
+import app.worbus.ui.components.layouts.PullToRefreshBox
+import app.worbus.ui.components.layouts.RootBottomBar
+import app.worbus.ui.components.layouts.RootTopBar
+import app.worbus.ui.components.sheets.ArtistSheet
+import app.worbus.ui.components.sheets.CollectionSheet
+import app.worbus.ui.navigation.PersistentViewModelStoreOwner
+import app.worbus.ui.navigation.Screen
+import app.worbus.ui.navigation.becomeStack
+import app.worbus.ui.navigation.searchEntryStack
+import app.worbus.ui.screens.album.AlbumListBody
+import app.worbus.ui.screens.album.AlbumListSortAction
+import app.worbus.ui.screens.album.albumListViewModel
+import app.worbus.ui.screens.artist.ArtistListBody
+import app.worbus.ui.screens.artist.ArtistListSortAction
+import app.worbus.ui.screens.artist.artistListViewModel
+import app.worbus.ui.screens.library.viewmodels.LibraryViewModel
+import app.worbus.ui.screens.mixes.MixListBody
+import app.worbus.ui.screens.mixes.MixNameDialog
+import app.worbus.ui.screens.mixes.MixSheet
+import app.worbus.ui.screens.mixes.mixListViewModel
+import app.worbus.ui.screens.playlist.PlaylistListBody
+import app.worbus.ui.screens.playlist.PlaylistListSortAction
+import app.worbus.ui.screens.playlist.playlistListViewModel
+import app.worbus.ui.screens.radio.RadioListBody
+import app.worbus.ui.screens.radio.radioListViewModel
+import app.worbus.ui.screens.savedqueues.components.SavedQueueSheet
+import app.worbus.ui.screens.savedqueues.rememberSavedQueueActions
+import app.worbus.ui.screens.savedqueues.savedQueueSubtitle
+import app.worbus.ui.screens.savedqueues.viewmodels.SavedQueuesViewModel
+import app.worbus.ui.screens.song.SongListBody
+import app.worbus.ui.screens.song.SongListSortAction
+import app.worbus.ui.screens.song.songListViewModel
+import app.worbus.ui.components.common.BrowsingAmbient
+import app.worbus.ui.viewmodel.RootViewModel
+import kotlin.time.Clock
+
+/*
+ * The Library (P5, board Library): the avatar, "Library", Search and New; one row of chips
+ * (Playlists, Albums, Artists, Mixes, Songs, Radios); a sort row; and one list. What is downloaded
+ * is the avatar menu's Downloads page (P5 round 3: as a chip it was one long song list, unsortable). With no
+ * chip it is Recents, Liked pinned above it; each chip is that list's own body (the pushed pages'
+ * bodies, so sort, filters, view mode, sheets and the scroller are theirs), under its sort menu.
+ * Tapping the chosen chip clears it. The old home's carousels, statistics card and buttons are gone:
+ * each has a home of its own (CLAUDE.md §1).
+ */
+
+/** How long the bodies cross-fade on a chip change. */
+private const val CHIP_FADE_MS = 220
+
+/** A second tap of the Library tab within this long of the first clears the chip. */
+private const val SECOND_TAP_MS = 2_500L
+
+@Composable
+fun LibraryScreen() {
+	val persistent = koinInject<PersistentViewModelStoreOwner>()
+	val shell = koinInject<ShellController>()
+	val backStack = LocalNavStack.current
+	val viewModel = koinViewModel<LibraryViewModel>(viewModelStoreOwner = persistent)
+	val recents by viewModel.recents.collectAsStateWithLifecycle()
+
+	var chip by rememberSaveable { mutableStateOf<LibraryChip?>(null) }
+	val requested by shell.libraryChip.collectAsStateWithLifecycle()
+	LaunchedEffect(requested) {
+		requested?.let { name ->
+			chip = LibraryChip.entries.firstOrNull { it.name == name }
+			shell.libraryChipShown()
+		}
+	}
+
+	val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+	val recentsState = rememberLazyListState()
+	// A chip change shows the bars again: the bottom bar collapses on scroll, and a list too short
+	// to scroll (an empty chip) could never bring it back (seen on the AVD).
+	val scrollManager = LocalBottomBarScrollManager.current
+	LaunchedEffect(chip) {
+		scrollManager.isTriggered = false
+		scrollBehavior.state.heightOffset = 0f
+	}
+	val songsState = rememberLazyListState()
+	// The tab tapped while on it scrolls the list to the top (each body listens for that), and a
+	// second tap soon after clears the chip.
+	val rootViewModel = koinViewModel<RootViewModel>()
+	LaunchedEffect(Unit) {
+		var lastTap = 0L
+		rootViewModel.events.collect { event ->
+			if (event !is RootViewModel.Event.ScrollToTop) return@collect
+			val now = Clock.System.now().toEpochMilliseconds()
+			if (chip != null && now - lastTap < SECOND_TAP_MS) chip = null
+			else recentsState.animateScrollToItem(0)
+			lastTap = now
+		}
+	}
+
+	// Each chip's body keeps its own view model in the persistent store, so switching chips keeps
+	// each list's scroll, sort and filters.
+	var radioAdd by rememberSaveable { mutableStateOf(false) }
+
+	BrowsingAmbient {
+		Scaffold(
+			containerColor = Color.Transparent,
+			topBar = {
+				Column {
+					RootTopBar(
+						{ Text(stringResource(Res.string.title_library)) },
+						scrollBehavior,
+						actions = {
+							IconButton(onClick = { backStack.becomeStack(searchEntryStack(backStack)) }) {
+								Icon(Icons.Outlined.Search, contentDescription = stringResource(Res.string.title_search))
+							}
+							IconButton(onClick = { shell.openNew() }) {
+								Icon(Icons.Outlined.Add, contentDescription = stringResource(Res.string.title_new))
+							}
+						}
+					)
+					PageChips(
+						options = LibraryChip.entries,
+						selected = chip,
+						label = { option -> option?.let { stringResource(it.label) }.orEmpty() },
+						onSelect = { chip = if (it == chip) null else it }
+					)
+					SortRow(chip, onAddRadio = { radioAdd = true })
+				}
+			},
+			bottomBar = {
+				val scrollManager = LocalBottomBarScrollManager.current
+				RootBottomBar(scrolled = scrollManager.isTriggered)
+			}
+		) { inner ->
+			val connection = scrollBehavior.nestedScrollConnection
+			AnimatedContent(
+				targetState = chip,
+				transitionSpec = { fadeIn(tween(CHIP_FADE_MS)) togetherWith fadeOut(tween(CHIP_FADE_MS)) },
+				label = "libraryChip"
+			) { shown ->
+				when (shown) {
+					null -> RecentsBody(viewModel, recents, inner, recentsState, connection)
+					LibraryChip.Playlists -> PlaylistListBody(playlistListViewModel(false), inner, scrollConnection = connection)
+					LibraryChip.Albums -> AlbumListBody(
+						albumListViewModel(false, LIBRARY_ALBUMS), inner, scrollConnection = connection
+					)
+					LibraryChip.Artists -> ArtistListBody(
+						artistListViewModel(false, LIBRARY_ARTISTS), inner, scrollConnection = connection,
+						showCount = false
+					)
+					LibraryChip.Mixes -> MixListBody(
+						mixListViewModel(false), inner, LocalSnackBarState.current, scrollConnection = connection
+					)
+					LibraryChip.Songs -> SongListBody(
+						songListViewModel(false, LIBRARY_SONGS), inner, scrollConnection = connection,
+						listState = songsState
+					)
+					LibraryChip.Radios -> RadioListBody(
+						radioListViewModel(false), inner, scrollConnection = connection,
+						createDialogShown = radioAdd, onCreateDialogDismissed = { radioAdd = false }
+					)
+				}
+			}
+		}
+	}
+}
+
+private val LIBRARY_ALBUMS = DomainAlbumListType.AlphabeticalByArtist
+private val LIBRARY_ARTISTS = DomainArtistListType.AlphabeticalByName
+private val LIBRARY_SONGS = DomainSongListType.FrequentlyPlayed
+
+private val LibraryChip.label: StringResource
+	get() = when (this) {
+		LibraryChip.Playlists -> Res.string.title_playlists
+		LibraryChip.Albums -> Res.string.title_albums
+		LibraryChip.Artists -> Res.string.title_artists
+		LibraryChip.Mixes -> Res.string.library_chip_mixes
+		LibraryChip.Songs -> Res.string.title_songs
+		LibraryChip.Radios -> Res.string.title_radios
+	}
+
+/**
+ * The row under the chips: "Recents" with no chip; the chip's own sort menu (with its filters and
+ * the list / grid setting) where it has one; Radios' "Add".
+ */
+@Composable
+private fun SortRow(chip: LibraryChip?, onAddRadio: () -> Unit) {
+	Row(
+		Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(start = 16.dp, end = 4.dp),
+		verticalAlignment = Alignment.CenterVertically
+	) {
+		// The board's glyph for Recents' order; a chip has its own sort button at the end instead.
+		if (chip == null) Icon(Icons.Outlined.Sort, contentDescription = null, modifier = Modifier.size(18.dp))
+		Text(
+			// How many the chip holds, not its name again (the owner's note); the name until the
+			// list has been read.
+			if (chip == null) stringResource(Res.string.library_recents) else chipSummary(chip) ?: stringResource(chip.label),
+			style = MaterialTheme.typography.titleSmall,
+			fontWeight = FontWeight.Bold,
+			modifier = Modifier.padding(start = if (chip == null) 8.dp else 0.dp)
+		)
+		Spacer(Modifier.weight(1f))
+		when (chip) {
+			LibraryChip.Playlists -> PlaylistListSortAction(playlistListViewModel(false), nested = false)
+			LibraryChip.Albums -> AlbumListSortAction(albumListViewModel(false, LIBRARY_ALBUMS), nested = false)
+			LibraryChip.Artists -> ArtistListSortAction(artistListViewModel(false, LIBRARY_ARTISTS), nested = false)
+			LibraryChip.Songs -> SongListSortAction(songListViewModel(false, LIBRARY_SONGS), nested = false)
+			LibraryChip.Radios -> TextButton(onClick = onAddRadio) {
+				Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+				Text(stringResource(Res.string.library_add_radio), modifier = Modifier.padding(start = 6.dp))
+			}
+			LibraryChip.Mixes, null -> Unit
+		}
+	}
+}
+
+/**
+ * What [chip] holds, as its sort row says it: "2474 artists". The lists' own
+ * view models (the bodies'), so the number is the list's, filters included. Null before a read.
+ */
+@Composable
+private fun chipSummary(chip: LibraryChip): String? {
+	return when (chip) {
+		LibraryChip.Playlists -> {
+			val state by playlistListViewModel(false).playlistsState.collectAsStateWithLifecycle()
+			state.data?.size?.let { pluralStringResource(Res.plurals.count_playlists, it, it) }
+		}
+		LibraryChip.Albums -> {
+			val state by albumListViewModel(false, LIBRARY_ALBUMS).albumsState.collectAsStateWithLifecycle()
+			state.data?.size?.let { pluralStringResource(Res.plurals.count_albums, it, it) }
+		}
+		LibraryChip.Artists -> {
+			val state by artistListViewModel(false, LIBRARY_ARTISTS).artistsState.collectAsStateWithLifecycle()
+			state.data?.size?.let { pluralStringResource(Res.plurals.count_artists, it, it) }
+		}
+		LibraryChip.Songs -> {
+			val state by songListViewModel(false, LIBRARY_SONGS).songsState.collectAsStateWithLifecycle()
+			state.data?.size?.let { pluralStringResource(Res.plurals.count_songs, it, it) }
+		}
+		LibraryChip.Mixes -> {
+			val mixes by mixListViewModel(false).mixes.collectAsStateWithLifecycle()
+			pluralStringResource(Res.plurals.count_mixes, mixes.size, mixes.size)
+		}
+		LibraryChip.Radios -> {
+			val state by radioListViewModel(false).radiosState.collectAsStateWithLifecycle()
+			state.data?.size?.let { pluralStringResource(Res.plurals.count_radios, it, it) }
+		}
+	}
+}
+
+/** Recents with its taps, its sheets and a pull that refreshes its sources. */
+@Composable
+private fun RecentsBody(
+	viewModel: LibraryViewModel,
+	recents: List<LibraryEntry>?,
+	contentPadding: PaddingValues,
+	listState: androidx.compose.foundation.lazy.LazyListState,
+	connection: androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+) {
+	val backStack = LocalNavStack.current
+	val player = koinInject<MediaPlayerViewModel>()
+	val radioManager = koinInject<RadioManager>()
+	val persistent = koinInject<PersistentViewModelStoreOwner>()
+	val mixes = mixListViewModel(false)
+	val savedQueues = koinViewModel<SavedQueuesViewModel>(viewModelStoreOwner = persistent)
+	val queueActions = rememberSavedQueueActions(savedQueues, player)
+	val albums = albumListViewModel(false, LIBRARY_ALBUMS)
+	val playlists = playlistListViewModel(false)
+	val scope = rememberCoroutineScope()
+
+	val syncState by koinInject<SyncManager>().syncState.collectAsStateWithLifecycle()
+	var sheet by remember { mutableStateOf<Any?>(null) }
+	var renaming by remember { mutableStateOf<Mix?>(null) }
+	var refreshing by remember { mutableStateOf(false) }
+
+	PullToRefreshBox(
+		isRefreshing = refreshing,
+		onRefresh = {
+			// The sources Recents reads: the albums' and the playlists' rows in Room. Mixes and
+			// saved queues are the hub's and arrive on their own.
+			refreshing = true
+			albums.refreshAlbums(true)
+			playlists.refreshPlaylists(true)
+			refreshing = false
+		},
+		modifier = Modifier.fillMaxSize()
+	) {
+		LibraryRecents(
+			entries = recents,
+			contentPadding = contentPadding,
+			listState = listState,
+			busyKey = null,
+			syncFailed = syncState.lastSyncFailed && !syncState.isSyncing,
+			scrollConnection = connection,
+			onOpen = { entry ->
+				when (val source = entry.source) {
+					null -> backStack.add(Screen.Starred(nested = true))
+					// Opened, not started (P5 round 2): its page builds it and plays from there.
+					is Mix -> backStack.add(Screen.MixDetail(source.id))
+					is SavedQueueEntity -> queueActions.resume(source)
+					is DomainPlaylist -> backStack.add(Screen.CollectionDetail(source.id, ""))
+					is DomainAlbum -> if (entry.kind == EntryKind.Artist) {
+						backStack.add(Screen.ArtistDetail(source.artistId))
+					} else {
+						backStack.add(Screen.CollectionDetail(source.id, ""))
+					}
+				}
+			},
+			onMenu = { entry ->
+				// The whole item for its sheet: Recents holds rows, not their songs. One Room no
+				// longer holds opens nothing.
+				scope.launch {
+					sheet = when (val source = entry.source) {
+						is Mix, is SavedQueueEntity -> source
+						is DomainPlaylist -> viewModel.playlist(source.id)
+						is DomainAlbum -> if (entry.kind == EntryKind.Artist) viewModel.artist(source.artistId)
+						else viewModel.album(source.id)
+						else -> null
+					}
+				}
+			}
+		)
+	}
+
+	when (val target = sheet) {
+		is Mix -> MixSheet(
+			mix = target,
+			onDismissRequest = { sheet = null },
+			onRename = { renaming = target },
+			onDelete = { mixes.delete(target.id) }
+		)
+		is SavedQueueEntity -> SavedQueueSheet(
+			queue = target,
+			subtitle = savedQueueSubtitle(target, target.id == queueActions.activeId),
+			onDismissRequest = { sheet = null },
+			onRestore = { queueActions.restore(target) },
+			onResume = { queueActions.resume(target) },
+			onPreview = { queueActions.resume(target) },
+			onDelete = { queueActions.delete(target) }
+		)
+		is DomainSongCollection -> CollectionSheet(
+			onDismissRequest = { sheet = null },
+			collection = target,
+			onPlayNext = { player.playNext(target) },
+			onAddToQueue = { player.addToQueue(target) },
+			onViewArtist = (target as? DomainAlbum)?.let { album ->
+				{ backStack.add(Screen.ArtistDetail(album.artistId)) }
+			}
+		)
+		is DomainArtist -> ArtistSheet(
+			onDismissRequest = { sheet = null },
+			artist = target,
+			onStartRadio = { radioManager.startArtistRadio(target.id, target.name) }
+		)
+		else -> Unit
+	}
+
+	renaming?.let { target ->
+		MixNameDialog(
+			title = stringResource(Res.string.title_rename_mix),
+			initial = target.name,
+			onConfirm = { name ->
+				mixes.rename(target.id, name)
+				renaming = null
+			},
+			onDismissRequest = { renaming = null }
+		)
+	}
+}

@@ -1,0 +1,308 @@
+package app.worbus.ui.components.layouts
+
+import app.worbus.ui.util.COVER_FADE_MS
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.plus
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import org.koin.compose.koinInject
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.count_plays
+import org.jetbrains.compose.resources.pluralStringResource
+import app.worbus.di.LocalPlatformContext
+import app.worbus.di.LocalSharedTransitionScope
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.models.settings.ListViewMode
+import app.worbus.ui.components.common.CoverArt
+import app.worbus.ui.components.common.ErrorBox
+import app.worbus.ui.core.UiState
+import app.worbus.ui.util.rememberCoverBoundsTransform
+import app.worbus.ui.util.shimmerLoading
+
+@Composable
+fun ArtGrid(
+	modifier: Modifier = Modifier,
+	state: LazyGridState = rememberLazyGridState(),
+	contentPadding: PaddingValues,
+	horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(12.dp),
+	verticalArrangement: Arrangement.Vertical = Arrangement.spacedBy(12.dp),
+	selectedViewMode: ListViewMode = ListViewMode.Grid,
+	columns: GridCells? = null,
+	content: LazyGridScope.() -> Unit
+) {
+	val platformContext = LocalPlatformContext.current
+	val preferenceManager = koinInject<PreferenceManager>()
+	val artGridItemSize = preferenceManager.artGridItemSize
+	val gridColumns = columns ?: if (selectedViewMode == ListViewMode.List) {
+		GridCells.Fixed(1)
+	} else if (platformContext.sizeClass.widthSizeClass <= WindowWidthSizeClass.Compact) {
+		GridCells.Fixed(preferenceManager.gridSize.value)
+	} else {
+		GridCells.Adaptive(artGridItemSize.dp)
+	}
+	LazyVerticalGrid(
+		modifier = modifier.fillMaxSize(),
+		state = state,
+		columns = gridColumns,
+		contentPadding = if (selectedViewMode == ListViewMode.Grid) {
+			contentPadding + PaddingValues(
+				start = 16.dp,
+				top = 16.dp,
+				end = 16.dp
+			)
+		} else {
+			contentPadding
+		},
+		horizontalArrangement = horizontalArrangement,
+		verticalArrangement = verticalArrangement,
+		content = content
+	)
+}
+
+@Composable
+fun ArtGridItem(
+	modifier: Modifier = Modifier,
+	onClick: () -> Unit,
+	onLongClick: (() -> Unit)? = null,
+	coverArtId: String?,
+	title: String,
+	subtitle: String? = null,
+	playCount: Int? = null,
+	/** See `CoverArt.isArtist` — an art-less artist has no id to infer from. */
+	isArtist: Boolean? = null,
+	id: String,
+	// this parameter is a shitty workaround for shared element
+	// transitions being performed when switching between tabs
+	// this can just be an empty string if the tab is unknown
+	//
+	// It also has to be unique per LIST, not just per tab: `"$tab-$id-cover"` is the shared-element
+	// key, and two visible elements claiming one key is undefined behaviour. The library home shows
+	// three album rows at once and an album can be in all three, so they pass "library-recent" /
+	// "library-frequent" / "library-newest" rather than a single "library". With a duplicate key,
+	// opening one copy dragged the OTHER row's copy into the transition too, and one of the two
+	// popped into place instead of animating. Whatever is passed here must match what's handed to
+	// `Screen.CollectionDetail`, since the detail header rebuilds the same key from it.
+	tab: String,
+	/**
+	 * navi-connect: a cover drawn instead of `CoverArt`, for a card whose picture is not a
+	 * library id's (a release lb-bot found: its Cover Art Archive URL). Given the card's
+	 * interaction source so the cover ripples for a press anywhere on the card; it takes no
+	 * part in the shared-element transition, having no library page to fly into.
+	 */
+	cover: (@Composable (MutableInteractionSource) -> Unit)? = null,
+	/** navi-connect: laid over the cover (a release's state, a one-tap acquire). */
+	coverOverlay: (@Composable BoxScope.() -> Unit)? = null,
+	/** navi-connect: makes the subtitle its own link (Fresh's artist name). */
+	onSubtitleClick: (() -> Unit)? = null,
+	/** navi-connect: a third line under the subtitle (Fresh's release date, "In library"). */
+	caption: String? = null,
+	/** navi-connect P1: the cover's box is this name's tinted gradient until the image fades in (Home). */
+	placeholderName: String? = null,
+	/** navi-connect P1: how long the real cover takes to fade in over its box. */
+	crossfadeMs: Int = COVER_FADE_MS
+) {
+	val interactionSource = remember { MutableInteractionSource() }
+	with(LocalSharedTransitionScope.current) {
+		Column(
+			modifier = Modifier
+				.fillMaxWidth()
+				.combinedClickable(
+					interactionSource = interactionSource,
+					indication = null,
+					onClick = onClick,
+					onLongClick = onLongClick
+				)
+				.semantics {
+					contentDescription = title
+				}
+				.then(modifier)
+		) {
+			Box(Modifier.fillMaxWidth()) {
+				if (cover != null) {
+					cover(interactionSource)
+				} else {
+					CoverArt(
+						coverArtId = coverArtId,
+						contentDescription = title,
+						isArtist = isArtist,
+						modifier = Modifier
+							.fillMaxWidth()
+							.sharedElement(
+								sharedContentState = this@with.rememberSharedContentState("${tab}-${id}-cover"),
+								boundsTransform = rememberCoverBoundsTransform(),
+								animatedVisibilityScope = LocalNavAnimatedContentScope.current
+							),
+						interactionSource = interactionSource,
+						placeholderName = placeholderName,
+						crossfadeMs = crossfadeMs
+					)
+				}
+				coverOverlay?.invoke(this)
+			}
+			Text(
+				text = title,
+				style = MaterialTheme.typography.titleSmallEmphasized,
+				modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+				maxLines = 2,
+				overflow = TextOverflow.Ellipsis
+			)
+			subtitle?.let {
+				Text(
+					text = subtitle,
+					style = MaterialTheme.typography.bodySmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					modifier = Modifier
+						.fillMaxWidth()
+						.then(
+							if (onSubtitleClick != null) Modifier.clickable(onClick = onSubtitleClick)
+							else Modifier
+						),
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis
+				)
+			}
+			caption?.ifBlank { null }?.let {
+				Text(
+					text = it,
+					style = MaterialTheme.typography.labelSmall,
+					color = MaterialTheme.colorScheme.onSurfaceVariant,
+					modifier = Modifier.fillMaxWidth(),
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis
+				)
+			}
+			if (playCount != null && playCount > 0) {
+				Text(
+					text = pluralStringResource(Res.plurals.count_plays, playCount, playCount),
+					style = MaterialTheme.typography.labelSmall,
+					color = MaterialTheme.colorScheme.primary,
+					modifier = Modifier.fillMaxWidth(),
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis
+				)
+			}
+		}
+	}
+}
+
+@Composable
+fun ArtGridPlaceholder(
+	modifier: Modifier = Modifier,
+	viewMode: ListViewMode = ListViewMode.Grid
+) {
+	if (viewMode == ListViewMode.Grid) {
+		Column(modifier = modifier) {
+			Box(
+				modifier = Modifier
+					.fillMaxWidth()
+					.aspectRatio(1f)
+					// placeholders shouldn't use continuous corners
+					// because it's less performant
+					.clip(RoundedCornerShape(16.0.dp))
+					.shimmerLoading()
+			)
+			Box(
+				modifier = Modifier
+					.padding(top = 6.dp)
+					.fillMaxWidth(0.8f)
+					.height(16.dp)
+					.clip(CircleShape)
+					.shimmerLoading()
+			)
+			Box(
+				modifier = Modifier
+					.padding(top = 4.dp)
+					.fillMaxWidth(0.6f)
+					.height(14.dp)
+					.clip(CircleShape)
+					.shimmerLoading()
+			)
+		}
+	} else {
+		ListItem(
+			leadingContent = {
+				Box(
+					modifier = Modifier
+						.size(50.dp)
+						.clip(RoundedCornerShape(8.0.dp))
+						.shimmerLoading()
+				)
+			},
+			content = {
+				Box(
+					modifier = Modifier
+						.width(170.dp)
+						.height(12.dp)
+						.clip(CircleShape)
+						.shimmerLoading()
+				)
+			},
+			supportingContent = {
+				Box(
+					modifier = Modifier
+						.width(120.dp)
+						.padding(top = 6.dp)
+						.height(12.dp)
+						.clip(CircleShape)
+						.shimmerLoading()
+				)
+			}
+		)
+	}
+}
+
+fun LazyGridScope.artGridPlaceholder(
+	itemCount: Int = 8,
+	viewMode: ListViewMode = ListViewMode.Grid
+) {
+	items(itemCount) {
+		ArtGridPlaceholder(
+			modifier = Modifier.fillMaxWidth(),
+			viewMode = viewMode
+		)
+	}
+}
+
+fun <T> LazyGridScope.artGridError(
+	state: UiState.Error<T>
+) {
+	item(span = { GridItemSpan(maxLineSpan) }) {
+		ErrorBox(
+			modifier = Modifier.animateItem(fadeInSpec = null),
+			error = state
+		)
+	}
+}

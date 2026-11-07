@@ -1,0 +1,575 @@
+package app.worbus.ui.components.layouts
+
+import app.worbus.ui.util.WASH_MS
+import app.worbus.ui.util.crossfadeMsFor
+import app.worbus.ui.util.rememberReducedMotion
+import worbus.composeapp.generated.resources.action_devices
+import app.worbus.ui.components.sheets.DevicePickerSheet
+import app.worbus.icons.outlined.Devices
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.plus
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.dropUnlessResumed
+import coil3.ImageLoader
+import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.kyant.capsule.ContinuousRoundedRectangle
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.action_next_song
+import worbus.composeapp.generated.resources.action_pause
+import worbus.composeapp.generated.resources.action_play
+import worbus.composeapp.generated.resources.action_previous_song
+import worbus.composeapp.generated.resources.info_playing_on
+import worbus.composeapp.generated.resources.info_paused_on
+import worbus.composeapp.generated.resources.info_not_playing
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import app.worbus.di.LocalNavStack
+import app.worbus.di.LocalPlatformContext
+import app.worbus.domain.manager.HubManager
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.domain.manager.RadioManager
+import app.worbus.domain.manager.SessionManager
+import app.worbus.domain.models.settings.MiniPlayerProgressStyle
+import app.worbus.domain.models.settings.MiniPlayerStyle
+import app.worbus.icons.Icons
+import app.worbus.icons.filled.Note
+import app.worbus.icons.filled.Pause
+import app.worbus.icons.filled.Play
+import app.worbus.icons.outlined.Radio
+import app.worbus.shared.MediaPlayerViewModel
+import app.worbus.ui.components.common.MarqueeText
+import app.worbus.ui.components.common.blur.LocalExpressiveBlur
+import app.worbus.ui.components.common.blur.expressiveBlurEffect
+import app.worbus.ui.navigation.Screen
+import app.worbus.ui.navigation.heldWhileCoveredBySheet
+import app.worbus.ui.navigation.rememberCoveredBySheet
+import app.worbus.ui.util.rememberNowPlayingCoverAmbient
+import coil3.compose.LocalPlatformContext as LocalCoilPlatformContext
+import app.worbus.domain.models.creditText
+
+@Composable
+fun MiniPlayer(
+	modifier: Modifier = Modifier,
+	windowInsets: WindowInsets,
+	enabled: Boolean = true
+) {
+	val platformContext = LocalPlatformContext.current
+	val player = koinInject<MediaPlayerViewModel>()
+	val hubManager = koinInject<HubManager>()
+	val isRemoteActive by hubManager.isRemoteActive.collectAsState()
+	// Active device name for the Spotify-style "Playing on <device>" cue.
+	val hubDevices by hubManager.devices.collectAsState()
+	val hubActiveId by hubManager.activeDeviceId.collectAsState()
+	val remoteDeviceName = hubDevices.firstOrNull { it.id == hubActiveId }?.name ?: "remote device"
+	val preferenceManager = koinInject<PreferenceManager>()
+	// When Expressive blur is on, make the mini-player container translucent so the
+	// frosted backdrop (RootBottomBar's hazeEffect over the screen content) shows
+	// through the card; otherwise keep the opaque surface.
+	val expressiveBlur = LocalExpressiveBlur.current
+	val backStack = LocalNavStack.current
+	val haptics = LocalHapticFeedback.current
+
+	// steadyState: the mini-player is on screen almost everywhere, and the only thing here that
+	// follows the playhead is [MiniPlayerProgressBar], which collects it in its own scope.
+	val playerState by player.steadyState.collectAsState()
+	val song = playerState.currentSong
+
+	val coilPlatformContext = LocalCoilPlatformContext.current
+	val imageLoader = koinInject<ImageLoader>()
+	val sessionManager = koinInject<SessionManager>()
+	val radioManager = koinInject<RadioManager>()
+	val fadeMs = crossfadeMsFor(rememberReducedMotion(), 400)
+	val model = remember(song?.coverArtId, fadeMs) {
+		ImageRequest.Builder(coilPlatformContext)
+			.data(song?.coverArtId?.let { sessionManager.getCoverArtUrl(it) })
+			.memoryCacheKey(song?.coverArtId)
+			.diskCacheKey(song?.coverArtId)
+			.diskCachePolicy(CachePolicy.ENABLED)
+			.memoryCachePolicy(CachePolicy.ENABLED)
+			// Cross-fade the thumbnail on track change so the swap eases in instead of
+			// hard-cutting — matches Now Playing and CoverArt.
+			.crossfade(fadeMs)
+			.build()
+	}
+
+	val detached = preferenceManager.miniPlayerStyle == MiniPlayerStyle.Detached
+
+	val outerPadding = if (detached) 12.dp else 0.dp
+	// Now Playing's mini header (the queue fully open) is the one mini player (P5 round 3, the
+	// owner's note): its 56 dp cover rounded 10 dp, its title and line, Devices and a filled
+	// play / pause. Swipes still skip either way.
+	val coverRounding by animateDpAsState(
+		if (playerState.isLoading)
+			46.dp
+		else 10.dp
+	)
+	var showDevicePicker by remember { mutableStateOf(false) }
+
+	val shape = ContinuousRoundedRectangle(
+		if (detached) 16.dp else 0.dp
+	)
+
+	// Same now-playing extraction the library hero and (for the same song) the detail page read,
+	// so all three agree on hue. `seed` is not eased inside CoverAmbient — only `top`/`bottom`
+	// are — so ease it here, or the ring/shadow would pop on track change.
+	val ambient = rememberNowPlayingCoverAmbient()
+	val ringColor by animateColorAsState(ambient.seed, tween(WASH_MS))
+
+	val onClick = dropUnlessResumed {
+		if (!backStack.contains(Screen.NowPlaying)) {
+			backStack.add(Screen.NowPlaying)
+		}
+	}
+
+	val hasSong = song != null
+	val isRadio = song?.id?.startsWith("radio_") == true
+	val isInteractive = enabled && hasSong
+
+	// upstream's "hide mini player if idle" (alpha55): the whole bar, swiper included,
+	// is gated on there being a song unless the user wants it always visible.
+	AnimatedVisibility(
+		visible = hasSong || !preferenceManager.hideIfIdle,
+		modifier = modifier
+	) {
+	Swiper(
+		onSwipeLeft = {
+			if (isInteractive) {
+				if (isRemoteActive) hubManager.actNext() else player.next()
+			}
+		},
+		onSwipeRight = {
+			if (isInteractive) {
+				if (isRemoteActive) hubManager.actPrevious() else player.previous()
+			}
+		},
+		swipeLeftAccessibilityLabel = stringResource(Res.string.action_previous_song),
+		swipeRightAccessibilityLabel = stringResource(Res.string.action_next_song),
+		modifier = if (detached) {
+			Modifier.windowInsetsPadding(windowInsets)
+		} else Modifier,
+		enabled = isInteractive
+	) {
+		Box(
+			modifier = Modifier
+				.widthIn(max = if (detached) 600.dp else Dp.Unspecified)
+				.padding(
+					bottom = if (detached) outerPadding else 0.dp,
+					start = outerPadding,
+					end = outerPadding
+				)
+				.align(Alignment.Center)
+		) {
+			ListItem(
+				modifier = Modifier
+					.dropShadow(
+						shape,
+						Shadow(
+							radius = if (detached) 10.dp else 8.dp,
+							color = ringColor,
+							alpha = 0.25f
+						)
+					)
+					// Only when detached: the full-bleed variant has no free edges, so a border
+					// would just draw hairlines along the screen edges and across the top.
+					.then(
+						if (detached) Modifier.border(1.dp, ringColor.copy(alpha = 0.32f), shape)
+						else Modifier
+					)
+					// Frost the floating pill itself (clipped to its shape) so it reads as a
+					// self-contained frosted-glass card over the content — instead of relying on
+					// a full-width haze band behind it. No-op when Expressive blur is off.
+					.then(
+						if (detached && expressiveBlur.enabled)
+							Modifier.clip(shape).expressiveBlurEffect(expressiveBlur)
+						else Modifier
+					)
+					.pointerInput(isInteractive) {
+						if (!isInteractive) return@pointerInput
+						var totalDrag = 0f
+						detectVerticalDragGestures(
+							onVerticalDrag = { _, dragAmount ->
+								totalDrag += dragAmount
+							},
+							onDragEnd = {
+								if (totalDrag < -150f) {
+									onClick()
+								}
+								totalDrag = 0f
+							}
+						)
+					},
+				contentPadding = PaddingValues(
+					start = if (detached) 10.dp else 16.dp,
+					end = if (detached) 10.dp else 16.dp,
+					top = if (detached) 10.dp else 16.dp,
+					bottom = if (detached) 10.dp else 12.dp
+				) + if (!detached)
+					windowInsets.asPaddingValues()
+				else PaddingValues(),
+				verticalAlignment = Alignment.CenterVertically,
+				colors = ListItemDefaults.colors(
+					containerColor = if (expressiveBlur.enabled)
+						NavigationBarDefaults.containerColor.copy(alpha = 0.6f)
+					else NavigationBarDefaults.containerColor
+				),
+				shapes = ListItemDefaults.shapes(
+					shape = shape,
+					selectedShape = shape,
+					pressedShape = shape,
+					focusedShape = shape,
+					hoveredShape = shape,
+					draggedShape = shape
+				),
+				onClick = {
+					onClick()
+				},
+				onLongClick = {
+					haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+					onClick()
+				},
+				leadingContent = {
+					Box(contentAlignment = Alignment.Center) {
+						AsyncImage(
+							model = model,
+							contentDescription = null,
+							contentScale = ContentScale.Fit,
+							modifier = Modifier
+								.size(if (detached) 48.dp else 56.dp)
+								.padding(if (playerState.isLoading) 8.dp else 0.dp)
+								.clip(
+									ContinuousRoundedRectangle(coverRounding)
+								)
+								.background(MaterialTheme.colorScheme.surfaceVariant)
+						)
+						if (song?.coverArtId.isNullOrEmpty()) {
+							Icon(
+								imageVector = if (isRadio) Icons.Outlined.Radio else Icons.Filled.Note,
+								contentDescription = null,
+								tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .38f)
+							)
+						}
+						AnimatedVisibility(
+							playerState.isLoading,
+							modifier = Modifier.matchParentSize(),
+							enter = scaleIn(MaterialTheme.motionScheme.defaultSpatialSpec())
+								+ fadeIn(MaterialTheme.motionScheme.defaultEffectsSpec()),
+							exit = scaleOut(MaterialTheme.motionScheme.defaultSpatialSpec())
+								+ fadeOut(MaterialTheme.motionScheme.defaultEffectsSpec())
+						) {
+							CircularProgressIndicator(
+								Modifier.matchParentSize(),
+								trackColor = MaterialTheme.colorScheme.primaryContainer
+							)
+						}
+					}
+				},
+				trailingContent = {
+					Row(verticalAlignment = Alignment.CenterVertically) {
+						IconButton(
+							onClick = {
+								platformContext.clickSound()
+								showDevicePicker = true
+							},
+							enabled = enabled
+						) {
+							Icon(Icons.Outlined.Devices, contentDescription = stringResource(Res.string.action_devices))
+						}
+						FilledIconButton(
+							onClick = {
+								platformContext.clickSound()
+								if (isRemoteActive) {
+									hubManager.actPlayPause()
+								} else if (playerState.isPaused) {
+									player.resume()
+								} else {
+									player.pause()
+								}
+							},
+							enabled = isInteractive
+						) {
+							Icon(
+								imageVector = if (playerState.isPaused) Icons.Filled.Play else Icons.Filled.Pause,
+								contentDescription = stringResource(
+									if (playerState.isPaused) Res.string.action_play else Res.string.action_pause
+								)
+							)
+						}
+					}
+				},
+				content = {
+					song?.title?.let { title ->
+						MarqueeText(title, style = MaterialTheme.typography.titleMedium)
+					}
+				},
+				supportingContent = {
+					if (isRemoteActive) {
+						// Spotify-style accent cue that playback is on another device — and
+						// whether it is actually PLAYING there. This read "Playing on <device>"
+						// unconditionally, so pausing the remote device left the pill still
+						// announcing playback: the transport icon flipped to play and the line
+						// under the title contradicted it. It is also the one user-facing string
+						// here that was hardcoded English rather than a resource.
+						MarqueeText(
+							stringResource(
+								if (playerState.isPaused) Res.string.info_paused_on
+								else Res.string.info_playing_on,
+								remoteDeviceName
+							),
+							style = LocalTextStyle.current.copy(
+								color = MaterialTheme.colorScheme.primary
+							)
+						)
+					} else if (song != null) {
+						MarqueeText(
+							song.creditText,
+							style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+						)
+					} else {
+						MarqueeText(stringResource(Res.string.info_not_playing))
+					}
+				},
+				enabled = enabled
+			)
+			if (preferenceManager.miniPlayerProgressStyle == MiniPlayerProgressStyle.Visible
+				|| preferenceManager.miniPlayerProgressStyle == MiniPlayerProgressStyle.Seekable
+			) {
+				MiniPlayerProgressBar(
+					hasSong = hasSong,
+					durationMs = song?.duration?.inWholeMilliseconds ?: 0L,
+					detached = detached,
+					shape = shape,
+					isInteractive = isInteractive,
+					isRemoteActive = isRemoteActive
+				)
+			}
+		}
+	}
+	}
+	if (showDevicePicker) {
+		DevicePickerSheet(onDismissRequest = { showDevicePicker = false })
+	}
+}
+
+/**
+ * The mini-player's own progress line, in its own composable ON PURPOSE.
+ *
+ * It is the one part of the mini-player that has to follow the playhead, so it collects
+ * [MediaPlayerViewModel.progress] itself instead of reading it off the state the parent already
+ * holds. Inlined into [MiniPlayer], that read invalidated the whole bar — cover art, marquee text,
+ * buttons and (with Expressive blur on) the pill's blur node — five times a second for the whole
+ * of playback. Here, only these three Boxes recompose.
+ */
+@Composable
+private fun BoxScope.MiniPlayerProgressBar(
+	hasSong: Boolean,
+	durationMs: Long,
+	detached: Boolean,
+	shape: Shape,
+	isInteractive: Boolean,
+	isRemoteActive: Boolean
+) {
+	val preferenceManager = koinInject<PreferenceManager>()
+	val player = koinInject<MediaPlayerViewModel>()
+	val hubManager = koinInject<HubManager>()
+	val radioManager = koinInject<RadioManager>()
+	val haptics = LocalHapticFeedback.current
+	val liveProgress by player.progress.collectAsState()
+	// Under a full-screen sheet (the player, the queue) nobody sees this bar (SheetCover).
+	val rawProgress = heldWhileCoveredBySheet(liveProgress)
+
+	var dragging by remember { mutableStateOf(false) }
+	// Where the finger is while a REMOTE drag is in progress, null otherwise: previewed here and
+	// sent to the hub once, on release (see NowPlayingProgressBar).
+	var dragValue by remember { mutableStateOf<Float?>(null) }
+	// `pointerInput(Unit)` below runs its block once, so the block would keep the values of the
+	// composition that started it: the duration of whichever track was playing then (a remote
+	// seek after a track change landed at the wrong place) and whether playback was remote then.
+	val currentDurationMs by rememberUpdatedState(durationMs)
+	val currentIsRemoteActive by rememberUpdatedState(isRemoteActive)
+	val seekable = hasSong
+		&& preferenceManager.miniPlayerProgressStyle == MiniPlayerProgressStyle.Seekable
+		&& isInteractive
+	// The gesture goes away with its modifier, and one cut off mid-drag reports no end: without
+	// this the bar would stay where the finger last was.
+	LaunchedEffect(seekable) {
+		if (!seekable) {
+			dragging = false
+			dragValue = null
+		}
+	}
+	val alpha by animateFloatAsState(
+		if (dragging) 1f else .7f
+	)
+	val progress by animateFloatAsState(
+		(dragValue ?: rawProgress).coerceIn(0f, 1f)
+	)
+	val alignment = if (detached) Alignment.BottomStart else Alignment.TopStart
+	Box(
+		modifier = Modifier
+			.matchParentSize()
+			.clip(shape)
+			.align(alignment),
+		contentAlignment = alignment
+	) {
+		if (!detached) {
+			Box(
+				Modifier
+					.background(MaterialTheme.colorScheme.surfaceBright)
+					.fillMaxWidth()
+					.height(3.dp)
+			)
+		}
+		// AudioMuse indicator: while a station plays, or a queue whose songs AudioMuse chose
+		// (`wearsAudioMuseColour`: not a genre mix's random draw, not Navidrome's similar
+		// songs), the progress bar drifts through the AudioMuse logo palette
+		// (periwinkle → pink → orange). Both the colour and the bar's length are read in the DRAW
+		// phase: read in composition, the endless colour animation and the eased progress
+		// recomposed the mini player every frame for the whole of playback (I-041).
+		val isAudioMuseMix by radioManager.isAudioMuseMix.collectAsState()
+		val coveredBySheet = rememberCoveredBySheet()
+		// Not run under a full-screen sheet: an endless colour animation redraws its window every
+		// frame, seen or not (SheetCover). It starts again as the sheet moves off.
+		val shift = if (isAudioMuseMix && !coveredBySheet) {
+			rememberInfiniteTransition(label = "audiomuse").animateFloat(
+				initialValue = 0f,
+				targetValue = 2f,
+				animationSpec = infiniteRepeatable(
+					animation = tween(durationMillis = 6000),
+					repeatMode = RepeatMode.Reverse
+				),
+				label = "audiomuse-color"
+			)
+		} else null
+		val primary = MaterialTheme.colorScheme.primary
+		Box(
+			Modifier
+				.fillMaxWidth()
+				.height(3.dp)
+				.drawBehind {
+					val fraction = if (hasSong) progress.coerceIn(0f, 1f) else 0f
+					if (fraction <= 0f) return@drawBehind
+					val color = shift?.value?.let { t ->
+						if (t < 1f) lerp(AUDIOMUSE_PERIWINKLE, AUDIOMUSE_PINK, t)
+						else lerp(AUDIOMUSE_PINK, AUDIOMUSE_ORANGE, t - 1f)
+					} ?: primary
+					drawRect(
+						color = color.copy(alpha = alpha),
+						size = Size(size.width * fraction, size.height)
+					)
+				}
+		)
+		Box(
+			Modifier
+				.fillMaxWidth()
+				.height(14.dp)
+				.then(
+					if (seekable)
+						Modifier.pointerInput(Unit) {
+							detectDragGestures(
+								onDragStart = {
+									dragging = true
+									haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+								},
+								onDragEnd = {
+									dragging = false
+									val fraction = dragValue
+									dragValue = null
+									if (fraction != null && currentIsRemoteActive) {
+										hubManager.actSeek((fraction * currentDurationMs).toLong())
+									}
+									haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
+								},
+								// Without this a cancelled drag left `dragging` set for good. A
+								// cancelled drag sends nothing.
+								onDragCancel = {
+									dragging = false
+									dragValue = null
+								}
+							) { change, _ ->
+								val fraction =
+									(change.position.x / size.width.toFloat())
+										.coerceIn(0f, 1f)
+								if (currentIsRemoteActive) {
+									dragValue = fraction
+								} else {
+									dragValue = null
+									player.seek(fraction)
+								}
+								change.consume()
+							}
+						}
+					else Modifier
+				)
+		)
+	}
+}
+
+/** The AudioMuse logo's palette, which the mini player's bar drifts through for a station's queue. */
+private val AUDIOMUSE_PERIWINKLE = Color(0xFF93A2E8)
+private val AUDIOMUSE_PINK = Color(0xFFEE7B90)
+private val AUDIOMUSE_ORANGE = Color(0xFFF5A661)

@@ -1,0 +1,322 @@
+package app.worbus.ui.components.sheets
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.count_lb_problems
+import worbus.composeapp.generated.resources.error_lbbot_busy
+import worbus.composeapp.generated.resources.error_lbbot_hub_outdated
+import worbus.composeapp.generated.resources.error_lbbot_not_configured
+import worbus.composeapp.generated.resources.error_lbbot_rejected
+import worbus.composeapp.generated.resources.error_lbbot_too_old
+import worbus.composeapp.generated.resources.error_lbbot_unreachable
+import worbus.composeapp.generated.resources.notice_about_error
+import worbus.composeapp.generated.resources.notice_about_error_said
+import worbus.composeapp.generated.resources.notice_about_nothing
+import worbus.composeapp.generated.resources.notice_about_nothing_this_time
+import worbus.composeapp.generated.resources.notice_about_nothing_written
+import worbus.composeapp.generated.resources.notice_about_refreshed
+import worbus.composeapp.generated.resources.notice_about_same
+import worbus.composeapp.generated.resources.notice_about_unreachable
+import org.jetbrains.compose.resources.PluralStringResource
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getPluralString
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import app.worbus.domain.manager.AboutRefreshNotice
+import app.worbus.domain.manager.LbAccess
+import app.worbus.domain.manager.LbBotManager
+import app.worbus.domain.manager.LbRefusal
+import app.worbus.domain.manager.LbSourceFile
+import app.worbus.ui.theme.defaultFont
+
+/**
+ * What went wrong, in words the user can act on.
+ *
+ * lb-bot writes its refusals as sentences for humans, so those are shown verbatim
+ * rather than paraphrased — it knows why and we don't. The one case worth
+ * translating is a 404, which does not mean "not found" here: it means the hub
+ * proxies no such route, i.e. it is older than this app and needs restarting.
+ * That failure used to be completely silent.
+ */
+@Composable
+fun lbErrorText(error: LbBotManager.LbError): String = when (error) {
+	is LbBotManager.LbError.NotConfigured -> stringResource(Res.string.error_lbbot_not_configured)
+	is LbBotManager.LbError.RouteUnknown -> stringResource(Res.string.error_lbbot_hub_outdated)
+	is LbBotManager.LbError.Busy -> stringResource(Res.string.error_lbbot_busy)
+	is LbBotManager.LbError.Unreachable -> stringResource(Res.string.error_lbbot_unreachable)
+	is LbBotManager.LbError.Rejected ->
+		error.message.ifBlank { stringResource(Res.string.error_lbbot_rejected, error.status) }
+	// Worbus P2 (review I-2): only too-old is ever drawn ([lbErrorDrawn]); the others hide their gate.
+	// Its words are the hub's own (`LBBOT_TOO_OLD`, R26): the cause, not a vague "unavailable".
+	is LbBotManager.LbError.AccessRefused -> stringResource(Res.string.error_lbbot_too_old)
+}
+
+/**
+ * NB2 (R26): the sentence a surface says when lb-bot does not answer it. While the hub calls lb-bot
+ * too old for this user, that is the cause, in the hub's own words; otherwise the surface's own
+ * "unreachable" or "needs lb-bot" line. Every surface that prints such a line routes it through here
+ * (`LaneNWalkGuardTest` enumerates them from strings.xml).
+ */
+fun lbUnavailableRes(tooOld: Boolean, otherwise: StringResource): StringResource =
+	if (tooOld) Res.string.error_lbbot_too_old else otherwise
+
+/** Whether the hub has called lb-bot too old for this user ([LbAccess.TOO_OLD]); moves in place. */
+@Composable
+fun rememberLbTooOld(): Boolean {
+	val access by koinInject<LbBotManager>().lbAccess.collectAsState()
+	return access == LbAccess.TOO_OLD
+}
+
+/**
+ * Whether [LbErrorLine] draws [error] at all. A refusal about who is asking hides its gate instead
+ * (`signin_required`: the layer goes; `admin_only` / `primary_only`: the action goes; the hub's own
+ * 401: the socket finds out), with no line and no toast. Too-old is one "unavailable" sentence. Every
+ * other error is drawn, "lb-bot isn't set up." included, which is only for a hub that has none.
+ */
+fun lbErrorDrawn(error: LbBotManager.LbError): Boolean =
+	error !is LbBotManager.LbError.AccessRefused || error.refusal == LbRefusal.TOO_OLD
+
+/**
+ * The sentence a "Refresh About" ends in; its arguments are `aboutRefreshArgs`'s. Only
+ * [AboutRefreshNotice.UPDATED] says "refreshed": every other one says what lb-bot answered and
+ * that what is shown did not change — a refresh that failed, or that came back with nothing,
+ * never empties an About that is on screen.
+ */
+fun aboutRefreshMessage(notice: AboutRefreshNotice): StringResource = when (notice) {
+	AboutRefreshNotice.UPDATED -> Res.string.notice_about_refreshed
+	AboutRefreshNotice.SAME -> Res.string.notice_about_same
+	AboutRefreshNotice.NOTHING_THIS_TIME -> Res.string.notice_about_nothing_this_time
+	AboutRefreshNotice.NOTHING_WRITTEN -> Res.string.notice_about_nothing_written
+	AboutRefreshNotice.NOTHING -> Res.string.notice_about_nothing
+	AboutRefreshNotice.UNREACHABLE -> Res.string.notice_about_unreachable
+	AboutRefreshNotice.TOO_OLD -> Res.string.error_lbbot_too_old
+	AboutRefreshNotice.ERROR -> Res.string.notice_about_error
+	AboutRefreshNotice.ERROR_SAID -> Res.string.notice_about_error_said
+}
+
+/**
+ * One sentence a sheet builds from lb-bot's answer: a plain string, or a plural with its
+ * quantity and arguments. Kept as data so the same sentence can be drawn in a sheet ([text])
+ * and said in a snackbar when no sheet is open ([resolve]). [then] is a second sentence said
+ * after it — a count of something else, which one plural resource cannot also carry.
+ */
+internal class LbSentence(
+	val string: StringResource? = null,
+	val plural: PluralStringResource? = null,
+	val quantity: Int = 0,
+	val args: List<Any> = emptyList(),
+	val then: LbSentence? = null
+)
+
+@Composable
+internal fun LbSentence.text(): String {
+	val counted = plural
+	val said = if (counted != null) pluralStringResource(counted, quantity, *args.toTypedArray())
+	else string?.let { stringResource(it) }.orEmpty()
+	val next = then?.text().orEmpty()
+	return listOf(said, next).filter { it.isNotBlank() }.joinToString(" ")
+}
+
+/** [text] outside a composition. */
+internal suspend fun LbSentence.resolve(): String {
+	val counted = plural
+	val said = if (counted != null) getPluralString(counted, quantity, *args.toTypedArray())
+	else string?.let { getString(it) }.orEmpty()
+	val next = then?.resolve().orEmpty()
+	return listOf(said, next).filter { it.isNotBlank() }.joinToString(" ")
+}
+
+/**
+ * "N problems." — what an outcome said outside its sheet adds when lb-bot listed any: there the
+ * list itself, with this count above it, is not on screen. Problems, not files (ruling X9): a
+ * cover that could not be saved is one of lb-bot's `failures` too.
+ */
+internal fun problemsSentence(count: Int): LbSentence? =
+	if (count > 0) LbSentence(plural = Res.plurals.count_lb_problems, quantity = count, args = listOf(count)) else null
+
+/** This sentence, then "N problems." when there are any ([problemsSentence]). */
+internal fun LbSentence.withProblems(count: Int): LbSentence =
+	LbSentence(string, plural, quantity, args, problemsSentence(count))
+
+@Composable
+fun LbErrorLine(error: LbBotManager.LbError?, modifier: Modifier = Modifier) {
+	if (error == null || !lbErrorDrawn(error)) return
+	Text(
+		lbErrorText(error),
+		style = MaterialTheme.typography.bodySmall,
+		color = MaterialTheme.colorScheme.error,
+		modifier = modifier.fillMaxWidth().padding(vertical = 6.dp)
+	)
+}
+
+/**
+ * The fixed top of a tall fork sheet: title, an optional line under it, a divider — OUTSIDE the
+ * sheet's scrolling body. Upstream's tall sheets (Song, Collection) keep their header out of the
+ * list for the same reason: there is always somewhere to take hold of the sheet that is not a
+ * scroll, which on a full-height sheet is the difference between dragging it and scrolling it
+ * (B-121). The title is set as upstream's ChangelogSheet sets its own.
+ */
+@Composable
+internal fun SheetHeader(title: String, subtitle: String? = null) {
+	Column(
+		modifier = Modifier
+			.fillMaxWidth()
+			.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+		verticalArrangement = Arrangement.spacedBy(2.dp)
+	) {
+		Text(
+			title,
+			style = MaterialTheme.typography.titleLarge,
+			fontFamily = defaultFont(round = 100f)
+		)
+		if (!subtitle.isNullOrBlank()) {
+			Text(
+				subtitle,
+				style = MaterialTheme.typography.bodyMedium,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+				maxLines = 2,
+				overflow = TextOverflow.Ellipsis
+			)
+		}
+	}
+	HorizontalDivider(Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+}
+
+@Composable
+internal fun SheetLabel(text: String) {
+	Text(
+		text,
+		style = MaterialTheme.typography.labelLarge,
+		fontWeight = FontWeight.Medium,
+		color = MaterialTheme.colorScheme.primary,
+		modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+	)
+}
+
+/** Horizontal chip picker. Versions and editions are a short, side-by-side choice —
+ *  a vertical scroller made two or three options look like a list to wade through. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ChipRow(labels: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit) {
+	LazyRow(
+		modifier = Modifier.fillMaxWidth(),
+		horizontalArrangement = Arrangement.spacedBy(8.dp)
+	) {
+		itemsIndexed(labels) { index, label ->
+			FilterChip(
+				selected = index == selectedIndex,
+				onClick = { onSelect(index) },
+				label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+			)
+		}
+	}
+}
+
+/** Two lines of small print under a heading — used for the source-picker caveat. */
+@Composable
+internal fun SheetCaption(text: String) {
+	Text(
+		text,
+		style = MaterialTheme.typography.bodySmall,
+		color = MaterialTheme.colorScheme.onSurfaceVariant,
+		modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+	)
+}
+
+/** A source's evidence line, shared by the album picker and the gap picker. */
+@Composable
+internal fun SourceHeadline(peer: String, trailing: @Composable () -> Unit) {
+	Row(Modifier.fillMaxWidth()) {
+		Text(
+			peer,
+			style = MaterialTheme.typography.bodyMedium,
+			fontWeight = FontWeight.Medium,
+			maxLines = 1,
+			overflow = TextOverflow.Ellipsis,
+			modifier = Modifier.weight(1f)
+		)
+		trailing()
+	}
+}
+
+/**
+ * What is actually in a peer's folder, and which slot each file would fill.
+ *
+ * This is the only thing that settles "seventeen tracks are missing but this
+ * source has twelve" before committing — a coverage count says *how many* match,
+ * this says *which*. A file with no `matchedTo` fills nothing: a folder made
+ * entirely of those is the wrong album, however plausible its name.
+ */
+@Composable
+internal fun SourceFileList(files: List<LbSourceFile>, truncated: Boolean) {
+	if (files.isEmpty()) return
+	Column(Modifier.fillMaxWidth().padding(top = 4.dp, start = 8.dp)) {
+		files.forEach { file ->
+			Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+				Text(
+					file.matchedTo?.let { match ->
+						listOfNotNull(
+							match.position.takeIf { it.isNotBlank() },
+							match.title.takeIf { it.isNotBlank() }
+						).joinToString(". ")
+					} ?: file.filename,
+					style = MaterialTheme.typography.bodySmall,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+					color = if (file.matchedTo != null) MaterialTheme.colorScheme.onSurface
+					else MaterialTheme.colorScheme.onSurfaceVariant,
+					modifier = Modifier.weight(1f)
+				)
+				Text(
+					listOfNotNull(
+						file.ext.takeIf { it.isNotBlank() },
+						file.bitrate.takeIf { it > 0 }?.let { "$it kbps" }
+					).joinToString(" "),
+					style = MaterialTheme.typography.labelSmall,
+					color = if (file.accepted) MaterialTheme.colorScheme.onSurfaceVariant
+					else MaterialTheme.colorScheme.error
+				)
+			}
+		}
+		if (truncated) {
+			Text(
+				"…",
+				style = MaterialTheme.typography.labelSmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant
+			)
+		}
+	}
+}
+
+@Composable
+internal fun SourceMetaLine(parts: List<String?>) {
+	val text = parts.filterNot { it.isNullOrBlank() }.joinToString(" • ")
+	if (text.isBlank()) return
+	Column {
+		Text(
+			text,
+			style = MaterialTheme.typography.bodySmall,
+			color = MaterialTheme.colorScheme.onSurfaceVariant
+		)
+	}
+}

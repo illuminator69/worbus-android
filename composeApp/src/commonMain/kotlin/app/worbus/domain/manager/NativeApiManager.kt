@@ -1,0 +1,298 @@
+package app.worbus.domain.manager
+
+import com.russhwolf.settings.Settings
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.parameter
+import io.ktor.client.request.post
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import okio.ByteString.Companion.encodeUtf8
+import app.worbus.di.synchronized
+import app.worbus.util.Logger
+
+/**
+ * Minimal client for Navidrome's NATIVE REST API (not Subsonic) — needed for
+ * features the Subsonic API doesn't expose, like smart playlists (`rules`
+ * criteria JSON on `POST /api/playlist`).
+ *
+ * Auth: `POST {base}/auth/login {username,password}` returns a JWT in `token`;
+ * subsequent requests carry `X-ND-Authorization: Bearer <token>`. The token is
+ * cached and refreshed once on 401. It is cached for the server, user and password it was issued
+ * to ([NativeTokenCache]): after a logout or a login as anyone else it is never sent again.
+ */
+class NativeApiManager(
+	private val settings: Settings,
+	private val preferenceManager: PreferenceManager,
+	private val secrets: SecretStore
+) {
+	private val tokens = NativeTokenCache()
+
+	private val client = HttpClient {
+		install(ContentNegotiation) {
+			json(Json {
+				ignoreUnknownKeys = true
+				isLenient = true
+				coerceInputValues = true
+			})
+		}
+	}
+
+	private fun base(): String = settings.getString("instanceUrl", "").trimEnd('/')
+
+	private fun credentials() = NativeCredentials(base(), settings.getString("username", ""), secrets.navidromePassword)
+
+	/** The cached token, if it was issued to the credentials in force now. */
+	private val token: String?
+		get() = tokens.current(credentials().identity())
+
+	/** Forgets the token: logging out. */
+	fun forget() = tokens.clear()
+
+	private suspend fun login(): String {
+		val credentials = credentials()
+		val response: JsonObject = client.post("${credentials.base}/auth/login") {
+			contentType(ContentType.Application.Json)
+			preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
+			setBody(buildJsonObject {
+				put("username", credentials.username)
+				put("password", credentials.password)
+			}.toString())
+		}.body()
+		val newToken = response["token"]?.jsonPrimitive?.content
+			?: throw IllegalStateException("Navidrome login returned no token")
+		tokens.store(credentials.identity(), newToken)
+		return newToken
+	}
+
+	private suspend fun authedPost(path: String, body: JsonObject): HttpResponse {
+		val activeToken = token ?: login()
+		var response = client.post("${base()}$path") {
+			contentType(ContentType.Application.Json)
+			header("X-ND-Authorization", "Bearer $activeToken")
+			preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
+			setBody(body.toString())
+		}
+		if (response.status == HttpStatusCode.Unauthorized) {
+			val freshToken = login()
+			response = client.post("${base()}$path") {
+				contentType(ContentType.Application.Json)
+				header("X-ND-Authorization", "Bearer $freshToken")
+				preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
+				setBody(body.toString())
+			}
+		}
+		return response
+	}
+
+	private suspend fun authedPut(path: String, body: JsonObject): HttpResponse {
+		val activeToken = token ?: login()
+		suspend fun send(bearer: String) = client.put("${base()}$path") {
+			contentType(ContentType.Application.Json)
+			header("X-ND-Authorization", "Bearer $bearer")
+			preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
+			setBody(body.toString())
+		}
+
+		val response = send(activeToken)
+		return if (response.status == HttpStatusCode.Unauthorized) send(login()) else response
+	}
+
+	private suspend fun authedGet(path: String, params: Map<String, String>): HttpResponse {
+		val activeToken = token ?: login()
+		suspend fun send(bearer: String) = client.get("${base()}$path") {
+			header("X-ND-Authorization", "Bearer $bearer")
+			preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
+			params.forEach { (key, value) -> parameter(key, value) }
+		}
+
+		val response = send(activeToken)
+		return if (response.status == HttpStatusCode.Unauthorized) send(login()) else response
+	}
+
+	/**
+	 * Album ids this artist PARTICIPATES in — as album artist or as a track artist.
+	 *
+	 * Navidrome's native `artist_id` filter is a participation filter, which is the whole reason
+	 * this exists: Subsonic's `getArtist` returns only albums the artist is credited on as ALBUM
+	 * artist, so a record they merely guest on is unreachable through the bundled client. Feishin's
+	 * "Appears on" is the same query (`artistIds` -> `artist_id=`) with the album-artist rows
+	 * subtracted afterwards.
+	 *
+	 * Returns ids only; the caller resolves them against the local library, so nothing here has to
+	 * know how Navidrome shapes an album.
+	 */
+	suspend fun albumIdsByParticipation(artistId: String): Result<List<String>> {
+		if (artistId.isBlank()) return Result.success(emptyList())
+		return try {
+			val response = authedGet(
+				"/api/album",
+				mapOf("artist_id" to artistId, "_start" to "0", "_end" to "0")
+			)
+			if (response.status.value !in 200..299) {
+				return Result.failure(IllegalStateException("HTTP ${response.status.value}"))
+			}
+			val ids = response.body<kotlinx.serialization.json.JsonElement>().jsonArray.mapNotNull {
+				it.jsonObject["id"]?.jsonPrimitive?.content?.takeIf(String::isNotBlank)
+			}
+			Result.success(ids)
+		} catch (e: Exception) {
+			// Fail-soft by contract: the caller renders nothing rather than an error.
+			Logger.w("NativeApiManager", "albumIdsByParticipation failed: ${e.message}")
+			Result.failure(e)
+		}
+	}
+
+	/**
+	 * Create a server-side smart playlist. Navidrome keeps it auto-updated;
+	 * every Subsonic client (including this one) then sees it as a normal
+	 * playlist with fresh contents.
+	 */
+	suspend fun createSmartPlaylist(
+		name: String,
+		comment: String,
+		isPublic: Boolean,
+		rules: JsonObject
+	): Result<String> {
+		return try {
+			val response = authedPost("/api/playlist", buildJsonObject {
+				put("name", name)
+				put("comment", comment)
+				put("public", isPublic)
+				put("rules", rules)
+			})
+			if (response.status.value in 200..299) {
+				// The created playlist's id, which this used to throw away by
+				// answering `Unit`. Two callers need it: the editor's Offline switch,
+				// which has to attach a download policy to the playlist it just made,
+				// and album-matching mode, which has to read the playlist back. An
+				// absent id is not a failure — the playlist exists — so it degrades
+				// to blank rather than to an error.
+				val id = runCatching {
+					response.body<kotlinx.serialization.json.JsonElement>()
+						.jsonObject["id"]?.jsonPrimitive?.content
+				}.getOrNull().orEmpty()
+				Result.success(id)
+			} else {
+				val text = try {
+					response.body<String>()
+				} catch (_: Exception) {
+					""
+				}
+				Result.failure(IllegalStateException("HTTP ${response.status.value} $text"))
+			}
+		} catch (e: Exception) {
+			Logger.e("NativeApiManager", "createSmartPlaylist failed", e)
+			Result.failure(e)
+		}
+	}
+
+	/**
+	 * The `rules` criteria of a playlist, or null when it has none.
+	 *
+	 * Null means "not a smart playlist" and is a perfectly ordinary answer — a
+	 * hand-made playlist has no rules — so it must not be conflated with a failure.
+	 * Nothing stores rules locally: `PlaylistEntity` has no such column, and the
+	 * Subsonic sync that populates it cannot see them, so this route is the only
+	 * way to find out what a smart playlist is actually built from.
+	 */
+	suspend fun fetchPlaylistRules(playlistId: String): Result<JsonObject?> {
+		if (playlistId.isBlank()) return Result.success(null)
+		return try {
+			val response = authedGet("/api/playlist/$playlistId", emptyMap())
+			if (response.status.value !in 200..299) {
+				return Result.failure(IllegalStateException("HTTP ${response.status.value}"))
+			}
+			val body = response.body<kotlinx.serialization.json.JsonElement>().jsonObject
+			Result.success(body["rules"]?.let { it as? JsonObject })
+		} catch (e: Exception) {
+			Logger.w("NativeApiManager", "fetchPlaylistRules failed: ${e.message}")
+			Result.failure(e)
+		}
+	}
+
+	/**
+	 * Rewrite an existing smart playlist's name, comment, visibility and rules.
+	 *
+	 * A full `PUT`, because Navidrome's native API replaces the record rather than
+	 * patching it — sending only `rules` would blank the name.
+	 */
+	suspend fun updateSmartPlaylist(
+		playlistId: String,
+		name: String,
+		comment: String,
+		isPublic: Boolean,
+		rules: JsonObject
+	): Result<Unit> {
+		return try {
+			val response = authedPut("/api/playlist/$playlistId", buildJsonObject {
+				put("id", playlistId)
+				put("name", name)
+				put("comment", comment)
+				put("public", isPublic)
+				put("rules", rules)
+			})
+			if (response.status.value in 200..299) {
+				Result.success(Unit)
+			} else {
+				val text = try {
+					response.body<String>()
+				} catch (_: Exception) {
+					""
+				}
+				Result.failure(IllegalStateException("HTTP ${response.status.value} $text"))
+			}
+		} catch (e: Exception) {
+			Logger.e("NativeApiManager", "updateSmartPlaylist failed", e)
+			Result.failure(e)
+		}
+	}
+}
+
+internal class NativeCredentials(val base: String, val username: String, val password: String) {
+	/** A digest of all three, so the cache keeps no second copy of the password. */
+	fun identity(): String = "$base\u0000$username\u0000$password".encodeUtf8().sha256().hex()
+}
+
+/**
+ * Navidrome's native token, kept only for the credentials it was issued to: [current] with any
+ * other identity (another server, user or password, or none after a logout) forgets it.
+ */
+internal class NativeTokenCache {
+	private val lock = Any()
+	private var token: String? = null
+	private var issuedTo: String? = null
+
+	fun current(identity: String): String? = synchronized(lock) {
+		if (identity != issuedTo) {
+			token = null
+			issuedTo = null
+		}
+		token
+	}
+
+	fun store(identity: String, token: String) = synchronized(lock) {
+		this.token = token
+		issuedTo = identity
+	}
+
+	fun clear() = synchronized(lock) {
+		token = null
+		issuedTo = null
+	}
+}

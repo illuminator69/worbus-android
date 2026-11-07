@@ -1,0 +1,264 @@
+package app.worbus.ui.components.layouts
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.WideNavigationRail
+import androidx.compose.material3.WideNavigationRailState
+import androidx.compose.material3.WideNavigationRailDefaults
+import androidx.compose.material3.WideNavigationRailValue
+import androidx.compose.material3.rememberWideNavigationRailState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.coerceAtLeast
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
+import com.kyant.capsule.ContinuousRoundedRectangle
+import kotlinx.coroutines.launch
+import worbus.composeapp.generated.resources.Res
+import worbus.composeapp.generated.resources.info_not_playing
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
+import org.koin.compose.viewmodel.koinViewModel
+import app.worbus.di.LocalNavStack
+import app.worbus.icons.Icons
+import app.worbus.icons.filled.Note
+import app.worbus.icons.outlined.Menu
+import app.worbus.icons.outlined.MenuOpen
+import app.worbus.icons.outlined.Radio
+import app.worbus.domain.manager.ShellController
+import app.worbus.domain.models.creditText
+import app.worbus.shared.MediaPlayerViewModel
+import app.worbus.ui.components.common.CoverArt
+import app.worbus.ui.components.common.WideNavigationRailItem
+import app.worbus.ui.navigation.Screen
+import app.worbus.ui.navigation.ShellTab
+import app.worbus.ui.navigation.isSelected
+import app.worbus.ui.navigation.onShellTabTapped
+import app.worbus.ui.viewmodel.RootViewModel
+
+@Composable
+fun SideBar() {
+	val rootViewModel = koinViewModel<RootViewModel>()
+	val shellController = koinInject<ShellController>()
+	val backStack = LocalNavStack.current
+	val top = backStack.lastOrNull()
+
+	val railState = rememberWideNavigationRailState()
+	val railExpanded = railState.targetValue == WideNavigationRailValue.Expanded
+	// The rail's own per-item spacing and minimum height (NavigationRailCollapsedTokens
+	// .ItemVerticalSpace, NavigationRailBaselineItemTokens.ContainerHeight, and 48 dp expanded),
+	// which it no longer applies now that the tabs are one scrolling child — see below.
+	val itemSpacing by animateDpAsState(
+		if (railExpanded) 0.dp else 4.dp,
+		animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+	)
+	// Audit W-05: at 448 dp tall the fourth item sat below the fold; compact items on a short window.
+	val windowHeightDp = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp().value }
+	val itemMinHeight by animateDpAsState(
+		railItemMinHeight(windowHeightDp, railExpanded).dp,
+		animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+	)
+	val scrollState = rememberScrollState()
+	val railColor = WideNavigationRailDefaults.colors().containerColor
+
+	WideNavigationRail(
+		state = railState,
+		header = {
+			Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+				SideBarHeader(state = railState)
+				SideBarMiniPlayer(railExpanded = railExpanded)
+			}
+		}
+	) {
+		// B-039: on a phone in landscape (~360 dp tall) the header left room for three tabs and
+		// the rail doesn't scroll, so Playlists and Songs were unreachable. The tabs are one
+		// scrolling Column. The rail sizes its first child to the height below the header but
+		// places it a header gap lower (WNRHeaderPadding, 40 dp): the bottom padding keeps the
+		// viewport on screen, or the last tab would scroll to just past the edge.
+		// A rail that scrolls says so: a fade to the rail's colour at its foot while more is below.
+		Column(
+			Modifier
+				.padding(bottom = 40.dp)
+				.drawWithContent {
+					drawContent()
+					if (scrollState.canScrollForward) {
+						val fade = RAIL_FADE_DP.dp.toPx()
+						drawRect(
+							Brush.verticalGradient(
+								listOf(railColor.copy(alpha = 0f), railColor),
+								startY = size.height - fade,
+								endY = size.height
+							),
+							topLeft = Offset(0f, size.height - fade),
+							size = Size(size.width, fade)
+						)
+					}
+				}
+				.verticalScroll(scrollState),
+			verticalArrangement = Arrangement.spacedBy(itemSpacing)
+		) {
+			ShellTab.entries.forEach { tab ->
+				val selected = tab.isSelected(top)
+				WideNavigationRailItem(
+					selected = selected,
+					onClick = dropUnlessResumed {
+						onShellTabTapped(tab, backStack, rootViewModel, shellController)
+					},
+					icon = {
+						if (selected) {
+							Icon(tab.iconFilled, null)
+						} else {
+							Icon(tab.iconOutlined, null)
+						}
+					},
+					label = { Text(stringResource(tab.label)) },
+					railExpanded = railExpanded,
+					modifier = Modifier.heightIn(min = itemMinHeight)
+				)
+			}
+		}
+	}
+}
+
+/** The fade's height at the foot of a rail that scrolls. */
+private const val RAIL_FADE_DP = 24
+
+/**
+ * A collapsed rail item's minimum height: 64 dp (the rail's own token), 56 dp on a window shorter than
+ * 480 dp so a phone in landscape fits more of its tabs; 48 dp expanded.
+ */
+fun railItemMinHeight(windowHeightDp: Float, expanded: Boolean): Float = when {
+	expanded -> 48f
+	windowHeightDp < 480f -> 56f
+	else -> 64f
+}
+
+@Composable
+private fun SideBarMiniPlayer(
+	railExpanded: Boolean
+) {
+	val backStack = LocalNavStack.current
+
+	val player = koinInject<MediaPlayerViewModel>()
+	// steadyState, not uiState: uiState re-stamps `progress` every 200 ms (250 ms remote) and
+	// nothing in this rail draws a playhead, so collecting it would recompose the whole sidebar
+	// five times a second for the entire duration of playback. Same rule as MiniPlayer.
+	val playerState by player.steadyState.collectAsStateWithLifecycle()
+	val song = playerState.currentSong
+	val isRadio = song?.id?.startsWith("radio_") == true
+
+	val padding by animateDpAsState(
+		if (railExpanded) 8.dp else 0.dp,
+		animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+	)
+	val containerRadius by animateDpAsState(
+		if (railExpanded) 18.dp else 12.dp,
+		animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
+	)
+
+	Surface(
+		modifier = Modifier.padding(start = 24.dp),
+		color = MaterialTheme.colorScheme.surfaceContainerHigh,
+		shape = ContinuousRoundedRectangle(containerRadius),
+		onClick = dropUnlessResumed {
+			backStack.add(Screen.NowPlaying)
+		}
+	) {
+		Row(
+			modifier = Modifier.padding(padding.coerceAtLeast(0.dp)),
+			verticalAlignment = Alignment.CenterVertically
+		) {
+			Box(contentAlignment = Alignment.Center) {
+				CoverArt(
+					modifier = Modifier.size(48.dp),
+					coverArtId = song?.coverArtId,
+					contentDescription = song?.title,
+					shape = ContinuousRoundedRectangle(12.dp)
+				)
+				if (song?.coverArtId.isNullOrEmpty()) {
+					Icon(
+						imageVector = if (isRadio) Icons.Outlined.Radio else Icons.Filled.Note,
+						contentDescription = null,
+						tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .38f)
+					)
+				}
+			}
+			AnimatedVisibility(
+				visible = railExpanded,
+				enter = fadeIn() + expandHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()),
+				exit = fadeOut() + shrinkHorizontally(MaterialTheme.motionScheme.defaultSpatialSpec()),
+			) {
+				Column(Modifier.padding(start = 12.dp)) {
+					Text(
+						text = song?.title ?: stringResource(Res.string.info_not_playing),
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+						style = MaterialTheme.typography.bodyMedium
+					)
+					song?.let { current ->
+						Text(
+							text = current.creditText,
+							maxLines = 1,
+							overflow = TextOverflow.Ellipsis,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+							style = MaterialTheme.typography.bodyMedium
+						)
+					}
+				}
+			}
+		}
+	}
+}
+
+@Composable
+private fun SideBarHeader(
+	state: WideNavigationRailState
+) {
+	val scope = rememberCoroutineScope()
+
+	IconButton(
+		modifier = Modifier.padding(start = 24.dp),
+		onClick = {
+			scope.launch {
+				if (state.targetValue == WideNavigationRailValue.Expanded)
+					state.collapse()
+				else state.expand()
+			}
+		},
+	) {
+		if (state.targetValue == WideNavigationRailValue.Expanded) {
+			Icon(Icons.Outlined.MenuOpen, null)
+		} else {
+			Icon(Icons.Outlined.Menu, null)
+		}
+	}
+}

@@ -1,0 +1,321 @@
+package app.worbus.ui.screens.downloads.viewmodels
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import app.worbus.data.database.dao.SongDao
+import app.worbus.data.database.entities.DownloadEntity
+import app.worbus.data.database.entities.DownloadStatus
+import app.worbus.data.database.mappers.toDomainModel
+import app.worbus.domain.manager.DownloadManager
+import app.worbus.domain.manager.FillActions
+import app.worbus.domain.manager.LbBotManager
+import app.worbus.domain.manager.isDownloadsOffRefusal
+import app.worbus.domain.models.DomainSong
+import app.worbus.domain.repositories.SongRepository
+
+/** One download plus the song it belongs to — the rows are useless without a title. */
+data class DownloadCenterItem(
+	val download: DownloadEntity,
+	val song: DomainSong?
+)
+
+/**
+ * The download center's sections. Active and queued are split on purpose: a queued row is accepted
+ * work waiting on a concurrency permit, and conflating the two is why a 50-track album download
+ * used to look like 50 simultaneous transfers.
+ */
+data class DownloadCenterState(
+	val active: List<DownloadCenterItem> = emptyList(),
+	val queued: List<DownloadCenterItem> = emptyList(),
+	val failed: List<DownloadCenterItem> = emptyList(),
+	val completed: List<DownloadCenterItem> = emptyList(),
+	val totalSize: Long = 0L
+)
+
+/** Worbus P1: whether a refused row action gets the snackbar: every refusal but lb-bot's `downloads_off`. */
+internal fun refusalAnnounced(error: LbBotManager.LbError): Boolean =
+	!isDownloadsOffRefusal(error) && error !is LbBotManager.LbError.AccessRefused
+
+class DownloadCenterViewModel(
+	private val downloadManager: DownloadManager,
+	private val songDao: SongDao,
+	private val lbBotManager: LbBotManager,
+	private val fillActions: FillActions,
+	private val songRepository: SongRepository
+) : ViewModel() {
+
+	/** True while "Download entire library" is queueing; the menu item waits for it. */
+	val isDownloadingLibrary = downloadManager.isDownloadingLibrary
+
+	/**
+	 * Queue every song the library holds that is not downloaded yet (it was Settings' Data & storage
+	 * row: an action, not a setting). The queued songs then show in the sections of this page.
+	 */
+	fun downloadEntireLibrary() {
+		viewModelScope.launch(Dispatchers.IO) {
+			downloadManager.downloadEntireLibrary(songRepository.getAllSongs())
+		}
+	}
+
+	/**
+	 * Albums being acquired from Soulseek, and the ones that have finished trying.
+	 *
+	 * A different kind of thing from the sections below — those are files this app is
+	 * fetching from Navidrome, this is lb-bot fetching a record the library never had —
+	 * but the same question ("what is downloading, and what went wrong?"), and this was
+	 * the only screen in the app that could answer it for one of them. Until now a fill
+	 * was visible solely from the artist page that started it.
+	 *
+	 * Empty whenever lb-bot is unconfigured, which is also how the section stays hidden:
+	 * nothing can ever have been started.
+	 */
+	val fills = lbBotManager.ledger
+
+	/**
+	 * What an action on a row answered, for the screen's snackbar. Every result used
+	 * to be dropped, so a Retry lb-bot refused looked exactly like a tap that did
+	 * nothing — which read as "it can only be restarted from lb-bot".
+	 */
+	private val _actionMessages = MutableSharedFlow<String>(extraBufferCapacity = 8)
+	val actionMessages: SharedFlow<String> = _actionMessages.asSharedFlow()
+
+	private suspend fun announce(result: LbBotManager.LbResult<app.worbus.domain.manager.LbOk>) {
+		when (result) {
+			// Worbus P1: lb-bot's `downloads_off` says nothing here: it turned the mode off, and the row
+			// has already lost the action that was tapped.
+			is LbBotManager.LbResult.Failed -> if (refusalAnnounced(result.error)) _actionMessages.emit(REFUSED)
+			is LbBotManager.LbResult.Ok -> {
+				val value = result.value
+				if (value.error.isNotBlank()) _actionMessages.emit(value.error)
+				else if (!value.ok) _actionMessages.emit(REFUSED)
+			}
+		}
+	}
+
+	/**
+	 * Run a row action to the end, whether or not this screen is still there to hear the answer.
+	 *
+	 * Since the ViewModel-store entry decorator came back (navic-gaps CLAUDE.md, rule 14) this
+	 * ViewModel dies when its pane is popped, and `viewModelScope` with it — so a Cancel tapped
+	 * just before backing out was cancelled with the screen, and the download it was meant to stop
+	 * kept running. The request is the user's decision, not the screen's: it runs
+	 * [NonCancellable]. What follows it is harmless with the screen gone — the snackbar flow
+	 * drops an emit nobody collects, and the ledger it updates lives in [LbBotManager].
+	 */
+	private fun launchToCompletion(block: suspend () -> Unit) {
+		viewModelScope.launch { withContext(NonCancellable) { block() } }
+	}
+
+	/** Re-issue a fill ([FillActions.retry]). */
+	fun retryFill(key: String) {
+		launchToCompletion { announce(fillActions.retry(key)) }
+	}
+
+	/** Retry with the peer that failed or crawled ruled out. */
+	fun retryAnotherSource(key: String) {
+		launchToCompletion { announce(fillActions.retryAnotherSource(key)) }
+	}
+
+	fun cancelFill(key: String) {
+		launchToCompletion { announce(fillActions.cancel(key)) }
+	}
+
+	/** [FillActions.allowMp3AndRetry]: a refused opt-in is said, and nothing is retried. */
+	fun allowMp3AndRetry(entry: app.worbus.domain.manager.LbFillEntry) {
+		launchToCompletion {
+			val result = fillActions.allowMp3AndRetry(entry)
+			if (result == null) _actionMessages.emit(REFUSED) else announce(result)
+		}
+	}
+
+	fun dismissFill(key: String) = fillActions.dismiss(key)
+
+	private companion object {
+		const val REFUSED = "lb-bot would not take that request."
+	}
+
+	/** [FillActions.addToWishlist], which dismisses the row once the add took. */
+	fun addToWishlist(entry: app.worbus.domain.manager.LbFillEntry) {
+		launchToCompletion {
+			// Marked before the call, so a second tap during the round trip cannot
+			// send a second add; cleared again if the add did not take, so the
+			// button comes back rather than leaving the row with no affordance.
+			_wishlisted.value = _wishlisted.value + entry.key
+			if (!fillActions.addToWishlist(entry)) {
+				_wishlisted.value = _wishlisted.value - entry.key
+			}
+		}
+	}
+
+	/**
+	 * Keys wishlisted in this session, so the button can go quiet immediately.
+	 *
+	 * Session-scoped on purpose: the durable record is lb-bot's list, this is only
+	 * what stops a second tap in the second between the POST and the row vanishing.
+	 */
+	private val _wishlisted = MutableStateFlow<Set<String>>(emptySet())
+	val wishlisted = _wishlisted.asStateFlow()
+
+	/** False when lb-bot is absent or the hub is too old to carry the wishlist routes. */
+	val wishlistSupported: Boolean
+		get() = lbBotManager.supportsWishlist
+
+	/**
+	 * Resolve a pasted streaming URL to something in MusicBrainz's vocabulary.
+	 *
+	 * Null for "we could not ask"; a resolution with `kind == "unknown"` for "that is
+	 * not a link we understand". The two are different answers and the caller shows
+	 * them differently.
+	 */
+	suspend fun resolveLink(url: String) = lbBotManager.resolveLink(url)
+
+	/**
+	 * Whether the page offers lb-bot's two chips: wherever the lb-bot layer is on, as the home
+	 * offers Library Matches. Each chip then says for itself what is not reachable or not
+	 * supported, rather than the chip blinking in once the hub has spoken.
+	 */
+	val lbConfigured: Boolean
+		get() = lbBotManager.isConfigured
+
+	/** As [wishlistSupported], for the paste-a-link action. */
+	val resolveLinkSupported: Boolean
+		get() = lbBotManager.supportsResolveLink
+
+	private val _state = MutableStateFlow(DownloadCenterState())
+	val state = _state.asStateFlow()
+
+	/** True while transfers are being held back by Wi-Fi-only / charging-only constraints. */
+	val constrained = downloadManager.downloadsConstrained.stateIn(
+		viewModelScope, SharingStarted.WhileSubscribed(5000), false
+	)
+
+	val totalSize = downloadManager.downloadSize.stateIn(
+		viewModelScope, SharingStarted.WhileSubscribed(5000), 0L
+	)
+
+	init {
+		viewModelScope.launch(Dispatchers.IO) {
+			// allDownloads re-emits on every ~1% progress tick. Only the ACTIVE/queued rows
+			// actually change on a tick, so cache the expensive, whole-library-scale work
+			// (the song-resolution DB query and the terminal-section builds) and rebuild it
+			// only when the relevant SET of downloads changes — not on every progress tick.
+			var cachedIdSet: Set<String> = emptySet()
+			var cachedSongs: Map<String, DomainSong> = emptyMap()
+			var completedIds: Set<String> = emptySet()
+			var failedIds: Set<String> = emptySet()
+			var cachedCompleted: List<DownloadCenterItem> = emptyList()
+			var cachedFailed: List<DownloadCenterItem> = emptyList()
+			var cachedTotalSize = 0L
+
+			downloadManager.allDownloads.collect { downloads ->
+				val idSet = downloads.mapTo(HashSet()) { it.songId }
+				val songsChanged = idSet != cachedIdSet
+				val songs = if (songsChanged) {
+					cachedIdSet = idSet
+					songDao.getSongsByIds(downloads.map { it.songId })
+						.associate { it.songId to it.toDomainModel() }
+						.also { cachedSongs = it }
+				} else {
+					cachedSongs
+				}
+
+				// In-flight and queued rows are ordered by when they were REQUESTED, and that order
+				// never changes while they run. Sorting them by `updatedAt` (as this first did)
+				// re-sorted the list on every progress tick, so downloads visibly swapped places
+				// with each other depending on which one last ticked.
+				fun byRequest(status: DownloadStatus) = downloads
+					.filter { it.status == status }
+					.sortedBy { it.createdAt }
+					.map { DownloadCenterItem(it, songs[it.songId]) }
+
+				// Finished and failed rows are terminal — their `updatedAt` is the moment they
+				// settled, so most-recent-first is both meaningful and stable. Rebuild them only
+				// when their membership changes (never on an active download's progress tick).
+				fun byCompletion(status: DownloadStatus) = downloads
+					.filter { it.status == status }
+					.sortedByDescending { it.updatedAt }
+					.map { DownloadCenterItem(it, songs[it.songId]) }
+
+				val newCompletedIds = downloads.filterTo(HashSet()) {
+					it.status == DownloadStatus.DOWNLOADED
+				}.mapTo(HashSet()) { it.songId }
+				if (newCompletedIds != completedIds || songsChanged) {
+					completedIds = newCompletedIds
+					cachedCompleted = byCompletion(DownloadStatus.DOWNLOADED)
+					cachedTotalSize = downloads
+						.filter { it.status == DownloadStatus.DOWNLOADED }
+						.sumOf { it.fileSize }
+				}
+
+				val newFailedIds = downloads.filterTo(HashSet()) {
+					it.status == DownloadStatus.FAILED
+				}.mapTo(HashSet()) { it.songId }
+				if (newFailedIds != failedIds || songsChanged) {
+					failedIds = newFailedIds
+					cachedFailed = byCompletion(DownloadStatus.FAILED)
+				}
+
+				_state.value = DownloadCenterState(
+					active = byRequest(DownloadStatus.DOWNLOADING),
+					queued = byRequest(DownloadStatus.QUEUED),
+					failed = cachedFailed,
+					completed = cachedCompleted,
+					totalSize = cachedTotalSize
+				)
+			}
+		}
+	}
+
+	fun retry(item: DownloadCenterItem) {
+		val song = item.song ?: return
+		downloadManager.retryDownload(song)
+	}
+
+	fun retryAllFailed() {
+		_state.value.failed.forEach { retry(it) }
+	}
+
+	fun cancel(item: DownloadCenterItem) {
+		downloadManager.cancelDownload(item.download.songId)
+	}
+
+	fun delete(item: DownloadCenterItem) {
+		downloadManager.deleteDownload(item.download.songId)
+	}
+
+	fun clearFailed() {
+		downloadManager.clearFailedDownloads()
+	}
+
+	/**
+	 * Re-check every completed download's file. Any whose file has vanished is re-downloaded with
+	 * its original settings when the song is still known, or dropped otherwise so the library stops
+	 * advertising it as available offline.
+	 */
+	fun repairMissing() {
+		viewModelScope.launch(Dispatchers.IO) {
+			_state.value.completed.forEach { item ->
+				if (!downloadManager.isDownloadFilePresent(item.download)) {
+					val song = item.song
+					if (song != null) downloadManager.retryDownload(song)
+					else downloadManager.deleteDownload(item.download.songId)
+				}
+			}
+		}
+	}
+
+	fun cancelAll() {
+		downloadManager.cancelAllActiveDownloads()
+	}
+}

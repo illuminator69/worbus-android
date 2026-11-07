@@ -1,0 +1,191 @@
+package app.worbus.domain.manager
+
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import app.worbus.domain.repositories.DbRepository
+import app.worbus.ui.core.LoginUiState
+import app.worbus.util.Logger
+
+/**
+ * What the login page shows once Log in has checked the fields. An attempt the fields refuse says
+ * why under the field; the error box of an EARLIER attempt is about another address (the N9 walk:
+ * "Can't reach the server at nas" stayed above "That isn't a server address"), so it goes.
+ */
+fun loginStateAfterFieldCheck(current: LoginUiState, fieldsOk: Boolean): LoginUiState =
+	if (!fieldsOk && current is LoginUiState.Error) LoginUiState.Idle else current
+
+class LoginManager(
+    private val repository: DbRepository,
+    private val sessionManager: SessionManager,
+    // B-279 review: its cached token is this user's; a logout forgets it.
+    private val nativeApi: NativeApiManager,
+    // B-100 / B-109: the login's library pull is the sync manager's full pull. SyncManager does
+    // not depend on this class (checked 2026-10-31), so the graph has no cycle.
+    private val syncManager: SyncManager,
+    // B-108: whether a failed login names Android's local network permission.
+    private val localNetwork: LocalNetworkAccess,
+    // Worbus P2: a logout leaves the Worbus Server too (the owner's ruling, 2026-11-02). HubManager does
+    // not depend on this class, so the graph has no cycle.
+    private val hubManager: HubManager,
+    // Worbus P3 (design §6.4): after a login with no Worbus Server set, look beside Navidrome once.
+    private val hubFinder: HubFinder
+) {
+	val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+	val loginState: StateFlow<LoginUiState>
+		field = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
+
+	val instanceState = TextFieldState()
+	val usernameState = TextFieldState()
+	val passwordState = TextFieldState()
+
+	var instanceError by mutableStateOf(false)
+		private set
+	/** Why the address field is red, for the line under it; null while it is not. */
+	var instanceProblem by mutableStateOf<InstanceUrlProblem?>(null)
+		private set
+	var usernameError by mutableStateOf(false)
+		private set
+	var passwordError by mutableStateOf(false)
+		private set
+
+	/**
+	 * A stored password that could not be read on this launch (B-279): the screen says why it
+	 * asks again. A session whose password is missing for any other reason (a device transfer)
+	 * only has its server and name filled in.
+	 */
+	var signInAgain by mutableStateOf(false)
+		private set
+
+	fun validateInstance() {
+		val problem = (normalizeInstanceUrl(instanceState.text.toString()) as? InstanceUrlResult.Invalid)?.reason
+		instanceProblem = problem
+		instanceError = problem != null
+	}
+
+	fun validateUsername() {
+		usernameError = usernameState.text.isBlank()
+	}
+
+	fun validatePassword() {
+		passwordError = passwordState.text.isBlank()
+	}
+
+	fun validateStuff(): Boolean {
+		validateInstance()
+		validateUsername()
+		validatePassword()
+		val ok = !instanceError && !usernameError && !passwordError
+		loginState.value = loginStateAfterFieldCheck(loginState.value, ok)
+		return ok
+	}
+
+	/**
+	 * Is the typed server on this network (B-108)? Total: it reads the text and nothing else,
+	 * resolves no name, and an address that does not parse is not local (B-283, B-296: this used
+	 * to be `InetAddress.getByName`, which threw out of the Log in tap for a typo).
+	 */
+	fun isLocalNetworkInstance(): Boolean = try {
+		(normalizeInstanceUrl(instanceState.text.toString()) as? InstanceUrlResult.Ok)
+			?.host?.let(::isPrivateHost) ?: false
+	} catch (e: Exception) {
+		Logger.w("LoginManager", "isLocalNetworkInstance: ${e::class.simpleName}")
+		false
+	}
+
+	init {
+		loadUser()
+	}
+
+	fun loadUser() {
+		sessionManager.signInAgainAs()?.let { (instanceUrl, username) ->
+			signInAgain = sessionManager.passwordWasUnreadable()
+			if (instanceState.text.isEmpty()) instanceState.setTextAndPlaceCursorAtEnd(instanceUrl)
+			if (usernameState.text.isEmpty()) usernameState.setTextAndPlaceCursorAtEnd(username)
+		}
+		scope.launch {
+			if (sessionManager.isLoggedIn.value) {
+				loginState.value = LoginUiState.Success
+			} else {
+				loginState.value = LoginUiState.Idle
+			}
+		}
+	}
+
+	fun login(): Boolean {
+		if (!validateStuff()) return false
+		val address = normalizeInstanceUrl(instanceState.text.toString()) as? InstanceUrlResult.Ok
+			?: return false
+
+		scope.launch {
+			loginState.value = LoginUiState.Loading
+
+			try {
+				sessionManager.login(
+					address.url,
+					usernameState.text.toString(),
+					passwordState.text.toString()
+				)
+
+				syncManager.firstPull { progress, message ->
+					loginState.value = LoginUiState.Syncing(progress, message)
+				}.onSuccess {
+					loginState.value = LoginUiState.Success
+					syncManager.startPeriodicSync()
+					hubFinder.startAutoLook(afterLogin = true)
+				}.onFailure { e ->
+					loginState.value = failure(e as? Exception ?: Exception(e), address.host)
+				}
+
+			} catch (e: kotlin.coroutines.cancellation.CancellationException) {
+				throw e
+			} catch (e: Exception) {
+				loginState.value = failure(e, address.host)
+			}
+		}
+
+		return true
+	}
+
+	/**
+	 * Show [e] on the login page as the login's error (B-302): the Log in tap's own catch sends
+	 * what escapes it here, so nothing a login throws reaches the crash screen.
+	 */
+	fun reportLoginFailure(e: Exception) {
+		val host = (normalizeInstanceUrl(instanceState.text.toString()) as? InstanceUrlResult.Ok)?.host
+		loginState.value = failure(e, host)
+	}
+
+	private fun failure(e: Exception, host: String?): LoginUiState.Error {
+		val kind = loginFailureKind(e)
+		val blocked = kind == LoginFailureKind.UNREACHABLE &&
+			failureLooksLocalNetworkBlocked(e, localNetwork.sdk, localNetwork.granted(), host)
+		Logger.w("LoginManager", "login failed: $kind${if (blocked) " (local network not granted)" else ""}")
+		return LoginUiState.Error(e, kind, host, blocked)
+	}
+
+	fun logout() {
+		loginState.value = LoginUiState.Idle
+		signInAgain = false
+		// B-279: the login form outlives the session (a singleton), and kept the password typed.
+		passwordState.clearText()
+		// Worbus P2: sign out of the Worbus Server, stop the socket, drop the saved-queue cache.
+		hubManager.leaveForLogout()
+		sessionManager.logout()
+		nativeApi.forget()
+		scope.launch {
+			repository.removeEverything()
+		}
+	}
+}
