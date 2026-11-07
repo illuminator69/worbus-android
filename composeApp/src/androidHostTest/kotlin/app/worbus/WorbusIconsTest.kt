@@ -28,6 +28,12 @@ class WorbusIconsTest {
 		return manifest.substring(start, manifest.indexOf(">", start))
 	}
 
+	/** The whole `<activity-alias …>…</activity-alias>` element whose name ends in [name]. */
+	private fun aliasBody(name: String): String {
+		val start = manifest.indexOf(aliasTag(name))
+		return manifest.substring(start, manifest.indexOf("</activity-alias>", start))
+	}
+
 	private fun attr(tag: String, name: String) =
 		Regex("""android:$name="([^"]*)"""").find(tag)?.groupValues?.get(1) ?: error("no $name in $tag")
 
@@ -53,6 +59,13 @@ class WorbusIconsTest {
 		assertEquals(2, Regex("""<activity-alias\b""").findAll(manifest).count(), "the manifest declares exactly two aliases")
 		assertEquals("true", attr(aliasTag("MainActivityDefault"), "enabled"))
 		assertEquals("false", attr(aliasTag("MainActivityTidepool"), "enabled"))
+		// An alias without its MAIN/LAUNCHER filter (or not exported) has no launcher entry: the icon vanishes too.
+		for (alias in listOf("MainActivityDefault", "MainActivityTidepool")) {
+			val body = aliasBody(alias)
+			assertEquals("true", attr(aliasTag(alias), "exported"), "$alias is exported")
+			assertTrue("<intent-filter>" in body && "android.intent.action.MAIN" in body, "$alias keeps its MAIN action")
+			assertTrue("android.intent.category.LAUNCHER" in body, "$alias keeps its LAUNCHER category")
+		}
 		assertTrue("Inverted" !in manifest, "the manifest still names the inverted icon")
 	}
 

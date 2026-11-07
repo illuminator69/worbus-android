@@ -61,10 +61,15 @@ class WorbusReleaseTest {
 	fun releaseAttachesChecksums() {
 		val job = releaseJob()
 		val check = job.indexOf("release-cert.sha256")
+		assertTrue(check >= 0, "no step reads androidApp/release-cert.sha256")
+		// The check is the whole step that reads release-cert.sha256 (its comparison and every `exit 1`),
+		// so the sum must start in a LATER step, not merely after the step's name.
+		val checkEnd = job.indexOf("- name:", check)
+		assertTrue(checkEnd > check, "the certificate check is followed by another step")
 		val sums = job.indexOf("""sha256sum "Worbus-${'$'}{GITHUB_REF_NAME}.apk" > SHA256SUMS""")
 		val draft = job.indexOf("gh release create")
 		assertTrue(sums >= 0, "no step writes SHA256SUMS from the release APK")
-		assertTrue(sums > check, "SHA256SUMS is written after the certificate check")
+		assertTrue(sums > checkEnd, "SHA256SUMS is written after the certificate check step has ended (its comparison and exits ran first)")
 		assertTrue(draft > sums, "SHA256SUMS is written before the release is drafted")
 		val create = job.substring(draft)
 		assertTrue(Regex("""gh release create\s+"\${'$'}GITHUB_REF_NAME"\s+"\./Worbus-\${'$'}\{GITHUB_REF_NAME}\.apk"\s+SHA256SUMS""").containsMatchIn(create),
