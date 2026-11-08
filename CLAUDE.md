@@ -25,7 +25,7 @@ front end.
 | Branch | **`navi-connect`** (not `master`) |
 | App ID | **`app.worbus.android`**; debug `app.worbus.android.debug` ("Worbus (Dev)"). Permanent: a new ID is a new app |
 | Packages | `app.worbus` (composeApp), `app.worbus.androidApp` (the app module), `app.worbus.icons` (Valkyrie), `app.worbus.generated` (BuildInfo); resources `worbus.composeapp.generated.resources` (`rootProject.name = "Worbus"`) |
-| Version | `0.6.0`, versionCode 62 (`androidApp/build.gradle.kts`; BuildInfo reads the name from there) |
+| Version | `0.7.0`, versionCode 63 (`androidApp/build.gradle.kts`; BuildInfo reads the name from there) |
 | Release key | lives only on the workstation; its certificate's SHA-256 is `androidApp/release-cert.sha256` (§3) |
 | Upstream base | ssalggnikool/Navic **`v1.0.0-alpha59`** |
 | Divergence | ~264 files, +33.6k / −3.5k (before the package move) |

@@ -30,8 +30,8 @@ extensions.configure<ApplicationExtension> {
 		targetSdk = libs.versions.android.targetSdk.get().toInt()
 		// One version for every piece of Worbus. The code keeps counting from 0.4.0's 60. BuildInfo
 		// reads versionName from this file for the User-Agent (composeApp/build.gradle.kts).
-		versionCode = 62
-		versionName = "0.6.0"
+		versionCode = 63
+		versionName = "0.7.0"
 
 		ndk {
 			abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))

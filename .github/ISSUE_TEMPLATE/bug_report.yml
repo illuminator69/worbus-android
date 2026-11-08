@@ -47,7 +47,7 @@ body:
     id: app-version
     attributes:
       label: App Version
-      placeholder: "eg. 0.6.0 (abc1234), from Settings › About"
+      placeholder: "eg. 0.7.0 (abc1234), from Settings › About"
     validations:
       required: true
 

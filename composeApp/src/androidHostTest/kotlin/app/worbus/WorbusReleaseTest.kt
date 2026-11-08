@@ -84,12 +84,29 @@ class WorbusReleaseTest {
 		assertEquals(emptyList(), dir.listFiles().orEmpty().map { it.name }.filter { it.endsWith(".jpg") }, "an upstream screenshot is still there")
 	}
 
-	/** P6 N3: F-Droid-style changelog for versionCode 62, two lines: the new icon, the checksums file. */
+	/**
+	 * P7 N3: F-Droid-style changelog for versionCode 63, three lines: the queue under shuffle, the sign-in
+	 * step, and small fixes; no word the launch keeps off its pages (the plan's banned-words regex).
+	 */
 	@Test
 	fun changelogForThisVersion() {
-		val changelog = sourceFile("../fastlane/metadata/android/en-US/changelogs/62.txt").readText()
-		assertEquals(2, changelog.lines().filter { it.isNotBlank() }.size, "62.txt is two lines: the new icon, the checksums file")
-		assertTrue("SHA256SUMS" in changelog, "62.txt names the checksums file")
+		val changelog = sourceFile("../fastlane/metadata/android/en-US/changelogs/63.txt").readText()
+		val lines = changelog.lines().filter { it.isNotBlank() }
+		assertEquals(3, lines.size, "63.txt is three lines: the queue under shuffle, the sign-in step, small fixes")
+		assertTrue("shuffle" in lines[0].lowercase(), "63.txt's first line is the queue under shuffle: ${lines[0]}")
+		assertTrue("Worbus Server" in lines[1], "63.txt's second line is the sign-in step: ${lines[1]}")
+		assertTrue("small fixes" in lines[2].lowercase(), "63.txt's last line is the small fixes: ${lines[2]}")
+		val banned = Regex("""soulseek|slskd|torrent|acquir|\bfills?\b|download(s|ed|ing)? (the |an? )?(album|music|song|track)""", RegexOption.IGNORE_CASE)
+		assertEquals(null, banned.find(changelog)?.value, "63.txt says a word the launch keeps off its pages")
+	}
+
+	/** P7 N3: the pull request template sends a patch to the one tracker, in the plan's words. */
+	@Test
+	fun pullRequestTemplateIsTheFixedText() {
+		val expected = "Thanks for the patch. It is read as a report: the fix is written and tested in the main tree, " +
+			"and you are credited in the release notes. Bugs and ideas go to the one tracker: " +
+			"https://github.com/illuminator69/worbus/issues/new/choose"
+		assertEquals(expected, sourceFile("../.github/pull_request_template.md").readText().trim())
 	}
 
 	/** P6 N3 (ruling R6): the README shows the umbrella's shots by raw URL, and keeps no copy of upstream's. */

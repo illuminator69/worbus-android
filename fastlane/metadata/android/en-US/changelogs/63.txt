@@ -1,0 +1,3 @@
+With shuffle on, the queue now lists songs in the order they will play.
+After you sign in to Navidrome, the app offers your Worbus Server right away.
+And small fixes.
