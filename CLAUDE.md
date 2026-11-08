@@ -510,8 +510,14 @@ Rules that are easy to violate and produce "it looks right and the wrong thing p
   not yet this mirror's keeps the listing on screen, mapped by uid (`queueListItems`' `lastShown`), and
   never falls back to queue order for a frame (review I1: every swipe-remove or top-up under shuffle
   animated all rows there and back). Drag is off while shuffled (`queueReorderAllowed`), and Remaining
-  counts the rows as listed (`remainingQueueIndices`). **Shuffled is ONE "Up next"** (B-350): a non-null play order (also the `lastShown` fallback) puts a single `Up next` header after "Now playing" and no `Queued`/`Autoplay` header (the shuffle order alternates the groups, so a header per run made a section per switch); each row keeps its own group, and `rowShowsAutoplayMark(row, shuffled)` is the one thing the screen reads to draw the 16 dp `PlaylistPlay` mark before the duration of an Autoplay row (both layouts; `shuffled` = `listOrder != null`, the value `queueListItems` branches on). Unshuffled is runs, as before. **Outside a drag the list groups by the player's own index**, not by the uid-tracked playing
-  row: that follows a track change a frame late, and the scroll to "Now playing" landed on the song
+  counts the rows as listed (`remainingQueueIndices`). **Shuffled is ONE "Up next"** (B-350): a
+  non-null play order (also the `lastShown` fallback) puts a single `Up next` header after "Now playing"
+  and no `Queued`/`Autoplay` header (the shuffle order alternates the groups, so a header per run made a
+  section per switch); each row keeps its own group, and `rowShowsAutoplayMark(row, shuffled)` is the one
+  thing the screen reads to draw the 16 dp `PlaylistPlay` mark before the duration of an Autoplay row
+  (both layouts; `shuffled` = `listOrder != null`, the value `queueListItems` branches on). Unshuffled is
+  runs, as before. **Outside a drag the list groups by the player's own index**, not by the uid-tracked
+  playing row: that follows a track change a frame late, and the scroll to "Now playing" landed on the song
   just played (LazyColumn then kept that row's key at the top; seen on the AVD). The layer is as tall
   as at full and slides, so what is pinned to its bottom (the undo snackbar) is lifted by the part
   off screen (`QueueLayout.Layer.hiddenBelowPx`). Navigating out from the layer leaves the player by

@@ -515,6 +515,30 @@ class QueueGroupingTest {
 	}
 
 	@Test
+	fun aStoppedStationUnderShuffleStillMarksWhatItKept() {
+		// Off kept s3 (served) in the queue; s1 s2 are the user's. Membership in `served` decides the
+		// group, not whether the station runs, under shuffle too: one Up next, s3 still Autoplay + marked.
+		val stopped = station.copy(stopped = true, served = listOf("s3"))
+		val items = queueListItems(
+			ids(4), uids(4), currentIndex = 0, bound = stopped, userQueued = setOf("s1", "s2"),
+			playOrder = listOf(0, 3, 1, 2)
+		)
+		assertEquals(
+			listOf(
+				Header(QueueGroup.Playing, 100L),
+				Row(0, 100L, QueueGroup.Playing),
+				Header(QueueGroup.Next, 103L),
+				Row(3, 103L, QueueGroup.Autoplay),
+				Row(1, 101L, QueueGroup.Queued),
+				Row(2, 102L, QueueGroup.Queued)
+			),
+			items
+		)
+		val marked = items.filterIsInstance<Row>().filter { rowShowsAutoplayMark(it, shuffled = true) }
+		assertEquals(listOf(Row(3, 103L, QueueGroup.Autoplay)), marked)
+	}
+
+	@Test
 	fun unshuffledStationKeepsRuns() {
 		// Served songs after the user's, in queue order: today's Queued then Autoplay headers.
 		val items = queueListItems(ids(6), uids(6), currentIndex = 0, bound = station, userQueued = setOf("s1", "s2"))

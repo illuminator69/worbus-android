@@ -10,7 +10,8 @@ import app.worbus.shared.MediaPlayerViewModel
  *
  * - "Autoplay": the song is in the bound station's served list (what this device saw it add). That
  *   membership decides, never whether the station still runs: a song Off kept because it was nearly
- *   playing is still the station's, and its header says the station is off.
+ *   playing is still the station's, and (unshuffled) its header says the station is off; under shuffle
+ *   the off note and the row's mark say it.
  * - "Queued by you": a song on a bound station's queue that the user queued on this device
  *   ([MediaPlayerViewModel.userQueued]: add to queue, play next). Only next to an autoplay group: an
  *   album's songs were never "queued by you". Any other row of such a queue (a hub edit's swap-in
@@ -29,7 +30,10 @@ import app.worbus.shared.MediaPlayerViewModel
 enum class QueueGroup { Played, Playing, Queued, Autoplay, Next }
 
 sealed interface QueueListItem {
-	/** A section label before a run of [group]; [key] is the run's first row's uid. */
+	/**
+	 * A section label before a run of [group]; [key] is the run's first row's uid. Unshuffled only: under
+	 * shuffle (B-350) the one "Up next" header ([QueueGroup.Next]) stands before rows of every group.
+	 */
 	data class Header(val group: QueueGroup, val key: Long) : QueueListItem
 
 	/** The queue's row [index], keyed by [uid]. */
@@ -91,7 +95,7 @@ fun queueListItems(
 			// Shuffled: one header for everything upcoming, right after "Now playing" (or first, with
 			// nothing playing); never between two upcoming rows, whoever added them.
 			playOrder != null && group != QueueGroup.Playing ->
-				QueueGroup.Next.takeIf { previous == null || previous == QueueGroup.Playing || previous == QueueGroup.Played }
+				QueueGroup.Next.takeIf { previous == null || previous == QueueGroup.Playing }
 			group != previous -> group
 			else -> null
 		}

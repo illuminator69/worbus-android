@@ -326,7 +326,7 @@ private fun QueueSongCard(
 							Icon(
 								Icons.Outlined.PlaylistPlay,
 								contentDescription = stringResource(Res.string.queue_row_autoplay_mark),
-								modifier = Modifier.size(16.dp),
+								modifier = Modifier.size(SongRowDefaults.StatusIconSize),
 								tint = MaterialTheme.colorScheme.onSurfaceVariant
 							)
 						}

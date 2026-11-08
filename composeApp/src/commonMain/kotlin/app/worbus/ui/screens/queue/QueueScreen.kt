@@ -287,9 +287,10 @@ internal fun QueueContent(layout: QueueLayout) {
 	// landed. That flicker is what a drag looked like from the queue.
 	var playingUid by remember { mutableStateOf<Long?>(null) }
 
-	// The layer's list (P2): the mirror grouped by who put each song there, a header per run. While
-	// a row is dragged the list is frozen as it was ([layerDragItems]) and the row moves in it, past
-	// headers too; the mirror moves only when the row passes another row. Regrouped on release.
+	// The layer's list (P2): the mirror grouped by who put each song there, a header per run
+	// (unshuffled; under shuffle one "Up next", B-350). While a row is dragged the list is frozen as it
+	// was ([layerDragItems]) and the row moves in it, past headers too; the mirror moves only when the
+	// row passes another row. Regrouped on release.
 	val isLayer = layout is QueueLayout.Layer
 	val boundStation by radioManager.boundStation.collectAsState()
 	val userQueued by player.userQueued.collectAsStateWithLifecycle()
