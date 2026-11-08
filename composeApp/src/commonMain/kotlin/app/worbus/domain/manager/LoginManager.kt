@@ -12,6 +12,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import app.worbus.domain.repositories.DbRepository
 import app.worbus.ui.screens.login.pages.sentenceResource
@@ -27,6 +28,41 @@ import app.worbus.util.Logger
 fun loginStateAfterFieldCheck(current: LoginUiState, fieldsOk: Boolean): LoginUiState =
 	if (!fieldsOk && current is LoginUiState.Error) LoginUiState.Idle else current
 
+/**
+ * The login page as ONE value (B-344): the login's state and the Worbus Server step it offers, if any.
+ * They were two StateFlows the page collected apart, and Home followed `Success && no step`: written
+ * step-then-Success here, a collector of the state already queued on the main thread (by the last
+ * "Syncing" update) read Success when it ran while the step's collector was still queued behind a
+ * frame, so that frame went Home and the step only showed in the login page's exit transition. One
+ * value has no such frame.
+ */
+data class LoginPage(val state: LoginUiState = LoginUiState.Idle, val hubStep: HubSignInStep? = null) {
+	/** Home follows: logged in, and no step offered or the one offered has ended. */
+	val goesHome: Boolean get() = state is LoginUiState.Success && hubStep == null
+}
+
+/** Every write of the login page, each one write of [page]. */
+class LoginPageHolder {
+	val page: StateFlow<LoginPage>
+		field = MutableStateFlow(LoginPage())
+
+	/** The form's state; a step offered stays. */
+	fun show(state: LoginUiState) = page.update { it.copy(state = state) }
+
+	/** The login succeeded: Success and the step it offers ([step] null for none) in the same write. */
+	fun loggedIn(step: HubSignInStep?) {
+		page.value = LoginPage(LoginUiState.Success, step)
+	}
+
+	/** The step is over ([HubStepState.Done]): Home follows. */
+	fun finishHubStep() = page.update { it.copy(hubStep = null) }
+
+	/** Logged out: the form, empty. */
+	fun reset() {
+		page.value = LoginPage()
+	}
+}
+
 class LoginManager(
     private val repository: DbRepository,
     private val sessionManager: SessionManager,
@@ -41,22 +77,21 @@ class LoginManager(
     // not depend on this class, so the graph has no cycle.
     private val hubManager: HubManager,
     // Worbus P3 (design §6.4): after a login with no Worbus Server set, look beside Navidrome once.
-    // Worbus P7 (I-064): that look is the Worbus Server step's, shown before Home ([hubStep]).
+    // Worbus P7 (I-064): that look is the Worbus Server step's, shown before Home ([page]).
     private val hubFinder: HubFinder,
     private val hubAuth: HubAuth,
     private val preferenceManager: PreferenceManager
 ) {
 	val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-	val loginState: StateFlow<LoginUiState>
-		field = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
+	private val pageHolder = LoginPageHolder()
 
 	/**
-	 * Worbus P7 (I-064): the Worbus Server step after a login that left no server set, or null. The
-	 * login page shows it instead of going Home while it is here; [finishHubStep] lets Home follow.
+	 * The login page: its state and, Worbus P7 (I-064), the Worbus Server step after a login that left
+	 * no server set. The page shows the step instead of going Home while it is here; [finishHubStep]
+	 * lets Home follow. One value, so the page never sees one without the other (B-344).
 	 */
-	val hubStep: StateFlow<HubSignInStep?>
-		field = MutableStateFlow<HubSignInStep?>(null)
+	val page: StateFlow<LoginPage> = pageHolder.page
 
 	val instanceState = TextFieldState()
 	val usernameState = TextFieldState()
@@ -99,7 +134,7 @@ class LoginManager(
 		validateUsername()
 		validatePassword()
 		val ok = !instanceError && !usernameError && !passwordError
-		loginState.value = loginStateAfterFieldCheck(loginState.value, ok)
+		pageHolder.show(loginStateAfterFieldCheck(page.value.state, ok))
 		return ok
 	}
 
@@ -128,9 +163,9 @@ class LoginManager(
 		}
 		scope.launch {
 			if (sessionManager.isLoggedIn.value) {
-				loginState.value = LoginUiState.Success
+				pageHolder.show(LoginUiState.Success)
 			} else {
-				loginState.value = LoginUiState.Idle
+				pageHolder.show(LoginUiState.Idle)
 			}
 		}
 	}
@@ -141,7 +176,7 @@ class LoginManager(
 			?: return false
 
 		scope.launch {
-			loginState.value = LoginUiState.Loading
+			pageHolder.show(LoginUiState.Loading)
 
 			try {
 				sessionManager.login(
@@ -151,20 +186,19 @@ class LoginManager(
 				)
 
 				syncManager.firstPull { progress, message ->
-					loginState.value = LoginUiState.Syncing(progress, message)
+					pageHolder.show(LoginUiState.Syncing(progress, message))
 				}.onSuccess {
-					// The step goes up before Success, so the page never heads Home ahead of it.
-					if (!hubAddressSet(preferenceManager)) hubStep.value = newHubStep()
-					loginState.value = LoginUiState.Success
+					// Success and the step in one write (B-344): the page never heads Home ahead of it.
+					pageHolder.loggedIn(if (!hubAddressSet(preferenceManager)) newHubStep() else null)
 					syncManager.startPeriodicSync()
 				}.onFailure { e ->
-					loginState.value = failure(e as? Exception ?: Exception(e), address.host)
+					pageHolder.show(failure(e as? Exception ?: Exception(e), address.host))
 				}
 
 			} catch (e: kotlin.coroutines.cancellation.CancellationException) {
 				throw e
 			} catch (e: Exception) {
-				loginState.value = failure(e, address.host)
+				pageHolder.show(failure(e, address.host))
 			}
 		}
 
@@ -177,7 +211,7 @@ class LoginManager(
 	 */
 	fun reportLoginFailure(e: Exception) {
 		val host = (normalizeInstanceUrl(instanceState.text.toString()) as? InstanceUrlResult.Ok)?.host
-		loginState.value = failure(e, host)
+		pageHolder.show(failure(e, host))
 	}
 
 	private fun failure(e: Exception, host: String?): LoginUiState.Error {
@@ -189,9 +223,7 @@ class LoginManager(
 	}
 
 	/** The Worbus Server step is over ([HubStepState.Done]): Home follows. */
-	fun finishHubStep() {
-		hubStep.value = null
-	}
+	fun finishHubStep() = pageHolder.finishHubStep()
 
 	private fun newHubStep() = HubSignInStep(
 		finder = hubFinder,
@@ -205,8 +237,7 @@ class LoginManager(
 	)
 
 	fun logout() {
-		hubStep.value = null
-		loginState.value = LoginUiState.Idle
+		pageHolder.reset()
 		signInAgain = false
 		// B-279: the login form outlives the session (a singleton), and kept the password typed.
 		passwordState.clearText()

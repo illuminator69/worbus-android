@@ -72,9 +72,12 @@ import app.worbus.ui.theme.defaultFont
 @Composable
 fun LoginScreenContent(innerPadding: PaddingValues) {
 	val viewModel = koinInject<LoginManager>()
-	val loginState by viewModel.loginState.collectAsStateWithLifecycle()
-	// Worbus P7 (I-064): after a login that left no Worbus Server set, its step comes before Home.
-	val hubStep by viewModel.hubStep.collectAsStateWithLifecycle()
+	// The login's state and (Worbus P7, I-064) the Worbus Server step after a login that left no
+	// server set, as ONE collected value (B-344): collected apart, a frame could hold Success
+	// without the step, go Home, and leave the step drawn only in the page's exit transition.
+	val page by viewModel.page.collectAsStateWithLifecycle()
+	val loginState = page.state
+	val hubStep = page.hubStep
 
 	val haptics = LocalHapticFeedback.current
 	val backStack = LocalNavStack.current
@@ -121,8 +124,8 @@ fun LoginScreenContent(innerPadding: PaddingValues) {
 		}
 	}
 
-	LaunchedEffect(loginState, hubStep) {
-		if (loginState is LoginUiState.Success && hubStep == null) {
+	LaunchedEffect(page.goesHome) {
+		if (page.goesHome) {
 			backStack.clear()
 			backStack.add(Screen.Home)
 		}
