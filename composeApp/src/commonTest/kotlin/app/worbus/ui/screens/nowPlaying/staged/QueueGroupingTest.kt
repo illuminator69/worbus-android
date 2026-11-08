@@ -325,15 +325,12 @@ class QueueGroupingTest {
 			listOf(
 				Header(QueueGroup.Playing, 100L),
 				Row(0, 100L, QueueGroup.Playing),
-				Header(QueueGroup.Autoplay, 104L),
+				// B-350: one "Up next" for everything after Now playing; each row keeps its group.
+				Header(QueueGroup.Next, 104L),
 				Row(4, 104L, QueueGroup.Autoplay),
-				Header(QueueGroup.Queued, 101L),
 				Row(1, 101L, QueueGroup.Queued),
-				Header(QueueGroup.Autoplay, 105L),
 				Row(5, 105L, QueueGroup.Autoplay),
-				Header(QueueGroup.Queued, 102L),
 				Row(2, 102L, QueueGroup.Queued),
-				Header(QueueGroup.Autoplay, 103L),
 				Row(3, 103L, QueueGroup.Autoplay)
 			),
 			items
@@ -424,6 +421,119 @@ class QueueGroupingTest {
 				playOrder = listOf(0, 4, 1, 6, 5, 2, 3), lastShown = listedUids(shown)
 			)
 		)
+	}
+
+	// ---- B-350: under shuffle everything after Now playing is one Up next, autoplay marked on its row ---- //
+
+	@Test
+	fun shuffledInterleavedStationGivesOneUpNextHeader() {
+		// s3 s4 s5 the station served, s1 s2 the user queued, s6 s7 neither (another device's top-up, a
+		// transfer's): they alternate in the order the player plays them.
+		val items = queueListItems(
+			ids(8), uids(8), currentIndex = 0, bound = station, userQueued = setOf("s1", "s2"),
+			playOrder = listOf(0, 4, 1, 6, 5, 2, 3, 7)
+		)
+		assertEquals(
+			listOf(
+				Header(QueueGroup.Playing, 100L),
+				Row(0, 100L, QueueGroup.Playing),
+				Header(QueueGroup.Next, 104L),
+				Row(4, 104L, QueueGroup.Autoplay),
+				Row(1, 101L, QueueGroup.Queued),
+				Row(6, 106L, QueueGroup.Next),
+				Row(5, 105L, QueueGroup.Autoplay),
+				Row(2, 102L, QueueGroup.Queued),
+				Row(3, 103L, QueueGroup.Autoplay),
+				Row(7, 107L, QueueGroup.Next)
+			),
+			items
+		)
+		// Rows played already stay unheaded, and the one header still comes after Now playing.
+		val later = queueListItems(
+			ids(8), uids(8), currentIndex = 1, bound = station, userQueued = setOf("s1", "s2"),
+			playOrder = listOf(0, 4, 1, 6, 5, 2, 3, 7)
+		)
+		assertEquals(
+			listOf(
+				Row(0, 100L, QueueGroup.Played),
+				Row(4, 104L, QueueGroup.Played),
+				Header(QueueGroup.Playing, 101L),
+				Row(1, 101L, QueueGroup.Playing),
+				Header(QueueGroup.Next, 106L),
+				Row(6, 106L, QueueGroup.Next),
+				Row(5, 105L, QueueGroup.Autoplay),
+				Row(2, 102L, QueueGroup.Queued),
+				Row(3, 103L, QueueGroup.Autoplay),
+				Row(7, 107L, QueueGroup.Next)
+			),
+			later
+		)
+	}
+
+	@Test
+	fun shuffledFallbackListingGivesOneHeader() {
+		val order = listOf(0, 4, 1, 5, 2, 3)
+		val shown = queueListItems(ids(6), uids(6), currentIndex = 0, bound = station, userQueued = setOf("s1", "s2"), playOrder = order)
+		// An order of seven songs against a mirror of six (a top-up a frame ahead of the mirror), and
+		// one of five (a swipe-remove): the listing on screen is kept, with its one upcoming header.
+		for (ahead in listOf(listOf(0, 4, 1, 6, 5, 2, 3), listOf(0, 4, 1, 2, 3))) {
+			val items = queueListItems(
+				ids(6), uids(6), currentIndex = 0, bound = station, userQueued = setOf("s1", "s2"),
+				playOrder = ahead, lastShown = listedUids(shown)
+			)
+			assertEquals(listOf(Header(QueueGroup.Playing, 100L), Header(QueueGroup.Next, 104L)), items.filterIsInstance<Header>())
+			assertEquals(listedUids(shown), listedUids(items))
+		}
+		// Nothing on screen yet: queue order, still one header, because the order says "shuffled".
+		val first = queueListItems(
+			ids(6), uids(6), currentIndex = 0, bound = station, userQueued = setOf("s1", "s2"),
+			playOrder = listOf(0, 4, 1, 6, 5, 2, 3)
+		)
+		assertEquals(listOf(Header(QueueGroup.Playing, 100L), Header(QueueGroup.Next, 101L)), first.filterIsInstance<Header>())
+	}
+
+	@Test
+	fun shuffledNoStationIsOneUpNext() {
+		val items = queueListItems(ids(5), uids(5), currentIndex = 1, bound = null, userQueued = emptySet(), playOrder = listOf(2, 1, 4, 0, 3))
+		assertEquals(
+			listOf(
+				Row(2, 102L, QueueGroup.Played),
+				Header(QueueGroup.Playing, 101L),
+				Row(1, 101L, QueueGroup.Playing),
+				Header(QueueGroup.Next, 104L),
+				Row(4, 104L, QueueGroup.Next),
+				Row(0, 100L, QueueGroup.Next),
+				Row(3, 103L, QueueGroup.Next)
+			),
+			items
+		)
+		// Nothing playing: all upcoming, one header on the first row. The last song playing: no header.
+		val nothing = queueListItems(ids(3), uids(3), currentIndex = -1, bound = null, userQueued = emptySet(), playOrder = listOf(1, 0, 2))
+		assertEquals(listOf(Header(QueueGroup.Next, 101L)), nothing.filterIsInstance<Header>())
+		val last = queueListItems(ids(3), uids(3), currentIndex = 2, bound = null, userQueued = emptySet(), playOrder = listOf(1, 0, 2))
+		assertEquals(listOf(Header(QueueGroup.Playing, 102L)), last.filterIsInstance<Header>())
+	}
+
+	@Test
+	fun unshuffledStationKeepsRuns() {
+		// Served songs after the user's, in queue order: today's Queued then Autoplay headers.
+		val items = queueListItems(ids(6), uids(6), currentIndex = 0, bound = station, userQueued = setOf("s1", "s2"))
+		assertEquals(
+			listOf(QueueGroup.Playing, QueueGroup.Queued, QueueGroup.Autoplay),
+			items.filterIsInstance<Header>().map { it.group }
+		)
+		// And the same with the player's own order of none, another device playing, or shuffle off.
+		assertEquals(items, queueListItems(ids(6), uids(6), 0, station, setOf("s1", "s2"), playOrder = queuePlayOrder(false, null)))
+		assertEquals(items, queueListItems(ids(6), uids(6), 0, station, setOf("s1", "s2"), playOrder = queuePlayOrder(true, listOf(0, 4, 1, 5, 2, 3))))
+	}
+
+	@Test
+	fun autoplayMarkOnlyWhenShuffled() {
+		fun row(group: QueueGroup) = Row(1, 101L, group)
+		for (group in QueueGroup.entries) {
+			assertEquals(group == QueueGroup.Autoplay, rowShowsAutoplayMark(row(group), shuffled = true), "shuffled $group")
+			assertFalse(rowShowsAutoplayMark(row(group), shuffled = false), "unshuffled $group")
+		}
 	}
 
 	// ---- Lane N review Minor 1: one trust rule for the list, the peek row and the drag ---------- //

@@ -173,6 +173,7 @@ import app.worbus.ui.screens.nowPlaying.staged.queuePlayOrder
 import app.worbus.ui.screens.nowPlaying.staged.queueReorderAllowed
 import app.worbus.ui.screens.nowPlaying.staged.remainingQueueIndices
 import app.worbus.ui.screens.nowPlaying.staged.rowRunPositions
+import app.worbus.ui.screens.nowPlaying.staged.rowShowsAutoplayMark
 import app.worbus.ui.screens.nowPlaying.viewmodels.NowPlayingViewModel
 import app.worbus.ui.util.DraggableListState
 import app.worbus.ui.util.Fold
@@ -222,6 +223,9 @@ internal fun QueueContent(layout: QueueLayout) {
 	// a shuffle order is not dragged (its neighbours on screen are not its neighbours in the queue).
 	val localPlayOrder by player.playOrder.collectAsStateWithLifecycle()
 	val listOrder = queuePlayOrder(isRemoteActive, localPlayOrder)
+	// B-350: "shuffled" is exactly what makes queueListItems take its shuffled branch (a non-null
+	// order), so the autoplay mark and the single "Up next" header never disagree for a frame.
+	val shuffled = listOrder != null
 	val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
 	val downloadedSongs by viewModel.downloadedSongs.collectAsStateWithLifecycle()
 	val queue = playerState.queue
@@ -397,12 +401,13 @@ internal fun QueueContent(layout: QueueLayout) {
 				.also { lastShownRef[0] = listedUids(it) }
 		}
 	} else emptyList()
-	// The sheet's rows: the same list without its headers (the sheet does not group).
+	// The sheet's rows: the same list without its headers (the sheet does not group). It still
+	// knows each row's group, for the autoplay mark under shuffle (B-350).
 	val sheetRows = if (!isLayer) {
 		val entries = displayQueue.toList()
-		remember(entries, playingIndex, listOrder) {
+		remember(entries, playingIndex, boundStation, userQueued, listOrder) {
 			queueListItems(
-				entries.map { it.song.id }, entries.map { it.uid }, playingIndex, bound = null, userQueued = emptySet(),
+				entries.map { it.song.id }, entries.map { it.uid }, playingIndex, boundStation, userQueued,
 				playOrder = listOrder, lastShown = lastShownRef[0]
 			).filterIsInstance<QueueListItem.Row>().also { lastShownRef[0] = listedUids(it) }
 		}
@@ -520,6 +525,7 @@ internal fun QueueContent(layout: QueueLayout) {
 			playingUid = displayQueue.getOrNull(playingIndex)?.uid,
 			isPaused = playerState.isPaused,
 			boundStation = boundStation,
+			shuffled = shuffled,
 			draggableState = draggableState,
 			dragEnabled = reorderAllowed,
 			countText = "$songsText • $totalDurationText",
@@ -764,7 +770,8 @@ internal fun QueueContent(layout: QueueLayout) {
 									else player.removeFromQueue(index)
 								},
 								isOffline = !isOnline,
-								isDownloaded = downloadedSongs.containsKey(song.id)
+								isDownloaded = downloadedSongs.containsKey(song.id),
+								autoplayMark = rowShowsAutoplayMark(row, shuffled)
 							)
 						}
 						if (queue.isEmpty()) {
@@ -919,7 +926,8 @@ internal fun QueueSaveControl(trigger: QueueSaveTrigger = DefaultQueueSaveTrigge
  * character chips (dimmed while autoplay is off, and still a tap that turns it on with that
  * character), the note that says what Off did, and at full only the Up next / Related switch and
  * the count with Clear. The rows are grouped by
- * who put them there ([queueListItems]); every row behaviour of the sheet is kept.
+ * who put them there ([queueListItems]; under shuffle one "Up next", autoplay rows marked, B-350);
+ * every row behaviour of the sheet is kept.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -932,6 +940,7 @@ private fun QueueLayerBody(
 	playingUid: Long?,
 	isPaused: Boolean,
 	boundStation: StationProvenance?,
+	shuffled: Boolean,
 	draggableState: DraggableListState,
 	dragEnabled: Boolean,
 	countText: String,
@@ -1160,7 +1169,8 @@ private fun QueueLayerBody(
 								onLongClick = { onRowLongClick(song) },
 								onRemove = { onRowRemove(queueIndexOf(item.uid)) },
 								isOffline = !isOnline,
-								isDownloaded = isDownloaded(song.id)
+								isDownloaded = isDownloaded(song.id),
+								autoplayMark = rowShowsAutoplayMark(item, shuffled)
 							)
 						}
 					}

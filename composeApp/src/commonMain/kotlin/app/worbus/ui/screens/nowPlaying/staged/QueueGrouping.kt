@@ -17,8 +17,11 @@ import app.worbus.shared.MediaPlayerViewModel
  *   before it is in `served`, another device's top-up, a transfer's) is "Up next" (audit L4a-04).
  * - "Up next": a queue no station is bound to (an album, a playlist, a hand-made queue).
  *
- * Groups are runs in the order listed (play order under shuffle, else queue order), not a
- * partition: a song the user adds after the autoplay run gets a second "Queued by you" header there.
+ * Unshuffled, groups are runs in queue order, not a partition: a song the user adds after the
+ * autoplay run gets a second "Queued by you" header there. Shuffled (a play order is given, B-350),
+ * the play order alternates the groups at random (a top-up lands anywhere in it), so a header per
+ * run drew a section for every switch: everything after "Now playing" is ONE "Up next" instead,
+ * each row keeps its own group, and the autoplay ones are marked on the row ([rowShowsAutoplayMark]).
  * Rows are keyed by the mirror's stable uid (a queue can hold one song twice) and headers by their
  * first row's uid, so a regroup does not replay animations.
  */
@@ -35,8 +38,11 @@ sealed interface QueueListItem {
 
 /**
  * The list the layer draws, in play order ([playOrder], the player's shuffle order, when it describes
- * this queue; else queue order): songs already played (no header), "Now playing", then runs of
- * "Queued by you" and "Autoplay" for a bound station's queue, or one "Up next" otherwise. Each row
+ * this queue; else queue order): songs already played (no header), "Now playing", then, for a bound
+ * station's queue, runs of "Queued by you" and "Autoplay", or one "Up next" otherwise. A non-null
+ * [playOrder] is "shuffled" (also while it is a frame ahead of the mirror and [lastShown] stands in
+ * for it): then every row after "Now playing" sits under ONE "Up next" header, whoever added it
+ * (B-350), and a row keeps its own group so the screen can mark the autoplay ones. Each row
  * keeps its QUEUE index and that index's uid, so a tap, a swipe or a remove acts on the song shown
  * (B-341, worbus-android#2: under shuffle "Up next" listed the queue, not what plays next). [songIds]
  * and [uids] are the mirror's, index for index. Null [playOrder] (no shuffle, another device playing:
@@ -80,7 +86,16 @@ fun queueListItems(
 			songIds[i] in userQueued -> QueueGroup.Queued
 			else -> QueueGroup.Next
 		}
-		if (group != QueueGroup.Played && group != previous) items += QueueListItem.Header(group, uids[i])
+		val headerGroup = when {
+			group == QueueGroup.Played -> null
+			// Shuffled: one header for everything upcoming, right after "Now playing" (or first, with
+			// nothing playing); never between two upcoming rows, whoever added them.
+			playOrder != null && group != QueueGroup.Playing ->
+				QueueGroup.Next.takeIf { previous == null || previous == QueueGroup.Playing || previous == QueueGroup.Played }
+			group != previous -> group
+			else -> null
+		}
+		if (headerGroup != null) items += QueueListItem.Header(headerGroup, uids[i])
 		items += QueueListItem.Row(i, uids[i], group)
 		previous = group
 	}
@@ -110,6 +125,13 @@ fun queueListOrder(count: Int, playOrder: List<Int>?, uids: List<Long> = emptyLi
 	for (i in 0 until count) if (!listed[i]) out += i
 	return out
 }
+
+/**
+ * Whether [row] wears the quiet "added by autoplay" mark: while the list is [shuffled] (the same
+ * value that makes [queueListItems] take its shuffled branch, a non-null play order), a row of the
+ * Autoplay group. Unshuffled, the group's own header already says it.
+ */
+fun rowShowsAutoplayMark(row: QueueListItem.Row, shuffled: Boolean): Boolean = shuffled && row.group == QueueGroup.Autoplay
 
 /** The uids of [items]' rows, in the order listed: what [queueListItems] keeps as `lastShown`. */
 fun listedUids(items: List<QueueListItem>): List<Long> = items.mapNotNull { (it as? QueueListItem.Row)?.uid }

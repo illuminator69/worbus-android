@@ -82,6 +82,7 @@ object SongRowDefaults {
  *
  * [trailing] appends a row-specific control (the queue's drag handle) after the cluster,
  * keeping its position stable no matter which status icons happen to be showing.
+ * [beforeDuration] puts a row-specific mark right before the duration (the queue's autoplay mark).
  */
 @Composable
 fun SongRowStatus(
@@ -94,6 +95,7 @@ fun SongRowStatus(
 	isPlaying: Boolean = false,
 	duration: Duration? = null,
 	durationColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+	beforeDuration: (@Composable () -> Unit)? = null,
 	trailing: (@Composable () -> Unit)? = null
 ) {
 	Row(
@@ -155,6 +157,7 @@ fun SongRowStatus(
 		if (isCurrentTrack) {
 			Waveform(isPlaying = isPlaying)
 		}
+		beforeDuration?.invoke()
 		if (duration != null) {
 			Text(
 				text = duration.toHoursMinutesSeconds(),

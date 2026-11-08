@@ -29,12 +29,14 @@ import worbus.composeapp.generated.resources.action_add_to_queue
 import worbus.composeapp.generated.resources.action_play_next
 import worbus.composeapp.generated.resources.action_remove_from_queue
 import worbus.composeapp.generated.resources.action_reorder
+import worbus.composeapp.generated.resources.queue_row_autoplay_mark
 import org.jetbrains.compose.resources.stringResource
 import app.worbus.data.database.entities.DownloadStatus
 import app.worbus.domain.models.DomainSong
 import app.worbus.icons.Icons
 import app.worbus.icons.outlined.Delete
 import app.worbus.icons.outlined.DragHandle
+import app.worbus.icons.outlined.PlaylistPlay
 import app.worbus.icons.outlined.Queue
 import app.worbus.icons.outlined.QueuePlayNext
 import app.worbus.ui.components.common.CoverArt
@@ -73,7 +75,13 @@ fun QueueScreenItem(
 	onRemove: () -> Unit,
 	dragEnabled: Boolean = true,
 	isOffline: Boolean = false,
-	isDownloaded: Boolean = false
+	isDownloaded: Boolean = false,
+	/**
+	 * B-350: a quiet mark before the duration for a song autoplay added, shown while the queue is
+	 * listed shuffled (its own section header is gone then). The screen reads
+	 * `rowShowsAutoplayMark`, nothing else.
+	 */
+	autoplayMark: Boolean = false
 ) {
 	val canPlay = !isOffline || isDownloaded
 
@@ -134,6 +142,7 @@ fun QueueScreenItem(
 				isPlaying = isPlaying,
 				canPlay = canPlay,
 				downloadStatus = if (isDownloaded) DownloadStatus.DOWNLOADED else null,
+				autoplayMark = autoplayMark,
 				elevation = elevation,
 				onClick = onClick,
 				onLongClick = onLongClick,
@@ -268,6 +277,7 @@ private fun QueueSongCard(
 	onLongClick: () -> Unit,
 	trailing: (@Composable () -> Unit)?,
 	downloadProgress: Float = 0f,
+	autoplayMark: Boolean = false,
 	elevation: Dp = 0.dp
 ) {
 	val color = SongRowDefaults.containerColor(isCurrentTrack)
@@ -311,6 +321,16 @@ private fun QueueSongCard(
 					isPlaying = isPlaying,
 					duration = song.duration,
 					durationColor = supportingContentColor,
+					beforeDuration = if (autoplayMark) {
+						{
+							Icon(
+								Icons.Outlined.PlaylistPlay,
+								contentDescription = stringResource(Res.string.queue_row_autoplay_mark),
+								modifier = Modifier.size(16.dp),
+								tint = MaterialTheme.colorScheme.onSurfaceVariant
+							)
+						}
+					} else null,
 					trailing = trailing
 				)
 			},
