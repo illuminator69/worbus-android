@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import app.worbus.domain.repositories.DbRepository
+import app.worbus.ui.screens.login.pages.sentenceResource
+import org.jetbrains.compose.resources.getString
 import app.worbus.ui.core.LoginUiState
 import app.worbus.util.Logger
 
@@ -39,12 +41,22 @@ class LoginManager(
     // not depend on this class, so the graph has no cycle.
     private val hubManager: HubManager,
     // Worbus P3 (design §6.4): after a login with no Worbus Server set, look beside Navidrome once.
-    private val hubFinder: HubFinder
+    // Worbus P7 (I-064): that look is the Worbus Server step's, shown before Home ([hubStep]).
+    private val hubFinder: HubFinder,
+    private val hubAuth: HubAuth,
+    private val preferenceManager: PreferenceManager
 ) {
 	val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
 	val loginState: StateFlow<LoginUiState>
 		field = MutableStateFlow<LoginUiState>(LoginUiState.Idle)
+
+	/**
+	 * Worbus P7 (I-064): the Worbus Server step after a login that left no server set, or null. The
+	 * login page shows it instead of going Home while it is here; [finishHubStep] lets Home follow.
+	 */
+	val hubStep: StateFlow<HubSignInStep?>
+		field = MutableStateFlow<HubSignInStep?>(null)
 
 	val instanceState = TextFieldState()
 	val usernameState = TextFieldState()
@@ -141,9 +153,10 @@ class LoginManager(
 				syncManager.firstPull { progress, message ->
 					loginState.value = LoginUiState.Syncing(progress, message)
 				}.onSuccess {
+					// The step goes up before Success, so the page never heads Home ahead of it.
+					if (!hubAddressSet(preferenceManager)) hubStep.value = newHubStep()
 					loginState.value = LoginUiState.Success
 					syncManager.startPeriodicSync()
-					hubFinder.startAutoLook(afterLogin = true)
 				}.onFailure { e ->
 					loginState.value = failure(e as? Exception ?: Exception(e), address.host)
 				}
@@ -175,7 +188,24 @@ class LoginManager(
 		return LoginUiState.Error(e, kind, host, blocked)
 	}
 
+	/** The Worbus Server step is over ([HubStepState.Done]): Home follows. */
+	fun finishHubStep() {
+		hubStep.value = null
+	}
+
+	private fun newHubStep() = HubSignInStep(
+		finder = hubFinder,
+		probe = KtorHubInfoProbe(),
+		auth = hubAuth,
+		preferenceManager = preferenceManager,
+		store = preferenceManager.serverRecordStore,
+		scope = scope,
+		onPaired = { hubManager.restart() },
+		words = { sentence, arg -> getString(sentenceResource(sentence), arg) }
+	)
+
 	fun logout() {
+		hubStep.value = null
 		loginState.value = LoginUiState.Idle
 		signInAgain = false
 		// B-279: the login form outlives the session (a singleton), and kept the password typed.

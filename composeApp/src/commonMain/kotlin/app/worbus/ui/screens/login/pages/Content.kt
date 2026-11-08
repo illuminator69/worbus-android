@@ -1,5 +1,9 @@
 package app.worbus.ui.screens.login.pages
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +59,8 @@ import worbus.composeapp.generated.resources.option_custom_headers
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import app.worbus.di.LocalNavStack
+import app.worbus.domain.manager.HubSignInStep
+import app.worbus.domain.manager.HubStepState
 import app.worbus.domain.manager.LoginManager
 import app.worbus.domain.manager.PermissionManager
 import app.worbus.icons.Icons
@@ -67,16 +73,11 @@ import app.worbus.ui.theme.defaultFont
 fun LoginScreenContent(innerPadding: PaddingValues) {
 	val viewModel = koinInject<LoginManager>()
 	val loginState by viewModel.loginState.collectAsStateWithLifecycle()
-
-	val instanceState = viewModel.instanceState
-	val usernameState = viewModel.usernameState
-	val passwordState = viewModel.passwordState
-
-	val isBusy = loginState is LoginUiState.Loading || loginState is LoginUiState.Syncing
+	// Worbus P7 (I-064): after a login that left no Worbus Server set, its step comes before Home.
+	val hubStep by viewModel.hubStep.collectAsStateWithLifecycle()
 
 	val haptics = LocalHapticFeedback.current
 	val backStack = LocalNavStack.current
-	val focusManager = LocalFocusManager.current
 
 	val instanceFocusRequester = remember { FocusRequester() }
 	val usernameFocusRequester = remember { FocusRequester() }
@@ -120,12 +121,68 @@ fun LoginScreenContent(innerPadding: PaddingValues) {
 		}
 	}
 
-	LaunchedEffect(loginState) {
-		if (loginState is LoginUiState.Success) {
+	LaunchedEffect(loginState, hubStep) {
+		if (loginState is LoginUiState.Success && hubStep == null) {
 			backStack.clear()
 			backStack.add(Screen.Home)
 		}
 	}
+
+	hubStep?.let { step ->
+		val stepState by step.state.collectAsStateWithLifecycle()
+		LaunchedEffect(stepState) {
+			if (stepState is HubStepState.Done) viewModel.finishHubStep()
+		}
+	}
+
+	// Once shown, the step stays until Home replaces the page: the form never comes back in between.
+	val stepShownRef = remember { arrayOfNulls<HubSignInStep>(1) }
+	if (loginState !is LoginUiState.Success) stepShownRef[0] = null
+	hubStep?.let { stepShownRef[0] = it }
+	val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+	AnimatedContent(
+		targetState = stepShownRef[0],
+		transitionSpec = { fadeIn(effectsSpec) togetherWith fadeOut(effectsSpec) },
+		label = "loginOrHubStep"
+	) { shownStep ->
+		if (shownStep != null) {
+			HubStepContent(step = shownStep, innerPadding = innerPadding)
+		} else {
+			LoginForm(
+				innerPadding = innerPadding,
+				viewModel = viewModel,
+				loginState = loginState,
+				login = login,
+				notificationsOff = notificationsOff,
+				onDismissNotificationsOff = { notificationsOff = false },
+				instanceFocusRequester = instanceFocusRequester,
+				usernameFocusRequester = usernameFocusRequester,
+				passwordFocusRequester = passwordFocusRequester
+			)
+		}
+	}
+}
+
+/** The login form: the page as it was before the Worbus Server step (P7) came after it. */
+@Composable
+private fun LoginForm(
+	innerPadding: PaddingValues,
+	viewModel: LoginManager,
+	loginState: LoginUiState,
+	login: () -> Unit,
+	notificationsOff: Boolean,
+	onDismissNotificationsOff: () -> Unit,
+	instanceFocusRequester: FocusRequester,
+	usernameFocusRequester: FocusRequester,
+	passwordFocusRequester: FocusRequester
+) {
+	val instanceState = viewModel.instanceState
+	val usernameState = viewModel.usernameState
+	val passwordState = viewModel.passwordState
+	val isBusy = loginState is LoginUiState.Loading || loginState is LoginUiState.Syncing
+	val backStack = LocalNavStack.current
+	val focusManager = LocalFocusManager.current
+	val permissionManager = koinInject<PermissionManager>()
 
 	Box {
 		LoginScreenProgress(
@@ -194,7 +251,7 @@ fun LoginScreenContent(innerPadding: PaddingValues) {
 							color = MaterialTheme.colorScheme.onSurfaceVariant,
 							modifier = Modifier.weight(1f)
 						)
-						IconButton(onClick = { notificationsOff = false }) {
+						IconButton(onClick = onDismissNotificationsOff) {
 							Icon(Icons.Outlined.Close, contentDescription = stringResource(Res.string.action_dismiss))
 						}
 					}

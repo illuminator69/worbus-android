@@ -38,7 +38,11 @@ class AnimatedContentKeyDriftTest {
 		// Worbus P2 (R34): the Server page's status line, and (re-walk NM1) its Sign in / Sign out
 		// slot. Each target is the words themselves (`ServerStatus`, equal for equal words; the
 		// action), so any change is new words and fades.
-		"ui/screens/settings/ServerScreen.kt" to 2
+		"ui/screens/settings/ServerScreen.kt" to 2,
+		// Worbus P7 (I-064): the Worbus Server step's layout (an enum: its own key), and the login
+		// page's form or step (the step object, replaced only by another login's step: new content).
+		"ui/screens/login/pages/HubStep.kt" to 1,
+		"ui/screens/login/pages/Content.kt" to 1
 	)
 
 	/** The argument list of each `AnimatedContent(` call in [text], by matching parentheses. */

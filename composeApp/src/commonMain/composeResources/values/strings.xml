@@ -1727,6 +1727,16 @@
 	<string name="address_add_hint">Add an address</string>
 	<string name="address_not_valid">That is not an address.</string>
 	<string name="finder_home_found">Home address found.</string>
+	<!-- Worbus P7 (I-064): the Worbus Server step after the Navidrome login -->
+	<string name="hub_step_found_title">Worbus Server found</string>
+	<string name="hub_step_found_body">At %1$s. Sign in to share playback across your devices.</string>
+	<string name="hub_step_not_found_title">No Worbus Server found</string>
+	<string name="hub_step_type_its_address">Type its address</string>
+	<string name="hub_step_no_answer_at">No Worbus Server answers at %1$s.</string>
+	<string name="hub_step_older">This Worbus Server is older than the app. Update it, then sign in from Settings.</string>
+	<string name="action_sign_in">Sign in</string>
+	<string name="action_skip">Skip</string>
+	<string name="action_continue">Continue</string>
 	<!-- Worbus P4 -->
 	<string name="action_share_logs">Share logs</string>
 	<plurals name="attention_imports_need_you">

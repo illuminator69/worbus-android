@@ -1,5 +1,6 @@
 package app.worbus.domain.manager
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -212,6 +213,30 @@ class HubFinder(
 			else -> FinderState.NothingBeside
 		}
 		log("looked beside Navidrome: ${candidates.size} candidates, ${found.size} found")
+		return found
+	}
+
+	/** The most [lookBeside] can take: each candidate's own probe timeout, one after the other. */
+	fun lookBesideBudgetMs(): Long =
+		candidatesFor(navidromeUrl()).mapNotNull { normaliseHubAddress(it) }.sumOf { probeTimeoutMs(it) }
+
+	/**
+	 * [lookBeside] within its own budget ([lookBesideBudgetMs]), for a caller that must not wait on a
+	 * probe that ignores its timeout (Worbus P7, the step after the login): null when the look did not
+	 * finish in it, which then stands as nothing found beside Navidrome. A look stopped by its caller
+	 * leaves no "Looking" behind.
+	 */
+	suspend fun lookBesideWithinBudget(): List<Found>? {
+		val found = try {
+			withTimeoutOrNull(lookBesideBudgetMs()) { lookBeside() }
+		} catch (e: CancellationException) {
+			if (_state.value == FinderState.Looking) _state.value = FinderState.Idle
+			throw e
+		}
+		if (found == null) {
+			_state.value = FinderState.NothingBeside
+			log("looked beside Navidrome: no answer within ${lookBesideBudgetMs()} ms")
+		}
 		return found
 	}
 
