@@ -46,8 +46,11 @@ sealed interface HubStepState {
 	/** A Worbus Server older than the app (the finder's 426, or a sign-in route it lacks) at [address]: Continue. */
 	data class OlderServer(val address: String) : HubStepState
 
-	/** Sign in was tapped and `POST /hub/signin` is out. Skip is still offered. */
-	data object SigningIn : HubStepState
+	/**
+	 * Sign in was tapped and `POST /hub/signin` is out, to the server offered at [address] (as [Found]
+	 * said it, so a screen drawn afresh, after a rotation, still says where). Skip is still offered.
+	 */
+	data class SigningIn(val address: String) : HubStepState
 
 	/** The step is over; Home follows. [paired]: this device signed in to the Worbus Server. */
 	data class Done(val paired: Boolean) : HubStepState
@@ -106,8 +109,8 @@ class HubSignInStep(
 				throw e
 			} catch (e: Exception) {
 				log("look failed: ${e::class.simpleName}")
-				null
-			}.orEmpty()
+				emptyList()
+			}
 			val server = found.filterIsInstance<Found.Server>().firstOrNull()
 			val older = found.filterIsInstance<Found.OlderAt>().firstOrNull()
 			_state.value = when {
@@ -124,10 +127,16 @@ class HubSignInStep(
 		if (ended) return
 		val shown = (_state.value as? HubStepState.Found)?.address ?: return
 		val (server, address) = offered ?: return
-		_state.value = HubStepState.SigningIn
+		_state.value = HubStepState.SigningIn(shown)
 		replaceJob {
-			signInToFound(preferenceManager, store, server, address) {}
-			stored = true
+			// Review Minor 4: kept only as far as signInToFound wrote it (it writes nothing for an address
+			// it cannot keep); with nothing written there is nothing to sign in with, nor to take back.
+			stored = signInToFound(preferenceManager, store, server, address) {}
+			if (!stored) {
+				_state.value = HubStepState.Found(shown, failure = SignInResult.NoAccount)
+				log("sign-in not asked: the address was not kept")
+				return@replaceJob
+			}
 			val result = try {
 				auth.signIn()
 			} catch (e: CancellationException) {
@@ -195,7 +204,9 @@ class HubSignInStep(
 	private suspend fun checkTyped(typed: String): HubStepState {
 		val candidate = typedHubCandidate(typed) ?: return HubStepState.Typing(words(HubStepSentence.NoAnswerAt, typed))
 		val timeout = probeTimeoutMs(candidate)
-		val outcome = withTimeoutOrNull(timeout) { probe.probe(candidate, timeout) } ?: InfoOutcome.Unreachable
+		// The probe's own timeout plus the slack the look has (review Minor 2): an answer on its way as
+		// the window closes is a server found, never "No Worbus Server answers".
+		val outcome = withTimeoutOrNull(timeout + PROBE_ANSWER_SLACK_MS) { probe.probe(candidate, timeout) } ?: InfoOutcome.Unreachable
 		log("typed address asked: ${outcome::class.simpleName}")
 		return when (val found = groupFound(listOf(candidate to outcome), olderCounts = true).firstOrNull()) {
 			is Found.Server -> offer(found, candidate)
@@ -231,16 +242,22 @@ class HubSignInStep(
 }
 
 /**
- * A typed address as the step asks it: one with no scheme and no port is on the Worbus Server's port
- * ("10.0.0.9" is `ws://10.0.0.9:4790`); anything else as [normaliseHubAddress] reads it (a reverse
- * proxy's `https://hub.example.com` stays on 443). Null when it does not normalise.
+ * A typed address as the step asks it: one with no port is on the Worbus Server's port when it is
+ * plain (no scheme, `http://` or `ws://`: "10.0.0.9" and "http://10.0.0.9" are both
+ * `ws://10.0.0.9:4790`, lane N review Minor 5); an encrypted one (`https://`, `wss://`) is a reverse
+ * proxy's and stays on 443; one with a port is taken as typed. Then as [normaliseHubAddress] reads it.
+ * Null when it does not normalise.
  */
 fun typedHubCandidate(raw: String): String? {
 	val text = raw.trim()
-	if ("://" in text) return normaliseHubAddress(text)
-	val slash = text.indexOf('/').let { if (it < 0) text.length else it }
-	val authority = text.substring(0, slash)
+	val schemeEnd = text.indexOf("://")
+	val start = if (schemeEnd < 0) 0 else schemeEnd + 3
+	val scheme = if (schemeEnd < 0) null else text.substring(0, schemeEnd).lowercase()
+	if (scheme != null && scheme != "http" && scheme != "ws") return normaliseHubAddress(text)
+	val rest = text.substring(start)
+	val end = rest.indexOfFirst { it == '/' || it == '?' || it == '#' }.let { if (it < 0) rest.length else it }
+	val authority = rest.substring(0, end)
 	val hostPort = authority.substringAfterLast('@')
 	val hasPort = if (hostPort.startsWith("[")) "]:" in hostPort else ':' in hostPort
-	return normaliseHubAddress(if (hasPort) text else "$authority:$HUB_PORT${text.substring(slash)}")
+	return normaliseHubAddress(if (hasPort) text else text.substring(0, start) + "$authority:$HUB_PORT" + rest.substring(end))
 }

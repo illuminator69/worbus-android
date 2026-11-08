@@ -271,6 +271,8 @@ fun notSetRows(state: FinderState): List<NotSetRow> = buildList {
  * is the same with its one address. One tap. Starting over is a server change (C1): the secret held
  * for whatever came before is forgotten first. An address the record would not keep (a plain-text one
  * on a public host, review I1) changes nothing: it is never laundered into `hubUrl` as typed.
+ * True when it wrote the record and ran [signIn] (Worbus P7 review Minor 4: the login's step keeps
+ * only what was written).
  */
 fun signInToFound(
 	preferenceManager: PreferenceManager,
@@ -278,20 +280,21 @@ fun signInToFound(
 	found: Found,
 	tapped: String,
 	signIn: () -> Unit
-) {
+): Boolean {
 	val addresses = when (found) {
 		is Found.Server -> listOf(tapped) + found.addresses
 		is Found.OlderAt -> listOf(found.address)
-		is Found.NotEncrypted -> return
+		is Found.NotEncrypted -> return false
 	}
-	val url = normaliseHubAddress(tapped) ?: return
+	val url = normaliseHubAddress(tapped) ?: return false
 	val kept = store.read().promptDismissed
 	val name = (found as? Found.Server)?.name?.ifBlank { null }
 	val record = addresses.fold(HubServerRecord(name = name, promptDismissed = kept)) { r, a -> r.withAddress(a, HubAddress.Source.Found) }
-	if (record.find(url) == null) return
+	if (record.find(url) == null) return false
 	store.startOver(record, hubUrl = url)
 	preferenceManager.hubEnabled = true
 	signIn()
+	return true
 }
 
 /**

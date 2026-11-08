@@ -80,7 +80,7 @@ private enum class HubStepLayout { Finding, Found, NotFound, Typing, Older }
 
 private fun layoutOf(state: HubStepState): HubStepLayout? = when (state) {
 	HubStepState.Finding -> HubStepLayout.Finding
-	is HubStepState.Found, HubStepState.SigningIn -> HubStepLayout.Found
+	is HubStepState.Found, is HubStepState.SigningIn -> HubStepLayout.Found
 	HubStepState.NotFound -> HubStepLayout.NotFound
 	is HubStepState.Typing -> HubStepLayout.Typing
 	is HubStepState.OlderServer -> HubStepLayout.Older
@@ -97,15 +97,24 @@ fun sentenceResource(sentence: HubStepSentence): StringResource = when (sentence
 fun HubStepContent(step: HubSignInStep, innerPadding: PaddingValues) {
 	val state by step.state.collectAsStateWithLifecycle()
 	val checking by step.checking.collectAsStateWithLifecycle()
-	// While signing in, the server that was found stays on screen (a holder: the state is what recomposes).
-	val lastFoundRef = remember { arrayOfNulls<HubStepState.Found>(1) }
-	(state as? HubStepState.Found)?.let { lastFoundRef[0] = it }
-	val lastFound = lastFoundRef[0]
+	// The server offered, from the state itself (Found, or SigningIn, which keeps its address: review
+	// Minor 3, a rotation while signing in redraws the "At …" line). Done keeps the last one on screen
+	// until Home replaces the page (a holder: the state is what recomposes).
+	val lastAddressRef = remember { arrayOfNulls<String>(1) }
+	when (val s = state) {
+		is HubStepState.Found -> lastAddressRef[0] = s.address
+		is HubStepState.SigningIn -> lastAddressRef[0] = s.address
+		else -> Unit
+	}
+	val offeredAddress = lastAddressRef[0]
+	val failure = (state as? HubStepState.Found)?.failure
 	// Done: the last layout stays, inert, until Home replaces the page.
 	val lastLayoutRef = remember { arrayOfNulls<HubStepLayout>(1) }
 	layoutOf(state)?.let { lastLayoutRef[0] = it }
 	val layout = lastLayoutRef[0] ?: HubStepLayout.Finding
-	val busy = state == HubStepState.Finding || state == HubStepState.SigningIn || checking
+	val busy = state == HubStepState.Finding || state is HubStepState.SigningIn || checking
+	// Saveable (`rememberTextFieldState` is `rememberSaveable` with TextFieldState's Saver): what was
+	// typed survives a rotation, which recreates the activity (review Minor 3).
 	val addressState = rememberTextFieldState()
 	val addressFocus = remember { FocusRequester() }
 
@@ -166,12 +175,12 @@ fun HubStepContent(step: HubSignInStep, innerPadding: PaddingValues) {
 							modifier = Modifier.padding(horizontal = 16.dp)
 						)
 
-						HubStepLayout.Found -> lastFound?.let { found ->
+						HubStepLayout.Found -> offeredAddress?.let { address ->
 							Text(
-								text = stringResource(Res.string.hub_step_found_body, shownAddress(found.address)),
+								text = stringResource(Res.string.hub_step_found_body, shownAddress(address)),
 								modifier = Modifier.padding(horizontal = 16.dp)
 							)
-							found.failure?.let(::statusOfSignIn)?.let { status ->
+							failure?.let(::statusOfSignIn)?.let { status ->
 								Spacer(Modifier.height(8.dp))
 								Text(
 									text = stringResource(status.line, *status.args.toTypedArray()),
@@ -236,7 +245,7 @@ fun HubStepContent(step: HubSignInStep, innerPadding: PaddingValues) {
 					Button(
 						modifier = Modifier.fillMaxWidth(),
 						onClick = onClick,
-						enabled = state != HubStepState.SigningIn && state !is HubStepState.Done && !checking &&
+						enabled = state !is HubStepState.SigningIn && state !is HubStepState.Done && !checking &&
 							(layout != HubStepLayout.Typing || addressState.text.isNotBlank()),
 						shape = ContinuousCapsule
 					) {

@@ -352,19 +352,100 @@ class QueueGroupingTest {
 
 	@Test
 	fun dragIsOffUnderShuffle() {
-		assertTrue(queueReorderAllowed(null))
-		assertTrue(queueReorderAllowed(listOf(0, 1, 2)))
-		assertFalse(queueReorderAllowed(listOf(0, 2, 1)))
+		assertTrue(queueReorderAllowed(3, null))
+		assertTrue(queueReorderAllowed(3, listOf(0, 1, 2)))
+		assertFalse(queueReorderAllowed(3, listOf(0, 2, 1)))
 	}
 
 	@Test
 	fun remainingCountsTheRowsAsListed() {
+		fun remaining(size: Int, current: Int, order: List<Int>?) =
+			remainingQueueIndices(queueListItems(ids(size), uids(size), current, bound = null, userQueued = emptySet(), playOrder = order))
 		// From the playing song on, in play order: the playing one and what comes after it.
-		assertEquals(listOf(3, 1, 4, 2), remainingQueueIndices(size = 5, currentIndex = 3, playOrder = listOf(0, 3, 1, 4, 2)))
-		assertEquals(listOf(2), remainingQueueIndices(size = 5, currentIndex = 2, playOrder = listOf(0, 3, 1, 4, 2)))
+		assertEquals(listOf(3, 1, 4, 2), remaining(5, 3, listOf(0, 3, 1, 4, 2)))
+		assertEquals(listOf(2), remaining(5, 2, listOf(0, 3, 1, 4, 2)))
 		// Queue order (no shuffle, another device, an order for another queue): today's count.
-		assertEquals(listOf(3, 4), remainingQueueIndices(size = 5, currentIndex = 3, playOrder = null))
-		assertEquals(listOf(3, 4), remainingQueueIndices(size = 5, currentIndex = 3, playOrder = listOf(1, 0)))
-		assertEquals(emptyList(), remainingQueueIndices(size = 0, currentIndex = 0, playOrder = null))
+		assertEquals(listOf(3, 4), remaining(5, 3, null))
+		assertEquals(listOf(3, 4), remaining(5, 3, listOf(1, 0)))
+		assertEquals(emptyList(), remaining(0, 0, null))
+	}
+
+	// ---- Lane N review I1: an order a step ahead of the mirror keeps the listing on screen ------- //
+
+	@Test
+	fun orderAStepAheadKeepsTheListing() {
+		val order = listOf(0, 3, 1, 4, 2)
+		val shown = queueListItems(ids(5), uids(5), currentIndex = 0, bound = null, userQueued = emptySet(), playOrder = order)
+		val lastShown = listedUids(shown)
+		assertEquals(listOf(100L, 103L, 101L, 104L, 102L), lastShown)
+		// An autoplay top-up: the player's order already holds six songs, the mirror still five. The
+		// list stays as it is on screen (it never falls back to queue order for a frame).
+		assertEquals(
+			shown,
+			queueListItems(ids(5), uids(5), currentIndex = 0, bound = null, userQueued = emptySet(), playOrder = listOf(0, 3, 5, 1, 4, 2), lastShown = lastShown)
+		)
+		// A swipe-remove of queue index 4: the order has four, the mirror five.
+		assertEquals(
+			shown,
+			queueListItems(ids(5), uids(5), currentIndex = 0, bound = null, userQueued = emptySet(), playOrder = listOf(0, 3, 1, 2), lastShown = lastShown)
+		)
+		// Its Remaining holds with it.
+		assertEquals(listOf(0, 3, 1, 4, 2), remainingQueueIndices(
+			queueListItems(ids(5), uids(5), currentIndex = 0, bound = null, userQueued = emptySet(), playOrder = listOf(0, 3, 1, 2), lastShown = lastShown)
+		))
+		// The mirror catches up: the new order, rows keyed as before.
+		val topUp = queueListItems(ids(6), uids(6), currentIndex = 0, bound = null, userQueued = emptySet(), playOrder = listOf(0, 3, 5, 1, 4, 2), lastShown = lastShown)
+		assertEquals(listOf(0, 3, 5, 1, 4, 2), topUp.filterIsInstance<Row>().map { it.index })
+		// The mirror moved first (the removed row gone, the order not yet republished): the rows still
+		// here keep their places, by uid, with their queue indices in this mirror.
+		val removed = queueListItems(
+			listOf("s0", "s1", "s2", "s3"), listOf(100L, 101L, 102L, 103L), currentIndex = 0, bound = null, userQueued = emptySet(),
+			playOrder = order, lastShown = lastShown
+		).filterIsInstance<Row>()
+		assertEquals(listOf(100L, 103L, 101L, 102L), removed.map { it.uid })
+		assertEquals(listOf(0, 3, 1, 2), removed.map { it.index })
+		// A row the listing never had goes after the rest until the order says where it plays.
+		val added = queueListItems(ids(6), uids(6), currentIndex = 0, bound = null, userQueued = emptySet(), playOrder = order, lastShown = lastShown)
+		assertEquals(listOf(0, 3, 1, 4, 2, 5), added.filterIsInstance<Row>().map { it.index })
+		// With nothing on screen yet, or without shuffle, nothing is kept: queue order, as before.
+		assertEquals(listOf(0, 1, 2, 3, 4), queueListItems(ids(5), uids(5), 0, null, emptySet(), playOrder = listOf(0, 3, 1, 2)).filterIsInstance<Row>().map { it.index })
+		assertEquals(listOf(0, 1, 2, 3, 4), queueListItems(ids(5), uids(5), 0, null, emptySet(), playOrder = null, lastShown = lastShown).filterIsInstance<Row>().map { it.index })
+	}
+
+	@Test
+	fun boundStationKeepsItsGroupsAStepAhead() {
+		val order = listOf(0, 4, 1, 5, 2, 3)
+		val shown = queueListItems(ids(6), uids(6), currentIndex = 0, bound = station, userQueued = setOf("s1", "s2"), playOrder = order)
+		// A top-up's order arrives before the mirror's seventh row: the groups and their headers stay.
+		assertEquals(
+			shown,
+			queueListItems(
+				ids(6), uids(6), currentIndex = 0, bound = station, userQueued = setOf("s1", "s2"),
+				playOrder = listOf(0, 4, 1, 6, 5, 2, 3), lastShown = listedUids(shown)
+			)
+		)
+	}
+
+	// ---- Lane N review Minor 1: one trust rule for the list, the peek row and the drag ---------- //
+
+	@Test
+	fun peekAndListReadOneTrustRule() {
+		// Four songs, an order of the right size that holds the playing one but is not an order of this
+		// queue (0 twice, 1 missing). The peek row and the list's first Up-next row must agree.
+		val malformed = listOf(2, 0, 0, 3)
+		val firstUpNext = queueListItems(ids(4), uids(4), currentIndex = 0, bound = null, userQueued = emptySet(), playOrder = malformed)
+			.filterIsInstance<Row>().first { it.group == QueueGroup.Next }.index
+		assertEquals(1, firstUpNext)
+		assertEquals(firstUpNext, peekRow(ids(4), currentIndex = 0, order = malformed))
+		assertEquals(listOf(1, 2), upcomingIndices(size = 4, currentIndex = 0, order = malformed, count = 2))
+	}
+
+	@Test
+	fun reorderReadsTheTrustedOrder() {
+		// Shuffle on and its order a step ahead of four rows: not draggable, whatever the order looks like.
+		assertFalse(queueReorderAllowed(4, listOf(0, 1, 2)))
+		assertFalse(queueReorderAllowed(4, listOf(0, 1, 1, 3)))
+		// This queue's order, in queue order: draggable.
+		assertTrue(queueReorderAllowed(4, listOf(0, 1, 2, 3)))
 	}
 }

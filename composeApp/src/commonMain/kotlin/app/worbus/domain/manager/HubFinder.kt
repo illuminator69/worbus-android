@@ -64,6 +64,13 @@ fun hubAddressSet(preferenceManager: PreferenceManager): Boolean = preferenceMan
 /** The port every candidate is asked on. */
 const val HUB_PORT = 4790
 
+/**
+ * What a bounded wait on a probe adds to the probe's own timeout (lane N review Minor 2): an answer
+ * already on its way as the probe's window closes (read, parsed) is waited for, not thrown away. The
+ * step after the login ends at its budget plus this at the latest.
+ */
+const val PROBE_ANSWER_SLACK_MS = 250L
+
 /** The sweep's numbers (Global Constraints): 32 at a time, 700 ms each, 10 s in all. */
 data class SweepLimits(val parallel: Int = 32, val perProbeMs: Long = 700, val capMs: Long = 10_000)
 
@@ -195,24 +202,39 @@ class HubFinder(
 	/** Candidates 1 and 2 only. Results, or NothingBeside. */
 	suspend fun lookBeside(): List<Found> {
 		_state.value = FinderState.Looking
-		val candidates = candidatesFor(navidromeUrl())
+		val look = BesideLook(candidatesFor(navidromeUrl()))
+		askBeside(look)
+		return endLook(look, "")
+	}
+
+	/** What a look beside Navidrome has gathered so far: each candidate's answer, in candidate order. */
+	private class BesideLook(val candidates: List<String>) {
+		val answers = ArrayList<Pair<String, InfoOutcome>>(candidates.size)
 		var skippedForPermission = false
-		val answers = candidates.mapNotNull { candidate ->
-			val address = normaliseHubAddress(candidate) ?: return@mapNotNull null
+	}
+
+	/** Ask each candidate in turn, adding each answer to [look] as it comes. */
+	private suspend fun askBeside(look: BesideLook) {
+		for (candidate in look.candidates) {
+			val address = normaliseHubAddress(candidate) ?: continue
 			// N6 walk: the permission's own test (B-108): loopback is never gated, a LAN host is.
 			if (!localNetworkGranted() && hubAddressHost(address)?.let { isPrivateHost(it) } == true) {
-				skippedForPermission = true
-				return@mapNotNull candidate to InfoOutcome.Unreachable
+				look.skippedForPermission = true
+				look.answers += candidate to InfoOutcome.Unreachable
+				continue
 			}
-			candidate to probe.probe(address, probeTimeoutMs(address))
+			look.answers += candidate to probe.probe(address, probeTimeoutMs(address))
 		}
-		val found = groupFound(answers, olderCounts = true)
+	}
+
+	private fun endLook(look: BesideLook, note: String): List<Found> {
+		val found = groupFound(look.answers, olderCounts = true)
 		_state.value = when {
 			found.isNotEmpty() -> FinderState.Results(found)
-			skippedForPermission -> FinderState.NeedsPermission
+			look.skippedForPermission -> FinderState.NeedsPermission
 			else -> FinderState.NothingBeside
 		}
-		log("looked beside Navidrome: ${candidates.size} candidates, ${found.size} found")
+		log("looked beside Navidrome: ${look.candidates.size} candidates, ${found.size} found$note")
 		return found
 	}
 
@@ -221,23 +243,23 @@ class HubFinder(
 		candidatesFor(navidromeUrl()).mapNotNull { normaliseHubAddress(it) }.sumOf { probeTimeoutMs(it) }
 
 	/**
-	 * [lookBeside] within its own budget ([lookBesideBudgetMs]), for a caller that must not wait on a
-	 * probe that ignores its timeout (Worbus P7, the step after the login): null when the look did not
-	 * finish in it, which then stands as nothing found beside Navidrome. A look stopped by its caller
-	 * leaves no "Looking" behind.
+	 * [lookBeside] within its own budget, for a caller that must not wait on a probe that ignores its
+	 * timeout (Worbus P7, the step after the login). The look ends at [budgetMs] plus
+	 * [PROBE_ANSWER_SLACK_MS] at the latest, and what the candidates answered by then is kept (lane N
+	 * review Minor 2): a server that answered stays found when a later candidate runs past its window,
+	 * and an answer still being read as its own window closes gets the slack. Nothing answered stands as
+	 * nothing found beside Navidrome. A look stopped by its caller leaves no "Looking" behind.
 	 */
-	suspend fun lookBesideWithinBudget(): List<Found>? {
-		val found = try {
-			withTimeoutOrNull(lookBesideBudgetMs()) { lookBeside() }
+	suspend fun lookBesideWithinBudget(budgetMs: Long = lookBesideBudgetMs()): List<Found> {
+		_state.value = FinderState.Looking
+		val look = BesideLook(candidatesFor(navidromeUrl()))
+		val finished = try {
+			withTimeoutOrNull(budgetMs + PROBE_ANSWER_SLACK_MS) { askBeside(look); true }
 		} catch (e: CancellationException) {
 			if (_state.value == FinderState.Looking) _state.value = FinderState.Idle
 			throw e
 		}
-		if (found == null) {
-			_state.value = FinderState.NothingBeside
-			log("looked beside Navidrome: no answer within ${lookBesideBudgetMs()} ms")
-		}
-		return found
+		return endLook(look, if (finished == null) ", the rest unanswered within ${budgetMs + PROBE_ANSWER_SLACK_MS} ms" else "")
 	}
 
 	/** Candidate 3, on a tap: the own /24 (Global Constraints' numbers). Results, NothingOnNetwork, NotOnWifi or NeedsPermission. */

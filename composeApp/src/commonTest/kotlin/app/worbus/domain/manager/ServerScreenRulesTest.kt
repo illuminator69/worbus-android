@@ -63,6 +63,23 @@ class ServerScreenRulesTest {
 	}
 
 	@Test
+	fun sign_in_to_found_says_whether_it_wrote() {
+		// Worbus P7 lane N review Minor 4: the login's step keeps only what this wrote.
+		prefs.hubUrl = ""
+		var signedIn = 0
+		assertTrue(signInToFound(prefs, store, Found.Server(idA, "Worbus Server", listOf("ws://192.168.1.20:4790")), "ws://192.168.1.20:4790") { signedIn++ })
+		assertEquals(1, signedIn)
+		prefs.hubUrl = ""
+		val before = store.read()
+		assertFalse(signInToFound(prefs, store, Found.NotEncrypted("ws://music.example.com:4790"), "ws://music.example.com:4790") { signedIn++ })
+		assertFalse(signInToFound(prefs, store, Found.Server(idA, "Worbus Server", listOf("ws://192.168.1.20:4790")), "not an address") { signedIn++ })
+		assertFalse(signInToFound(prefs, store, Found.OlderAt("ws://music.example.com:4790"), "ws://music.example.com:4790") { signedIn++ })
+		assertEquals(1, signedIn, "nothing written, no sign-in")
+		assertEquals("", prefs.hubUrl)
+		assertEquals(before, store.read())
+	}
+
+	@Test
 	fun sign_in_tap_saves_found_sets_url_and_enables() {
 		prefs.hubEnabled = false
 		store.write(HubServerRecord(addresses = listOf(HubAddress("ws://10.0.0.9:4790", HubAddress.Source.Typed, null)), promptDismissed = listOf("x")))

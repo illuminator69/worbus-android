@@ -119,7 +119,8 @@ class HubSignInStepTest {
 		// Offered, not yet kept: Skip here would leave Settings as it is.
 		assertEquals("", prefs.hubUrl)
 		s.signIn()
-		s.await { it == HubStepState.SigningIn }
+		// Review Minor 3: Signing in keeps the address offered, so a screen drawn afresh still says it.
+		assertEquals(HubStepState.SigningIn("http://192.168.1.20:4790"), s.await { it is HubStepState.SigningIn })
 		gate.complete(Unit)
 		assertEquals(HubStepState.Done(paired = true), s.await { it is HubStepState.Done })
 		assertEquals(listOf("http://192.168.1.20:4790/hub/signin"), transport.urls.toList(), "one POST /hub/signin")
@@ -152,6 +153,8 @@ class HubSignInStepTest {
 		assertEquals(HubStepState.NotFound, s.await(timeoutMs = budget + 3_000) { it != HubStepState.Finding })
 		val waited = (System.nanoTime() - started) / 1_000_000
 		assertTrue(waited >= budget - 50, "waited the finder's own budget ($budget ms), not less: $waited ms")
+		// And not much more: the budget plus the slack for an answer in flight (review Minor 2).
+		assertTrue(waited < budget + PROBE_ANSWER_SLACK_MS + 1_000, "bounded by $budget + $PROBE_ANSWER_SLACK_MS ms: $waited ms")
 		// Skip and Type its address are offered there; Skip ends the step with nothing paired.
 		s.skip()
 		assertEquals(HubStepState.Done(paired = false), s.await { it is HubStepState.Done })
@@ -222,9 +225,42 @@ class HubSignInStepTest {
 		// A sign-in that never answers: Skip still ends the step.
 		transport.reply = { awaitCancellation() }
 		s.signIn()
-		s.await { it == HubStepState.SigningIn }
+		s.await { it is HubStepState.SigningIn }
 		s.skip()
 		assertEquals(HubStepState.Done(paired = false), s.await { it is HubStepState.Done })
 		nothingStored()
+	}
+
+	// ---- Lane N review Minor 2 and 5: the typed address ---------------------------------------- //
+
+	@Test
+	fun typedAnswerJustPastItsWindowIsFound() = runBlocking<Unit> {
+		val probe = FakeProbe { InfoOutcome.Unreachable }
+		val s = step(probe)
+		s.await { it == HubStepState.NotFound }
+		s.typeAddress()
+		// The typed server's answer is on its way as its 1500 ms window closes (read 100 ms past it).
+		probe.answer = { base ->
+			kotlinx.coroutines.delay(PROBE_TIMEOUT_PRIVATE_MS + 100)
+			if (base == "ws://10.0.0.9:4790") InfoOutcome.Match(id, "Worbus Server") else InfoOutcome.Unreachable
+		}
+		s.submit("10.0.0.9")
+		assertEquals(HubStepState.Found("http://10.0.0.9:4790"), s.await { it is HubStepState.Found || (it is HubStepState.Typing && it.error != null) })
+	}
+
+	@Test
+	fun typedPlainAddressWithoutPortIsOnTheServersPort() {
+		assertEquals("ws://10.0.0.9:4790", typedHubCandidate("10.0.0.9"))
+		assertEquals("ws://192.168.1.20:4790", typedHubCandidate("http://192.168.1.20"))
+		assertEquals("ws://10.0.0.9:4790", typedHubCandidate("ws://10.0.0.9/"))
+		assertEquals("ws://box.lan:4790/hub", typedHubCandidate("HTTP://Box.lan/hub"))
+		assertEquals("ws://[fd00::5]:4790", typedHubCandidate("http://[fd00::5]"))
+		assertEquals("ws://10.0.0.9:4790", typedHubCandidate("10.0.0.9?x=1"))
+		// A port typed is the port asked; an encrypted address is a reverse proxy's, on 443.
+		assertEquals("ws://10.0.0.9:8080", typedHubCandidate("http://10.0.0.9:8080"))
+		assertEquals("wss://hub.example.com", typedHubCandidate("https://hub.example.com"))
+		assertEquals("wss://hub.example.com", typedHubCandidate("wss://hub.example.com/"))
+		assertEquals(null, typedHubCandidate("ftp://10.0.0.9"))
+		assertEquals(null, typedHubCandidate("http://"))
 	}
 }

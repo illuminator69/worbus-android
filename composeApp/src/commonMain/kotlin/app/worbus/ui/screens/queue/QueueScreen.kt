@@ -167,6 +167,7 @@ import app.worbus.domain.manager.characterChips
 import app.worbus.domain.models.settings.StationCharacter
 import app.worbus.ui.screens.nowPlaying.staged.QueueGroup
 import app.worbus.ui.screens.nowPlaying.staged.QueueListItem
+import app.worbus.ui.screens.nowPlaying.staged.listedUids
 import app.worbus.ui.screens.nowPlaying.staged.queueListItems
 import app.worbus.ui.screens.nowPlaying.staged.queuePlayOrder
 import app.worbus.ui.screens.nowPlaying.staged.queueReorderAllowed
@@ -221,7 +222,6 @@ internal fun QueueContent(layout: QueueLayout) {
 	// a shuffle order is not dragged (its neighbours on screen are not its neighbours in the queue).
 	val localPlayOrder by player.playOrder.collectAsStateWithLifecycle()
 	val listOrder = queuePlayOrder(isRemoteActive, localPlayOrder)
-	val reorderAllowed = queueReorderAllowed(listOrder)
 	val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
 	val downloadedSongs by viewModel.downloadedSongs.collectAsStateWithLifecycle()
 	val queue = playerState.queue
@@ -293,6 +293,10 @@ internal fun QueueContent(layout: QueueLayout) {
 	var layerDragging by remember { mutableStateOf(false) }
 	val groupedRef = remember { arrayOf<List<QueueListItem>>(emptyList()) }
 	val sheetRowsRef = remember { arrayOf<List<QueueListItem.Row>>(emptyList()) }
+	// The uids of the listing last built, in its order: kept while the player's order is a step ahead
+	// of the mirror (review I1, `queueListItems`' lastShown), so a size change under shuffle does not
+	// lay the list out in queue order for a frame.
+	val lastShownRef = remember { arrayOfNulls<List<Long>>(1) }
 
 	val haptic = LocalHapticFeedback.current
 	val draggableState = rememberDraggableListState(viewModel.listState) { from, to ->
@@ -389,19 +393,24 @@ internal fun QueueContent(layout: QueueLayout) {
 	val grouped = if (isLayer) {
 		val entries = displayQueue.toList()
 		remember(entries, groupingIndex, boundStation, userQueued, listOrder) {
-			queueListItems(entries.map { it.song.id }, entries.map { it.uid }, groupingIndex, boundStation, userQueued, listOrder)
+			queueListItems(entries.map { it.song.id }, entries.map { it.uid }, groupingIndex, boundStation, userQueued, listOrder, lastShownRef[0])
+				.also { lastShownRef[0] = listedUids(it) }
 		}
 	} else emptyList()
 	// The sheet's rows: the same list without its headers (the sheet does not group).
 	val sheetRows = if (!isLayer) {
 		val entries = displayQueue.toList()
 		remember(entries, playingIndex, listOrder) {
-			queueListItems(entries.map { it.song.id }, entries.map { it.uid }, playingIndex, bound = null, userQueued = emptySet(), playOrder = listOrder)
-				.filterIsInstance<QueueListItem.Row>()
+			queueListItems(
+				entries.map { it.song.id }, entries.map { it.uid }, playingIndex, bound = null, userQueued = emptySet(),
+				playOrder = listOrder, lastShown = lastShownRef[0]
+			).filterIsInstance<QueueListItem.Row>().also { lastShownRef[0] = listedUids(it) }
 		}
 	} else emptyList()
 	groupedRef[0] = grouped
 	sheetRowsRef[0] = sheetRows
+	// Drag by the same trust rule as the list (review Minor 1): not while it is listed in a shuffle order.
+	val reorderAllowed = queueReorderAllowed(displayQueue.size, listOrder)
 	val layerItems: List<QueueListItem> = if (layerDragging) layerDragItems else grouped
 
 	// Auto-scroll on a genuine TRACK CHANGE only — keyed on the song, not the index.
@@ -439,8 +448,9 @@ internal fun QueueContent(layout: QueueLayout) {
 	val preferenceManager = koinInject<PreferenceManager>()
 	val infoType = preferenceManager.queueInfoType
 	val fromIndex = playingIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
-	// Remaining: the playing song and the rows after it as listed (play order under shuffle).
-	val remaining = remember(queue.size, fromIndex, listOrder) { remainingQueueIndices(queue.size, fromIndex, listOrder) }
+	// Remaining: the playing song and the rows after it as listed (play order under shuffle, the listing
+	// on screen while the order is a step ahead), so the count holds with the rows. Mirror indices.
+	val remaining = remember(grouped, sheetRows) { remainingQueueIndices(if (isLayer) grouped else sheetRows) }
 	val songsText = when (infoType) {
 		QueueInfoType.Full -> pluralStringResource(Res.plurals.count_songs, queue.size, queue.size)
 		QueueInfoType.Remaining -> pluralStringResource(
@@ -454,7 +464,7 @@ internal fun QueueContent(layout: QueueLayout) {
 		if (infoType == QueueInfoType.Remaining) {
 			val current = queue.getOrNull(fromIndex)
 			val elapsedCurrent = (current?.duration?.inWholeMilliseconds ?: 0L) * playerState.progress
-			totalMillis = remaining.sumOf { queue[it].duration.inWholeMilliseconds } - elapsedCurrent.toLong()
+			totalMillis = remaining.sumOf { displayQueue.getOrNull(it)?.song?.duration?.inWholeMilliseconds ?: 0L } - elapsedCurrent.toLong()
 		}
 		val totalSeconds = totalMillis.coerceAtLeast(0L) / 1000
 		val hours = totalSeconds / 3600

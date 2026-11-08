@@ -371,4 +371,41 @@ class HubFinderTest {
 		assertTrue(request.endsWith("\n\n"), "no body")
 		for (s in listOf("hunter2", "legacy-token-value", "device-secret-value")) assertFalse(s in request)
 	}
+
+	// ---- Worbus P7 lane N review Minor 2: the bounded look keeps what was answered -------------- //
+
+	@Test
+	fun bounded_look_keeps_an_answer_in_flight() = runBlocking<Unit> {
+		// One candidate (Navidrome's IP host, 1500 ms). Its answer is on its way as the window closes:
+		// read 100 ms past it. Within the look's slack (PROBE_ANSWER_SLACK_MS), it is a server found.
+		val f = finder(FakeProbe { base ->
+			delay(PROBE_TIMEOUT_PRIVATE_MS + 100)
+			if (base == "ws://192.168.1.20:4790") InfoOutcome.Match(idA, "Worbus Server") else InfoOutcome.Unreachable
+		})
+		assertEquals(listOf<Found>(Found.Server(idA, "Worbus Server", listOf("ws://192.168.1.20:4790"))), f.lookBesideWithinBudget())
+		assertEquals(FinderState.Results(listOf(Found.Server(idA, "Worbus Server", listOf("ws://192.168.1.20:4790")))), f.state.value)
+		// One that never answers still ends: at the budget plus the slack, as nothing found.
+		val started = System.nanoTime()
+		val g = finder(FakeProbe { awaitCancellation() })
+		assertEquals(emptyList(), g.lookBesideWithinBudget())
+		val waited = (System.nanoTime() - started) / 1_000_000
+		assertTrue(waited < PROBE_TIMEOUT_PRIVATE_MS + PROBE_ANSWER_SLACK_MS + 500, "ended by its bound: $waited ms")
+		assertEquals(FinderState.NothingBeside, g.state.value)
+	}
+
+	@Test
+	fun bounded_look_keeps_answers_gathered_before_the_budget() = runBlocking<Unit> {
+		// Navidrome's host answers at once; the next candidate runs past its own window and the
+		// budget. The server already found stays found (a 300 ms budget keeps the test short).
+		navidrome = "https://music.example.com"
+		val f = finder(FakeProbe { base ->
+			when (base) {
+				"ws://music.example.com:4790" -> InfoOutcome.Unreachable
+				"wss://hub.example.com" -> InfoOutcome.Match(idA, "Worbus Server")
+				else -> awaitCancellation()
+			}
+		})
+		assertEquals(listOf<Found>(Found.Server(idA, "Worbus Server", listOf("wss://hub.example.com"))), f.lookBesideWithinBudget(budgetMs = 300))
+		assertEquals(FinderState.Results(listOf(Found.Server(idA, "Worbus Server", listOf("wss://hub.example.com")))), f.state.value)
+	}
 }
