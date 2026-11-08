@@ -17,8 +17,8 @@ import app.worbus.shared.MediaPlayerViewModel
  *   before it is in `served`, another device's top-up, a transfer's) is "Up next" (audit L4a-04).
  * - "Up next": a queue no station is bound to (an album, a playlist, a hand-made queue).
  *
- * Groups are runs in queue order, not a partition: a song the user adds after the autoplay run gets
- * a second "Queued by you" header there. Rows are keyed by the mirror's stable uid (a queue can hold
+ * Groups are runs in the order listed (play order under shuffle, else queue order), not a partition:
+ * a song the user adds after the autoplay run gets a second "Queued by you" header there. Rows are keyed by the mirror's stable uid (a queue can hold
  * one song twice) and headers by their first row's uid, so a regroup does not replay animations.
  */
 
@@ -33,30 +33,38 @@ sealed interface QueueListItem {
 }
 
 /**
- * The list the layer draws, in queue order: songs already played (no header), "Now playing", then
- * runs of "Queued by you" and "Autoplay" for a bound station's queue, or one "Up next" otherwise.
- * [songIds] and [uids] are the mirror's, index for index.
+ * The list the layer draws, in play order ([playOrder], the player's shuffle order, when it describes
+ * this queue; else queue order): songs already played (no header), "Now playing", then runs of
+ * "Queued by you" and "Autoplay" for a bound station's queue, or one "Up next" otherwise. Each row
+ * keeps its QUEUE index and that index's uid, so a tap, a swipe or a remove acts on the song shown
+ * (B-341, worbus-android#2: under shuffle "Up next" listed the queue, not what plays next). [songIds]
+ * and [uids] are the mirror's, index for index. Null [playOrder] (no shuffle, another device playing:
+ * [queuePlayOrder]) is today's list exactly.
  */
 fun queueListItems(
 	songIds: List<String>,
 	uids: List<Long>,
 	currentIndex: Int,
 	bound: StationProvenance?,
-	userQueued: Set<String>
+	userQueued: Set<String>,
+	playOrder: List<Int>? = null
 ): List<QueueListItem> {
 	val count = minOf(songIds.size, uids.size)
 	if (count == 0) return emptyList()
+	val order = queueListOrder(count, playOrder)
 	val playing = currentIndex.takeIf { it in 0 until count }
+	val playingAt = playing?.let { order.indexOf(it) }
 	// "Queued by you" only beside an autoplay group: with nothing upcoming the station's, the rest
-	// is one "Up next" (a station continued here after a transfer, or one Off emptied).
+	// is one "Up next" (a station continued here after a transfer, or one Off emptied). Upcoming in
+	// play order: under shuffle a song later in the queue may already have played.
 	val served = bound?.served?.toHashSet()?.takeIf { set ->
-		((playing?.plus(1) ?: 0) until count).any { songIds[it] in set }
+		order.subList((playingAt?.plus(1) ?: 0), count).any { songIds[it] in set }
 	}
 	val items = ArrayList<QueueListItem>(count + 4)
 	var previous: QueueGroup? = null
-	for (i in 0 until count) {
+	for ((at, i) in order.withIndex()) {
 		val group = when {
-			playing != null && i < playing -> QueueGroup.Played
+			playingAt != null && at < playingAt -> QueueGroup.Played
 			i == playing -> QueueGroup.Playing
 			served == null -> QueueGroup.Next
 			songIds[i] in served -> QueueGroup.Autoplay
@@ -68,6 +76,47 @@ fun queueListItems(
 		previous = group
 	}
 	return items
+}
+
+/**
+ * The queue indices in the order the layer lists them: [playOrder] when it is an order of exactly
+ * these [count] songs (a frame behind, or a mirror mid-rebuild, it is not trusted), else queue order.
+ */
+fun queueListOrder(count: Int, playOrder: List<Int>?): List<Int> =
+	if (playOrder != null && isOrderOf(count, playOrder)) playOrder else (0 until count).toList()
+
+/** [order] holds each of 0 until [count] exactly once. */
+private fun isOrderOf(count: Int, order: List<Int>): Boolean {
+	if (order.size != count) return false
+	val seen = BooleanArray(count)
+	for (i in order) {
+		if (i !in 0 until count || seen[i]) return false
+		seen[i] = true
+	}
+	return true
+}
+
+/**
+ * The play order the queue lists by: the LOCAL player's ([playOrder], null without shuffle), and
+ * none while another device plays, whose queue the local order says nothing about. The peek row and
+ * the queue's list read the same value.
+ */
+fun queuePlayOrder(isRemoteActive: Boolean, playOrder: List<Int>?): List<Int>? = if (isRemoteActive) null else playOrder
+
+/**
+ * Whether the queue's rows may be dragged: not while it is listed in a shuffle order. A drag moves a
+ * row among its neighbours on screen, and under shuffle those are not its neighbours in the queue.
+ */
+fun queueReorderAllowed(playOrder: List<Int>?): Boolean = playOrder == null || playOrder.indices.all { playOrder[it] == it }
+
+/**
+ * The queue indices the Remaining count and duration add up: the playing song and every row after it
+ * as listed ([queueListOrder]), nothing for an index outside the queue.
+ */
+fun remainingQueueIndices(size: Int, currentIndex: Int, playOrder: List<Int>?): List<Int> {
+	if (currentIndex !in 0 until size) return emptyList()
+	val order = queueListOrder(size, playOrder)
+	return order.drop(order.indexOf(currentIndex))
 }
 
 /**
@@ -146,3 +195,4 @@ fun userQueuedAfterQueueChange(
 	queueId: String?,
 	queueEmpty: Boolean
 ): Set<String> = if (queueEmpty || (previousQueueId != null && previousQueueId != queueId)) emptySet() else current
+

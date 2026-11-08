@@ -6,7 +6,9 @@ import app.worbus.ui.screens.nowPlaying.staged.QueueListItem.Header
 import app.worbus.ui.screens.nowPlaying.staged.QueueListItem.Row
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * The staged queue's rows (P2, `QueueGrouping.kt`): grouped by who put them there, keyed by the
@@ -242,5 +244,127 @@ class QueueGroupingTest {
 		assertEquals(listOf(1, 2), upcomingIndices(size = 4, currentIndex = 0, order = listOf(1, 0), count = 2))
 		assertEquals(listOf(1, 2, 3), upcomingIndices(size = 4, currentIndex = 0, order = null, count = 9))
 		assertEquals(emptyList(), upcomingIndices(size = 4, currentIndex = 7, order = null, count = 2))
+	}
+
+	// ---- B-341 (worbus-android#2): the layer under shuffle lists what plays next ---------------- //
+
+	@Test
+	fun shuffledUpNextFollowsPlayOrder() {
+		val items = queueListItems(ids(5), uids(5), currentIndex = 0, bound = null, userQueued = emptySet(), playOrder = listOf(0, 3, 1, 4, 2))
+		assertEquals(listOf(3, 1, 4, 2), items.filterIsInstance<Row>().filter { it.group == QueueGroup.Next }.map { it.index })
+		assertEquals(
+			listOf(
+				Header(QueueGroup.Playing, 100L),
+				Row(0, 100L, QueueGroup.Playing),
+				Header(QueueGroup.Next, 103L),
+				Row(3, 103L, QueueGroup.Next),
+				Row(1, 101L, QueueGroup.Next),
+				Row(4, 104L, QueueGroup.Next),
+				Row(2, 102L, QueueGroup.Next)
+			),
+			items
+		)
+	}
+
+	@Test
+	fun shuffledRowsKeepQueueIndex() {
+		val order = listOf(0, 3, 1, 4, 2)
+		// The playing song is queue index 3, at play-order position 1.
+		val rows = queueListItems(ids(5), uids(5), currentIndex = 3, bound = null, userQueued = emptySet(), playOrder = order)
+			.filterIsInstance<Row>()
+		// Listed in play order, each row still names its queue index, and its key is that index's uid:
+		// a tap or a swipe (both go by the row's uid to the mirror's index) acts on the song shown.
+		assertEquals(order, rows.map { it.index })
+		rows.forEach { assertEquals(uids(5)[it.index], it.uid) }
+		val firstUpNext = rows.first { it.group == QueueGroup.Next }
+		assertEquals(order[order.indexOf(3) + 1], firstUpNext.index)
+		assertEquals(1, firstUpNext.index)
+	}
+
+	@Test
+	fun shuffledPlayedRowsFollowPlayOrder() {
+		val order = listOf(2, 4, 0, 1, 3)
+		val rows = queueListItems(ids(5), uids(5), currentIndex = 0, bound = null, userQueued = emptySet(), playOrder = order)
+			.filterIsInstance<Row>()
+		assertEquals(order.subList(0, 2), rows.filter { it.group == QueueGroup.Played }.map { it.index })
+		assertEquals(listOf(0), rows.filter { it.group == QueueGroup.Playing }.map { it.index })
+		assertEquals(listOf(1, 3), rows.filter { it.group == QueueGroup.Next }.map { it.index })
+	}
+
+	@Test
+	fun remoteListsInQueueOrder() {
+		// Another device plays: the local player's shuffle order says nothing about that queue.
+		val order = queuePlayOrder(isRemoteActive = true, playOrder = listOf(0, 3, 1, 4, 2))
+		assertNull(order)
+		val queueOrder = listOf(
+			Row(0, 100L, QueueGroup.Played),
+			Header(QueueGroup.Playing, 101L),
+			Row(1, 101L, QueueGroup.Playing),
+			Header(QueueGroup.Next, 102L),
+			Row(2, 102L, QueueGroup.Next),
+			Row(3, 103L, QueueGroup.Next),
+			Row(4, 104L, QueueGroup.Next)
+		)
+		assertEquals(queueOrder, queueListItems(ids(5), uids(5), currentIndex = 1, bound = null, userQueued = emptySet(), playOrder = order))
+		assertEquals(queueOrder, queueListItems(ids(5), uids(5), currentIndex = 1, bound = null, userQueued = emptySet()))
+		// This device plays: its own order is used.
+		assertEquals(listOf(0, 3, 1, 4, 2), queuePlayOrder(isRemoteActive = false, playOrder = listOf(0, 3, 1, 4, 2)))
+		// An order for another queue (a frame behind, a mirror mid-rebuild) is not trusted: queue order.
+		assertEquals(queueOrder, queueListItems(ids(5), uids(5), currentIndex = 1, bound = null, userQueued = emptySet(), playOrder = listOf(1, 0, 2)))
+		assertEquals(queueOrder, queueListItems(ids(5), uids(5), currentIndex = 1, bound = null, userQueued = emptySet(), playOrder = listOf(0, 1, 1, 3, 4)))
+	}
+
+	@Test
+	fun boundStationGroupsUnderShuffle() {
+		// s3 s4 s5 the station served, s1 s2 the user queued; played in the order 0 4 1 5 2 3.
+		val items = queueListItems(
+			ids(6), uids(6), currentIndex = 0, bound = station, userQueued = setOf("s1", "s2"),
+			playOrder = listOf(0, 4, 1, 5, 2, 3)
+		)
+		assertEquals(
+			listOf(
+				Header(QueueGroup.Playing, 100L),
+				Row(0, 100L, QueueGroup.Playing),
+				Header(QueueGroup.Autoplay, 104L),
+				Row(4, 104L, QueueGroup.Autoplay),
+				Header(QueueGroup.Queued, 101L),
+				Row(1, 101L, QueueGroup.Queued),
+				Header(QueueGroup.Autoplay, 105L),
+				Row(5, 105L, QueueGroup.Autoplay),
+				Header(QueueGroup.Queued, 102L),
+				Row(2, 102L, QueueGroup.Queued),
+				Header(QueueGroup.Autoplay, 103L),
+				Row(3, 103L, QueueGroup.Autoplay)
+			),
+			items
+		)
+		// "Queued by you" only beside an autoplay group still counts what is upcoming in play order:
+		// the station's one song already played (s3, last in the queue) makes no group.
+		val playedFirst = queueListItems(
+			ids(4), uids(4), currentIndex = 0, bound = station.copy(served = listOf("s3")), userQueued = setOf("s1"),
+			playOrder = listOf(3, 0, 1, 2)
+		)
+		assertEquals(
+			listOf(QueueGroup.Played, QueueGroup.Playing, QueueGroup.Next, QueueGroup.Next),
+			playedFirst.filterIsInstance<Row>().map { it.group }
+		)
+	}
+
+	@Test
+	fun dragIsOffUnderShuffle() {
+		assertTrue(queueReorderAllowed(null))
+		assertTrue(queueReorderAllowed(listOf(0, 1, 2)))
+		assertFalse(queueReorderAllowed(listOf(0, 2, 1)))
+	}
+
+	@Test
+	fun remainingCountsTheRowsAsListed() {
+		// From the playing song on, in play order: the playing one and what comes after it.
+		assertEquals(listOf(3, 1, 4, 2), remainingQueueIndices(size = 5, currentIndex = 3, playOrder = listOf(0, 3, 1, 4, 2)))
+		assertEquals(listOf(2), remainingQueueIndices(size = 5, currentIndex = 2, playOrder = listOf(0, 3, 1, 4, 2)))
+		// Queue order (no shuffle, another device, an order for another queue): today's count.
+		assertEquals(listOf(3, 4), remainingQueueIndices(size = 5, currentIndex = 3, playOrder = null))
+		assertEquals(listOf(3, 4), remainingQueueIndices(size = 5, currentIndex = 3, playOrder = listOf(1, 0)))
+		assertEquals(emptyList(), remainingQueueIndices(size = 0, currentIndex = 0, playOrder = null))
 	}
 }

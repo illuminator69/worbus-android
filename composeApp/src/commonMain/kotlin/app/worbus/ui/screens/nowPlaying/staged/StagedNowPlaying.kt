@@ -371,7 +371,7 @@ fun StagedNowPlaying() {
 		}
 		if (!isPlayerCurrent) return@Box
 
-		val next = peekRow(playerState.queue.map { it.id }, playerState.currentIndex, if (isRemoteActive) null else playOrder)
+		val next = peekRow(playerState.queue.map { it.id }, playerState.currentIndex, queuePlayOrder(isRemoteActive, playOrder))
 			?.let { playerState.queue.getOrNull(it) }
 		StagedQueueLayer(
 			state = queueState,

@@ -168,6 +168,9 @@ import app.worbus.domain.models.settings.StationCharacter
 import app.worbus.ui.screens.nowPlaying.staged.QueueGroup
 import app.worbus.ui.screens.nowPlaying.staged.QueueListItem
 import app.worbus.ui.screens.nowPlaying.staged.queueListItems
+import app.worbus.ui.screens.nowPlaying.staged.queuePlayOrder
+import app.worbus.ui.screens.nowPlaying.staged.queueReorderAllowed
+import app.worbus.ui.screens.nowPlaying.staged.remainingQueueIndices
 import app.worbus.ui.screens.nowPlaying.staged.rowRunPositions
 import app.worbus.ui.screens.nowPlaying.viewmodels.NowPlayingViewModel
 import app.worbus.ui.util.DraggableListState
@@ -213,6 +216,12 @@ internal fun QueueContent(layout: QueueLayout) {
 	val hubManager = koinInject<HubManager>()
 	val isRemoteActive by hubManager.isRemoteActive.collectAsState()
 	val playerState by player.steadyState.collectAsStateWithLifecycle()
+	// B-341 (worbus-android#2): both layouts list the queue in the order it will play, the same order
+	// the peek row reads; none while another device plays. Rows keep their queue index, and a list in
+	// a shuffle order is not dragged (its neighbours on screen are not its neighbours in the queue).
+	val localPlayOrder by player.playOrder.collectAsStateWithLifecycle()
+	val listOrder = queuePlayOrder(isRemoteActive, localPlayOrder)
+	val reorderAllowed = queueReorderAllowed(listOrder)
 	val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
 	val downloadedSongs by viewModel.downloadedSongs.collectAsStateWithLifecycle()
 	val queue = playerState.queue
@@ -283,6 +292,7 @@ internal fun QueueContent(layout: QueueLayout) {
 	val layerDragItems = remember { mutableStateListOf<QueueListItem>() }
 	var layerDragging by remember { mutableStateOf(false) }
 	val groupedRef = remember { arrayOf<List<QueueListItem>>(emptyList()) }
+	val sheetRowsRef = remember { arrayOf<List<QueueListItem.Row>>(emptyList()) }
 
 	val haptic = LocalHapticFeedback.current
 	val draggableState = rememberDraggableListState(viewModel.listState) { from, to ->
@@ -378,11 +388,20 @@ internal fun QueueContent(layout: QueueLayout) {
 	else playingIndex
 	val grouped = if (isLayer) {
 		val entries = displayQueue.toList()
-		remember(entries, groupingIndex, boundStation, userQueued) {
-			queueListItems(entries.map { it.song.id }, entries.map { it.uid }, groupingIndex, boundStation, userQueued)
+		remember(entries, groupingIndex, boundStation, userQueued, listOrder) {
+			queueListItems(entries.map { it.song.id }, entries.map { it.uid }, groupingIndex, boundStation, userQueued, listOrder)
+		}
+	} else emptyList()
+	// The sheet's rows: the same list without its headers (the sheet does not group).
+	val sheetRows = if (!isLayer) {
+		val entries = displayQueue.toList()
+		remember(entries, playingIndex, listOrder) {
+			queueListItems(entries.map { it.song.id }, entries.map { it.uid }, playingIndex, bound = null, userQueued = emptySet(), playOrder = listOrder)
+				.filterIsInstance<QueueListItem.Row>()
 		}
 	} else emptyList()
 	groupedRef[0] = grouped
+	sheetRowsRef[0] = sheetRows
 	val layerItems: List<QueueListItem> = if (layerDragging) layerDragItems else grouped
 
 	// Auto-scroll on a genuine TRACK CHANGE only — keyed on the song, not the index.
@@ -409,7 +428,7 @@ internal fun QueueContent(layout: QueueLayout) {
 				val target = if (isLayer) {
 					groupedRef[0].indexOfFirst { it is QueueListItem.Header && it.group == QueueGroup.Playing }
 						.coerceAtLeast(0)
-				} else playingIndex.coerceAtLeast(0)
+				} else sheetRowsRef[0].indexOfFirst { it.index == playingIndex }.coerceAtLeast(0)
 				draggableState.listState.scrollToItem(target)
 			}
 		}
@@ -420,21 +439,22 @@ internal fun QueueContent(layout: QueueLayout) {
 	val preferenceManager = koinInject<PreferenceManager>()
 	val infoType = preferenceManager.queueInfoType
 	val fromIndex = playingIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0))
+	// Remaining: the playing song and the rows after it as listed (play order under shuffle).
+	val remaining = remember(queue.size, fromIndex, listOrder) { remainingQueueIndices(queue.size, fromIndex, listOrder) }
 	val songsText = when (infoType) {
 		QueueInfoType.Full -> pluralStringResource(Res.plurals.count_songs, queue.size, queue.size)
 		QueueInfoType.Remaining -> pluralStringResource(
 			Res.plurals.count_remaining_songs,
-			queue.size - fromIndex,
-			queue.size - fromIndex
+			remaining.size,
+			remaining.size
 		)
 	}
-	val durationText = remember(queue, infoType, fromIndex, playerState.progress) {
+	val durationText = remember(queue, infoType, remaining, playerState.progress) {
 		var totalMillis = queue.sumOf { it.duration.inWholeMilliseconds }
 		if (infoType == QueueInfoType.Remaining) {
-			val pastMillis = queue.take(fromIndex).sumOf { it.duration.inWholeMilliseconds }
 			val current = queue.getOrNull(fromIndex)
 			val elapsedCurrent = (current?.duration?.inWholeMilliseconds ?: 0L) * playerState.progress
-			totalMillis -= pastMillis + elapsedCurrent.toLong()
+			totalMillis = remaining.sumOf { queue[it].duration.inWholeMilliseconds } - elapsedCurrent.toLong()
 		}
 		val totalSeconds = totalMillis.coerceAtLeast(0L) / 1000
 		val hours = totalSeconds / 3600
@@ -491,6 +511,7 @@ internal fun QueueContent(layout: QueueLayout) {
 			isPaused = playerState.isPaused,
 			boundStation = boundStation,
 			draggableState = draggableState,
+			dragEnabled = reorderAllowed,
 			countText = "$songsText • $totalDurationText",
 			onToggleCount = {
 				preferenceManager.queueInfoType = when (infoType) {
@@ -693,20 +714,24 @@ internal fun QueueContent(layout: QueueLayout) {
 					) {
 						draggableItemsIndexed(
 							state = draggableState,
-							items = displayQueue,
-							key = { _, entry -> entry.uid }
-						) { index, entry, isDragging ->
-							val song = entry.song
+							items = sheetRows,
+							key = { _, row -> row.uid }
+						) { position, row, isDragging ->
+							// The row's queue index (its place in the list only in queue order), by its uid
+							// should the mirror have moved since the rows were listed.
+							val index = if (displayQueue.getOrNull(row.index)?.uid == row.uid) row.index
+							else displayQueue.indexOfFirst { it.uid == row.uid }
+							val song = displayQueue.getOrNull(index)?.song ?: return@draggableItemsIndexed
 							QueueScreenItem(
-								index = index,
-								dragKey = entry.uid,
+								index = position,
+								dragKey = row.uid,
 								count = queue.count(),
 								song = song,
 								isPlaying = playingIndex == index && !playerState.isPaused,
 								isSelected = playingIndex == index,
 								isDragging = isDragging,
 								draggableState = draggableState,
-								dragEnabled = true,
+								dragEnabled = reorderAllowed,
 								onClick = {
 									platformContext.clickSound()
 									if (playingIndex != index) {
@@ -898,6 +923,7 @@ private fun QueueLayerBody(
 	isPaused: Boolean,
 	boundStation: StationProvenance?,
 	draggableState: DraggableListState,
+	dragEnabled: Boolean,
 	countText: String,
 	onToggleCount: () -> Unit,
 	onClear: () -> Unit,
@@ -1119,7 +1145,7 @@ private fun QueueLayerBody(
 								isSelected = current,
 								isDragging = isDragging,
 								draggableState = draggableState,
-								dragEnabled = true,
+								dragEnabled = dragEnabled,
 								onClick = { onRowClick(queueIndexOf(item.uid), song) },
 								onLongClick = { onRowLongClick(song) },
 								onRemove = { onRowRemove(queueIndexOf(item.uid)) },
