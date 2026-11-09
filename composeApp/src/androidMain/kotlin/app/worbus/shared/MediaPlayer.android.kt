@@ -1504,6 +1504,9 @@ class AndroidMediaPlayerViewModel(
 		return shows
 	}
 
+	/** The queue whose tags the gain processor last got ([applyAudioGain]). */
+	private var gainQueue: List<DomainSong>? = null
+
 	/** The last disagreement [updatePlaybackState] logged (B-155), so each is said once. */
 	private var lastDisagreement: String? = null
 
@@ -1591,6 +1594,12 @@ class AndroidMediaPlayerViewModel(
 	override fun applyAudioGain() {
 		val state = _uiState.value
 		val song = state.currentSong
+		// B-282: the queue's tags, for the processor to give a new stream its own gain at the item
+		// boundary on the playback thread, before this (main-thread) call names the new song.
+		if (state.queue !== gainQueue) {
+			gainQueue = state.queue
+			audioGainManager.setQueueTags(state.queue.associate { it.id to it.replayGain })
+		}
 		audioGainManager.update(
 			withReplayGain = preferenceManager.rgAmpGain,
 			withoutReplayGain = preferenceManager.ampGain,

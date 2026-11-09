@@ -266,7 +266,7 @@ class AudioGainProcessorTest {
 		val p = processor()
 		val queue = listOf("a", "b", "c")
 		p.setQueueTags(mapOf("a" to rg(track = -6f), "b" to rg(track = 3f), "c" to null))
-		p.update(0f, 0f, rg(track = -6f), ReplayGainMode.Track, mediaId = "a")
+		p.update(0f, 0f, rg(track = -6f), ReplayGainMode.Track)
 		assertEquals(db(-6f), p.linearGain, 0.0001f)
 
 		p.flush(boundaryTo(queue, 1))
@@ -274,10 +274,10 @@ class AudioGainProcessorTest {
 		val half = (0.5f * Short.MAX_VALUE).toInt().toShort()
 		assertEquals((half * db(3f)).roundToInt().toShort(), run(p, shortArrayOf(half, half))[0], "no ramp from a's gain")
 
-		// main's update for b, half a second later, changes nothing; nor does a late one still for a
-		p.update(0f, 0f, rg(track = 3f), ReplayGainMode.Track, mediaId = "b")
+		// main's update for b, half a second later, changes nothing; nor does a late one still naming a
+		p.update(0f, 0f, rg(track = 3f), ReplayGainMode.Track)
 		assertEquals(db(3f), p.linearGain, 0.0001f)
-		p.update(0f, 0f, rg(track = -6f), ReplayGainMode.Track, mediaId = "a")
+		p.update(0f, 0f, rg(track = -6f), ReplayGainMode.Track)
 		assertEquals(db(3f), p.linearGain, 0.0001f, "an update for a song that is not the stream's does not take its gain back")
 
 		// c has no tags: the plain amplifier (0 dB here), not b's gain
@@ -290,9 +290,9 @@ class AudioGainProcessorTest {
 		val p = processor()
 		p.setQueueTags(mapOf("a" to rg(track = -6f), "b" to rg(track = 3f)))
 		p.flush(boundaryTo(listOf("a", "b"), 1))
-		p.update(2f, 0f, rg(track = 3f), ReplayGainMode.Track, mediaId = "b")
+		p.update(2f, 0f, rg(track = 3f), ReplayGainMode.Track)
 		assertEquals(db(5f), p.linearGain, 0.0001f, "the pre-amp moves")
-		p.update(2f, 4f, rg(track = 3f), ReplayGainMode.Off, mediaId = "b")
+		p.update(2f, 4f, rg(track = 3f), ReplayGainMode.Off)
 		assertEquals(db(4f), p.linearGain, 0.0001f, "ReplayGain off: the plain amplifier")
 	}
 
@@ -303,7 +303,7 @@ class AudioGainProcessorTest {
 		val p = processor()
 		p.setQueueTags(mapOf("a" to rg(track = -6f)))
 		p.flush(boundaryTo(listOf("a", "x"), 1))
-		p.update(0f, 0f, rg(track = 2f), ReplayGainMode.Track, mediaId = "x")
+		p.update(0f, 0f, rg(track = 2f), ReplayGainMode.Track)
 		assertEquals(db(2f), p.linearGain, 0.0001f)
 	}
 }

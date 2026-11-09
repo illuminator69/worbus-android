@@ -1,6 +1,8 @@
 package app.worbus.exoplayer
 
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Timeline
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.AudioProcessor.StreamMetadata
 import androidx.media3.common.audio.BaseAudioProcessor
@@ -25,15 +27,17 @@ import kotlin.math.roundToInt
  * pre-amp. At unity the samples pass through bit for bit. The default used to be 1 read as
  * dB, so every song played 1 dB hot and was clipped.
  *
- * A song without tags no longer keeps the previous song's gain for the whole song. **The first
- * fraction of a second after a transition still can**: the player calls [update] on the main
- * thread from its transition callback, while this processor runs ahead of what is heard by the
- * AudioTrack's buffer (about 0.25 to 0.75 s), so the new song's first samples went through at the
- * old gain. Pre-existing, inherited from upstream; resolving the gain on the playback thread at
- * the stream boundary is still open (B-282).
+ * **The gain follows the stream, not the main thread (B-282).** At every item boundary, gapless
+ * ones included, media3 calls [onFlush] on the playback thread with the NEW item's period in its
+ * `StreamMetadata` (watched on the VM, media3 1.11: 0.5 to 0.6 s before the player's transition
+ * callback on main). The item's media id picks its tags out of the queue's ([setQueueTags]), so the
+ * new song's first buffer is already at its own gain. The player's [update] (main thread, at the
+ * transition) carries the settings and the playing song's tags; those tags are used only for a
+ * stream the queue's tags do not name (no flush with a known item yet, or an item a path added
+ * without publishing its tags), as before.
  *
- * Everything the output gain depends on is one immutable [GainState] in one volatile field, so the
- * playback thread never reads half of an update. [update] never flushes (B-366): it ran on the
+ * Each input is one immutable value in a volatile field (the settings with main's tags, the queue's
+ * tags, the stream's id), so the playback thread never reads half of an update. [update] never flushes (B-366): it ran on the
  * main thread while the playback thread was inside [queueInput], so both wrote the processor's
  * buffers at once, and the buffer just produced was thrown away. The playback thread picks the
  * new gain up at its next buffer and ramps to it across that buffer, which is what keeps a change
@@ -42,52 +46,80 @@ import kotlin.math.roundToInt
  */
 @UnstableApi
 class AudioGainProcessor : BaseAudioProcessor() {
-	private class GainState(
+	/** What the player says, in one call ([update]): the settings and the playing song's tags. */
+	private class Settings(
+		val rgAmpDb: Float,
+		val ampDb: Float,
+		/** Already resolved (`resolveGainMode`: Dynamic is never passed). */
+		val mode: ReplayGainMode,
+		/** The playing song's tags as the player names it; null: none. */
+		val tags: DomainReplayGain?
+	)
+
+	private class GainState(settings: Settings, tags: DomainReplayGain?) {
 		/** ReplayGain is switched on, whatever the song carries (see [isActive]). */
-		val replayGainEnabled: Boolean,
-		rgAmpDb: Float,
-		ampDb: Float,
-		/** The ReplayGain in force, in dB; null when none applies. */
-		replayGainDb: Float?,
-		/** The song's peak for the mode (linear); null when not known. */
-		peak: Float?
-	) {
+		val replayGainEnabled: Boolean = settings.mode != ReplayGainMode.Off
+		private val replayGainDb: Float? = tags?.effectiveGain(settings.mode)
+
 		// The cap is ReplayGain's clipping prevention, applied only while a ReplayGain gain is in
 		// force (the controller's ruling on the B-282 review): the plain amplifier, with ReplayGain
 		// Off or for a song without a gain tag, is the same gain on every song, as before.
-		val linear: Float = outputGainDb(replayGainDb, rgAmpDb, ampDb).decibelsToLinear()
-			.let { if (replayGainDb != null) peakLimited(it, peak) else it }
+		val linear: Float = outputGainDb(replayGainDb, settings.rgAmpDb, settings.ampDb).decibelsToLinear()
+			.let { if (replayGainDb != null) peakLimited(it, tags?.peak(settings.mode)) else it }
 	}
 
+	private class Cached(val settings: Settings, val queueTags: Map<String, DomainReplayGain?>, val streamId: String?, val state: GainState)
+
 	@Volatile
-	private var state = GainState(replayGainEnabled = false, rgAmpDb = 0f, ampDb = 0f, replayGainDb = null, peak = null)
+	private var settings = Settings(rgAmpDb = 0f, ampDb = 0f, mode = ReplayGainMode.Off, tags = null)
+
+	@Volatile
+	private var queueTags: Map<String, DomainReplayGain?> = emptyMap()
+
+	/** The media id of the stream going through now, from the last [onFlush]; written on the playback thread. */
+	@Volatile
+	private var streamId: String? = null
+
+	@Volatile
+	private var cached: Cached? = null
 
 	// Playback thread only: the gain the last buffer ended at, and whether any audio has gone
 	// through since the last flush (before that there is nothing a step could click against).
 	private var appliedLinear = 1f
 	private var processedSinceFlush = false
 
+	/** The gain state for the inputs as they are now; recomputed only when one of them changed. */
+	private fun state(): GainState {
+		val settings = settings
+		val queueTags = queueTags
+		val streamId = streamId
+		cached?.let { if (it.settings === settings && it.queueTags === queueTags && it.streamId == streamId) return it.state }
+		// The stream's own tags when the queue names it (a null value is "no tags", an answer);
+		// otherwise the player's word.
+		val tags = if (streamId != null && queueTags.containsKey(streamId)) queueTags[streamId] else settings.tags
+		return GainState(settings, tags).also { cached = Cached(settings, queueTags, streamId, it) }
+	}
+
 	/** The output gain as a linear factor. */
 	val linearGain: Float
-		get() = state.linear
+		get() = state().linear
 
 	/**
-	 * The whole input to the output gain, at once: the ReplayGain pre-amp and the plain amplifier
-	 * (dB), the playing song's tags (null: none) and the mode, already resolved
-	 * (`resolveGainMode`: Dynamic is never passed). Any thread; it only swaps the state, and the
-	 * playback thread ramps to it at its next buffer (B-366).
+	 * The ReplayGain pre-amp and the plain amplifier (dB), the playing song's tags (null: none) and
+	 * the mode, already resolved (`resolveGainMode`: Dynamic is never passed). Any thread; it only
+	 * swaps the settings, and the playback thread ramps to the result at its next buffer (B-366).
 	 */
-	/** The tags of every song in the queue, by media id (not read yet). */
-	fun setQueueTags(tags: Map<String, DomainReplayGain?>) = Unit
+	fun update(rgAmpDb: Float, ampDb: Float, metadata: DomainReplayGain?, mode: ReplayGainMode) {
+		settings = Settings(rgAmpDb = rgAmpDb, ampDb = ampDb, mode = mode, tags = metadata)
+	}
 
-	fun update(rgAmpDb: Float, ampDb: Float, metadata: DomainReplayGain?, mode: ReplayGainMode, mediaId: String? = null) {
-		state = GainState(
-			replayGainEnabled = mode != ReplayGainMode.Off,
-			rgAmpDb = rgAmpDb,
-			ampDb = ampDb,
-			replayGainDb = metadata?.effectiveGain(mode),
-			peak = metadata?.peak(mode)
-		)
+	/**
+	 * The tags of every song in the player's queue, by media id (a null value: that song has none).
+	 * Published by the player whenever its queue changes, so that [onFlush] can give a new stream its
+	 * own gain on the playback thread (B-282). Any thread.
+	 */
+	fun setQueueTags(tags: Map<String, DomainReplayGain?>) {
+		queueTags = tags
 	}
 
 	/**
@@ -98,7 +130,7 @@ class AudioGainProcessor : BaseAudioProcessor() {
 	 * are copied unchanged.
 	 */
 	override fun isActive(): Boolean {
-		val state = state
+		val state = state()
 		return super.isActive() && (state.replayGainEnabled || !isUnityGain(state.linear))
 	}
 
@@ -110,9 +142,11 @@ class AudioGainProcessor : BaseAudioProcessor() {
 	}
 
 	override fun onFlush(streamMetadata: StreamMetadata) {
-		// The playback thread's own flush (a seek, a new configuration): nothing is in flight, so
-		// the next buffer starts at the gain in force, with no ramp.
-		appliedLinear = state.linear
+		// The playback thread's own flush (an item boundary, gapless ones too; a seek; a new
+		// configuration). The metadata names the stream about to go through: its song's gain is in
+		// force from its first buffer (B-282). Nothing is in flight, so no ramp.
+		streamId = streamMediaId(streamMetadata)
+		appliedLinear = state().linear
 		processedSinceFlush = false
 	}
 
@@ -124,7 +158,7 @@ class AudioGainProcessor : BaseAudioProcessor() {
 		inputBuffer.order(ByteOrder.LITTLE_ENDIAN)
 		outputBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
-		val target = linearGain
+		val target = state().linear
 		// A change since the last buffer ramps across this one; before any audio has gone through
 		// since a flush there is nothing to ramp from.
 		val from = if (processedSinceFlush) appliedLinear else target
@@ -157,5 +191,24 @@ class AudioGainProcessor : BaseAudioProcessor() {
 			outputBuffer.position(outputBuffer.position() + shortBufferOutput.position() * 2)
 		}
 		outputBuffer.flip()
+	}
+}
+
+/**
+ * The media id of the item [metadata]'s period belongs to, or null when it names none (media3's
+ * `StreamMetadata.DEFAULT`, an empty timeline, an item with no id).
+ */
+@UnstableApi
+internal fun streamMediaId(metadata: StreamMetadata): String? {
+	val timeline = metadata.timeline
+	val periodUid = metadata.periodUid ?: return null
+	if (timeline.isEmpty) return null
+	return try {
+		val periodIndex = timeline.getIndexOfPeriod(periodUid)
+		if (periodIndex == C.INDEX_UNSET) return null
+		val windowIndex = timeline.getPeriod(periodIndex, Timeline.Period()).windowIndex
+		timeline.getWindow(windowIndex, Timeline.Window()).mediaItem.mediaId.takeIf { it != MediaItem.DEFAULT_MEDIA_ID && it.isNotEmpty() }
+	} catch (_: IndexOutOfBoundsException) {
+		null
 	}
 }

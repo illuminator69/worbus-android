@@ -12,4 +12,8 @@ actual class AudioGainManager(
 	actual fun update(withReplayGain: Float, withoutReplayGain: Float, metadata: DomainReplayGain?, mode: ReplayGainMode) {
 		audioGainProcessor.update(withReplayGain, withoutReplayGain, metadata, mode)
 	}
+
+	actual fun setQueueTags(tags: Map<String, DomainReplayGain?>) {
+		audioGainProcessor.setQueueTags(tags)
+	}
 }

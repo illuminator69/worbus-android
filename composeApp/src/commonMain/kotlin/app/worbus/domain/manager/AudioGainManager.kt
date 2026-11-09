@@ -10,4 +10,11 @@ expect class AudioGainManager {
 	 * `resolveGainMode`. Called by the player only (`applyAudioGain`), the settings screen included.
 	 */
 	fun update(withReplayGain: Float, withoutReplayGain: Float, metadata: DomainReplayGain?, mode: ReplayGainMode)
+
+	/**
+	 * The tags of every song in the player's queue, by song id (null: none), published whenever the
+	 * queue changes: the processor picks a new stream's own tags on the playback thread at the item
+	 * boundary, before the player's [update] for it (B-282).
+	 */
+	fun setQueueTags(tags: Map<String, DomainReplayGain?>)
 }
