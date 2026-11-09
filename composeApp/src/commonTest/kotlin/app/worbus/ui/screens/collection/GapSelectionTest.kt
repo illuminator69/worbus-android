@@ -35,4 +35,21 @@ class GapSelectionTest {
 		assertNull(gapChosenSource(after, kept), "nothing is sent for a folder that is gone")
 		assertNull(gapSelectedIndex(after, kept))
 	}
+
+	@Test
+	fun theSafeDefaultStandsInOnlyForAChoiceThatIsGone() {
+		val sources = listOf(alice, bob)
+		assertEquals(alice.id, gapPreselection(sources, preselected = 0, selectedId = null, pickAgain = false))
+		assertEquals(alice.id, gapPreselection(sources, preselected = 0, selectedId = carol.id, pickAgain = false), "carol left the list")
+		assertNull(gapPreselection(sources, preselected = 0, selectedId = bob.id, pickAgain = false), "a choice in the list stands")
+		assertNull(gapPreselection(sources, preselected = null, selectedId = null, pickAgain = false))
+	}
+
+	@Test
+	fun afterAStaleRefusalNothingIsChosenForTheUser() {
+		// Review nit (B-370): after lb-bot's 409 stale_source the box shows lb-bot's sentence and
+		// re-reads the list. If the safe default then stood in, a card the user never picked was
+		// highlighted under that sentence, and a quick second tap on Request sent it.
+		assertNull(gapPreselection(listOf(alice, bob), preselected = 0, selectedId = null, pickAgain = true), "the user picks again")
+	}
 }

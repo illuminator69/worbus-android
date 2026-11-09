@@ -843,6 +843,8 @@ data class GapBoxUi(
 	 * list no longer holds is no selection (`gapChosenSource`).
 	 */
 	val selectedId: Int? = null,
+	/** lb-bot refused the chosen folder as stale (409 `stale_source`): nothing is chosen for the user until a tap or a new search. */
+	val pickAgain: Boolean = false,
 	val working: Boolean = false,
 	val error: LbBotManager.LbError? = null,
 	/** The source this device requested from, for the steps' "FLAC · from …" line. */

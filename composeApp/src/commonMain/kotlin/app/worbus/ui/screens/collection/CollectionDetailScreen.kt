@@ -299,12 +299,9 @@ fun CollectionDetailScreen(
 	// A safe source is chosen for the user when the sources land (recommended, the artist found in
 	// the folder, the folder read as this album); anything less waits for a tap.
 	val choosing = gapStage as? GapStage.Choosing
-	val preselect = choosing?.preselected?.let { gapSelection(choosing.sources, it) }
+	val preselect = choosing?.let { gapPreselection(it.sources, it.preselected, gapBox.selectedId, gapBox.pickAgain) }
 	LaunchedEffect(preselect) {
-		// A choice whose folder left the list is no choice (B-370): the safe default may stand in.
-		if (preselect != null && gapChosenSource(choosing.sources, gapBox.selectedId) == null) {
-			viewModel.selectGapSource(preselect, fetchListing = false)
-		}
+		if (preselect != null) viewModel.selectGapSource(preselect, fetchListing = false)
 	}
 	// Opened to fill its gaps: unfold once, on the first visit to this entry.
 	var gapsOpened by rememberSaveable { mutableStateOf(false) }
