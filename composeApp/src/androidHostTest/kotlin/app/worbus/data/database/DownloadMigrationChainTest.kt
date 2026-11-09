@@ -12,9 +12,15 @@ import kotlin.test.assertTrue
  * without a migration fails here instead of stopping the app at open.
  */
 class DownloadMigrationChainTest {
-	private val declared: Int = Regex("""version\s*=\s*(\d+)""")
-		.find(sourceFile("src/commonMain/kotlin/app/worbus/data/database/DownloadDatabase.kt").readText())!!
-		.groupValues[1].toInt()
+	private val declared: Int = DOWNLOAD_DB_VERSION
+
+	@Test
+	fun roomsAnnotationDeclaresTheVersionTheFirstOpenCheckIsGiven() {
+		// The check moves aside a file above DOWNLOAD_DB_VERSION; a literal in the annotation could
+		// drift from it, and the check would then move aside the app's own current file.
+		val source = sourceFile("src/commonMain/kotlin/app/worbus/data/database/DownloadDatabase.kt").readText()
+		assertTrue(Regex("""(?s)@Database\(.*?version\s*=\s*DOWNLOAD_DB_VERSION""").containsMatchIn(source), source)
+	}
 
 	@Test
 	fun theMigrationsChainFromThreeToTheDeclaredVersion() {

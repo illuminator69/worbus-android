@@ -16,6 +16,7 @@ import app.worbus.data.database.MIGRATION_CACHE_18_19
 import app.worbus.data.database.MIGRATION_CACHE_22_23
 import app.worbus.data.database.MIGRATION_CACHE_23_24
 import app.worbus.data.database.AdoptDownloadsOnCreate
+import app.worbus.data.database.DOWNLOAD_DB_VERSION
 import app.worbus.data.database.DOWNLOAD_MIGRATIONS
 import app.worbus.data.database.checkDbAtOpen
 import app.worbus.data.database.checkCacheDbAtOpen
@@ -91,9 +92,16 @@ actual val platformModule = module {
 		//   downloads directory (`AdoptDownloadsOnCreate`).
 		// - B-365: no destructive fallback. A version with no migration in DOWNLOAD_MIGRATIONS stops
 		//   at open rather than erasing every record; DownloadMigrationChainTest catches it first.
+		// - a file a NEWER build wrote (a release installed over a dev build that bumped the schema)
+		//   has no path down either: the same check moves it aside (`downloads.db.newer-<ms>`) and
+		//   the files are adopted, rather than Room throwing at every launch.
 		Room
 			.databaseBuilder<DownloadDatabase>(get(), dbPath)
-			.setDriver(CheckedFirstOpenDriver(BundledSQLiteDriver()) { checkDbAtOpen(File(dbPath), "DownloadsDb") })
+			.setDriver(
+				CheckedFirstOpenDriver(BundledSQLiteDriver()) {
+					checkDbAtOpen(File(dbPath), "DownloadsDb", newestVersion = DOWNLOAD_DB_VERSION)
+				}
+			)
 			.addMigrations(*DOWNLOAD_MIGRATIONS)
 			.addCallback(AdoptDownloadsOnCreate({ File(app.filesDir, "downloads") }))
 			.build()

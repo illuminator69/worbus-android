@@ -27,7 +27,8 @@ internal sealed interface CacheDbCheck {
 	data object Healthy : CacheDbCheck
 
 	/**
-	 * Not a database or malformed, and gone from where Room opens it: moved to [movedTo], or, when
+	 * Not a database, malformed, or written by a newer build (`newestVersion`), and gone from where
+	 * Room opens it: moved to [movedTo], or, when
 	 * it could not be moved, deleted ([movedTo] null). Room will create a fresh one.
 	 */
 	data class Quarantined(val movedTo: File?, val why: String) : CacheDbCheck
@@ -82,17 +83,49 @@ internal fun guardCacheDb(
 	if (!db.exists()) return CacheDbCheck.Missing
 	val why = try {
 		val answer = quickCheck(db)
-		if (answer.trim().equals("ok", ignoreCase = true)) return CacheDbCheck.Healthy
+		if (answer.trim().equals("ok", ignoreCase = true)) return newerThanDeclared(db, nowMs, newestVersion, userVersion, move, delete, warn)
 		"quick_check: ${answer.take(200)}"
 	} catch (e: Exception) {
 		if (!isSqliteCorruption(e)) return CacheDbCheck.Unchecked("${e::class.simpleName}: ${e.message}")
 		"${e::class.simpleName}: ${e.message}"
 	}
-	return when (val moved = quarantineCacheDb(db, nowMs, move, delete, warn)) {
+	return quarantined(quarantineCacheDb(db, nowMs, move, delete, warn), why)
+}
+
+private fun quarantined(moved: Quarantine, why: String): CacheDbCheck =
+	when (moved) {
 		Quarantine.Stuck -> CacheDbCheck.Stuck(why)
 		Quarantine.Deleted -> CacheDbCheck.Quarantined(null, why)
 		is Quarantine.Moved -> CacheDbCheck.Quarantined(moved.to, why)
 	}
+
+/**
+ * A sound file whose `user_version` is above [newestVersion] was written by a newer build (a dev
+ * build of a branch that bumped the schema, with a release installed over it: the versionCode is
+ * pinned, so Android takes it). Room has no path down, and a database with no destructive fallback
+ * (`downloads.db`, B-365) then throws at its first open, at every launch (the review of B-306/365).
+ * Moved aside as `<name>.newer-<nowMs>`, whole, for that newer build; Room creates it afresh and
+ * `downloads.db` adopts its files ([AdoptDownloadsOnCreate]). Null [newestVersion]: not checked
+ * (`cache.db`, whose destructive fallback covers a downgrade).
+ */
+private fun newerThanDeclared(
+	db: File,
+	nowMs: Long,
+	newestVersion: Int?,
+	userVersion: (File) -> Int,
+	move: (File, File) -> Boolean,
+	delete: (File) -> Boolean,
+	warn: (String) -> Unit
+): CacheDbCheck {
+	if (newestVersion == null) return CacheDbCheck.Healthy
+	val found = try {
+		userVersion(db)
+	} catch (e: Exception) {
+		return CacheDbCheck.Unchecked("user_version: ${e::class.simpleName}: ${e.message}")
+	}
+	if (found <= newestVersion) return CacheDbCheck.Healthy
+	val why = "user_version $found is newer than this build's $newestVersion (a newer build wrote it)"
+	return quarantined(quarantineCacheDb(db, nowMs, move, delete, warn, kind = "newer"), why)
 }
 
 /** What became of `cache.db` itself; its `-wal`, `-shm` and `-journal` are logged, not reported. */
@@ -103,19 +136,21 @@ internal sealed interface Quarantine {
 }
 
 /**
- * Move [db] and its `-wal` / `-shm` / `-journal` aside as `<name>.corrupt-<nowMs>`; drop older such
- * copies. A file that will not move is deleted, since Room would open it again where it is; one
- * that will do neither is left, and said so.
+ * Move [db] and its `-wal` / `-shm` / `-journal` aside as `<name>.<kind>-<nowMs>` (`corrupt`, or
+ * `newer` for a file a newer build wrote); drop older such copies of the same kind. A file that
+ * will not move is deleted, since Room would open it again where it is; one that will do neither
+ * is left, and said so.
  */
 internal fun quarantineCacheDb(
 	db: File,
 	nowMs: Long,
 	move: (File, File) -> Boolean = { from, to -> from.renameTo(to) },
 	delete: (File) -> Boolean = { it.delete() },
-	warn: (String) -> Unit = { Logger.w("CacheDb", it) }
+	warn: (String) -> Unit = { Logger.w("CacheDb", it) },
+	kind: String = "corrupt"
 ): Quarantine {
 	val dir = db.absoluteFile.parentFile
-	val prefix = "${db.name}.corrupt-"
+	val prefix = "${db.name}.$kind-"
 	dir.listFiles()?.filter { it.name.startsWith(prefix) }?.forEach { it.delete() }
 	val target = File(dir, "$prefix$nowMs")
 	var result: Quarantine = Quarantine.Moved(target)
@@ -197,12 +232,12 @@ internal fun checkCacheDbAtOpen(db: File) = checkDbAtOpen(db, "CacheDb")
  * log [tag]. A file that fails it is moved aside and Room creates it afresh; for `downloads.db` the
  * files already on disk are then adopted by [AdoptDownloadsOnCreate].
  */
-internal fun checkDbAtOpen(db: File, tag: String) {
+internal fun checkDbAtOpen(db: File, tag: String, newestVersion: Int? = null) {
 	val started = System.nanoTime()
 	val sizeKb = if (db.exists()) db.length() / 1024 else 0
 	val warn: (String) -> Unit = { Logger.w(tag, it) }
 	val result = try {
-		guardCacheDb(db, System.currentTimeMillis(), ::bundledQuickCheck, warn = warn)
+		guardCacheDb(db, System.currentTimeMillis(), ::bundledQuickCheck, warn = warn, newestVersion = newestVersion)
 	} catch (e: Exception) {
 		CacheDbCheck.Unchecked("${e::class.simpleName}: ${e.message}")
 	}
