@@ -1211,11 +1211,14 @@ class HubManager(
 		// Shuffle and repeat are read from every frame, not baked into the base: the base is rebuilt
 		// only when the tracks or the index change, so a shuffle or repeat tap on a remote session
 		// showed nothing until the next song (seen on the phone, 2026-10-19).
+		// W1: the session's order, shown only when the hub and the playing device vouch for it.
+		val activeCaps = _activeDeviceId.value?.let { id -> _devices.value.firstOrNull { it.id == id }?.caps }
 		mediaPlayer.setRemoteState(
 			base.copy(
 				isPaused = !session.isPlaying,
 				progress = progress,
 				isShuffleEnabled = session.shuffle,
+				playOrder = mirrorPlayOrder(hubOffers(HUB_FEATURE_PLAY_ORDER), activeCaps, session.shuffle, session.order, base.queue.size),
 				repeatMode = repeatToInt(session.repeat)
 			)
 		)
@@ -1435,6 +1438,9 @@ class HubManager(
 						// while another device plays, so this device's row can be turned down
 						// before music is sent to it. Only where the system's volume can be set.
 						if (localDevice.setsMediaVolume) add(CAP_IDLE_VOLUME)
+						// W1 (HubPlayOrder.kt): this player publishes its shuffle and play order
+						// with its queue and adopts the order a directive carries.
+						playOrderCaps().forEach { add(it) }
 					}
 				}
 			})
@@ -2394,12 +2400,16 @@ class HubManager(
 						return
 					}
 					val play = msg["play"]?.jsonPrimitive?.booleanOrNull ?: true
-					lastQueueSig = songs.joinToString(",") { it.id }
+					// W1: the session's shuffle and order, adopted verbatim; pre-set as published so
+					// adopting them is not echoed back.
+					val adopt = directivePlayOrder(msg, hubOffers(HUB_FEATURE_PLAY_ORDER))
+					lastQueueSig = adoptedSignature(songs, adopt)
 					// ACK_RESERVE_MS is kept back for this frame's own trip: answering AT the deadline is
 					// the same as not answering, because the hub has already rolled the slot back by then.
 					val outcome = mediaPlayer.awaitRemoteQueueLoad(
 						songs, index, positionMs, play,
-						(budgetMs - ACK_RESERVE_MS).coerceAtLeast(1_000L)
+						(budgetMs - ACK_RESERVE_MS).coerceAtLeast(1_000L),
+						adopt.shuffle, adopt.order
 					)
 					// A superseded load has no standing to answer for a queue it no longer owns.
 					if (outcome.error == "superseded by a newer load") return
@@ -2436,10 +2446,11 @@ class HubManager(
 					val songs = resolveQueue(tracks)
 					if (songs.isEmpty()) return
 					val index = msg["index"]?.jsonPrimitive?.intOrNull ?: 0
-					lastQueueSig = songs.joinToString(",") { it.id }
+					val adopt = directivePlayOrder(msg, hubOffers(HUB_FEATURE_PLAY_ORDER))
+					lastQueueSig = adoptedSignature(songs, adopt)
 					// Edits the queue around the current track without restarting
 					// it (falls back to a reload when the current track changed).
-					mediaPlayer.awaitRemoteQueueReconcile(songs, index)
+					mediaPlayer.awaitRemoteQueueReconcile(songs, index, adopt.shuffle, adopt.order)
 					expectIndex = index
 				}
 
@@ -2462,9 +2473,13 @@ class HubManager(
 					mediaPlayer.applyRemoteRepeat(mode)
 				}
 
-				"setShuffle" -> mediaPlayer.applyRemoteShuffle(
-					msg["on"]?.jsonPrimitive?.booleanOrNull ?: false
-				)
+				"setShuffle" -> {
+					val on = msg["on"]?.jsonPrimitive?.booleanOrNull ?: false
+					val adopt = directivePlayOrder(msg, hubOffers(HUB_FEATURE_PLAY_ORDER))
+					val queue = mediaPlayer.localUiState.value.queue
+					if (adopt.shuffle != null) lastQueueSig = adoptedSignature(queue, adopt)
+					mediaPlayer.applyRemoteShuffle(on, adopt.order)
+				}
 
 				"release" -> {
 					// Stop, THEN the final report and `released`: the hub resumes the next device
@@ -2891,6 +2906,10 @@ class HubManager(
 	private var sigCacheQueue: List<DomainSong>? = null
 	private var sigCacheValue = ""
 
+	/** The signature a queue adopted from a directive will publish with ([publishSignature]). */
+	private fun adoptedSignature(songs: List<DomainSong>, adopt: DirectivePlayOrder): String =
+		publishSignature(queueSig(songs), adopt.shuffle ?: false, adopt.order, adopt.shuffle != null && hubOffers(HUB_FEATURE_PLAY_ORDER))
+
 	private fun queueSig(queue: List<DomainSong>): String {
 		if (queue !== sigCacheQueue) {
 			sigCacheQueue = queue
@@ -2964,13 +2983,17 @@ class HubManager(
 		now: Long
 	) {
 		if (!_connected.value) return
-		if (state.isPaused || state.queue.isEmpty()) return
+		if (state.queue.isEmpty()) return
 		if (now < hubDrivenUntilMs) return
 		val active = _activeDeviceId.value
 		val me = _myDeviceId.value
 		if (!(active == null || (me != null && active == me))) return
+		val offersPlayOrder = hubOffers(HUB_FEATURE_PLAY_ORDER)
+		// A paused device never claims the session (B-047); the active one keeps the hub's copy
+		// of its queue and order current while paused too (W1).
+		if (state.isPaused && !publishesWhilePaused(offersPlayOrder, active, me)) return
 
-		val sig = queueSig(state.queue)
+		val sig = publishSignature(queueSig(state.queue), state.isShuffleEnabled, state.playOrder, offersPlayOrder)
 		// Normally one publish per queue change. But when NOBODY is active and we're
 		// playing, publishing is also how we CLAIM the session — and after adopting the
 		// hub's queue our signature already equals it, so the dedupe would block the
@@ -2992,7 +3015,10 @@ class HubManager(
 			put("action", "setQueue")
 			put("index", state.currentIndex.coerceAtLeast(0))
 			put("positionMs", positionMs)
-			put("play", true)
+			put("play", !state.isPaused)
+			// W1: "this is what I play, in this order" (a hub with `playOrder` only).
+			playOrderPublishFields(offersPlayOrder, state.isShuffleEnabled, state.playOrder, state.queue.size)
+				.forEach { (key, value) -> put(key, value) }
 			put("savedQueueId", savedQueueId)
 			put("sourceKind", state.savedQueueKind)
 			savedQueueNameFor(state)?.let { put("sourceName", it) }
