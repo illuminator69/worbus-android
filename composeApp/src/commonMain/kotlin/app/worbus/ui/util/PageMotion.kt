@@ -64,6 +64,13 @@ val QuickPageMotion = PageMotion(
 	foldTallMs = 280
 )
 
+/** When each page's fade runs, in ms from the start of a page change (B-378). */
+data class PageFadeWindows(val exitStartMs: Int, val exitEndMs: Int, val enterStartMs: Int, val enterEndMs: Int)
+
+/** Today: both fades start at once. */
+fun pageFadeWindows(motion: PageMotion): PageFadeWindows =
+	PageFadeWindows(0, motion.exitFadeMs, 0, motion.enterFadeMs)
+
 /** The fold's time under [motion], or null for the motion scheme's springs. */
 fun foldMs(motion: PageMotion, tall: Boolean): Int? = if (tall) motion.foldTallMs else motion.foldMs
 
