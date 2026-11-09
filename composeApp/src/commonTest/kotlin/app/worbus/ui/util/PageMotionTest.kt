@@ -14,13 +14,16 @@ class PageMotionTest {
 
 	@Test
 	fun expressiveAndStandardKeepTodaysNumbers() {
+		// B-378 (the owner's ruling, 2026-11-09) moved the fades and the outgoing slide: staggered
+		// fades (PageFadeTest), both pages sliding the whole 500 ms. The rest is as it always was.
 		val today = PageMotion(
-			enterFadeMs = 450,
+			enterFadeMs = 325,
+			enterFadeDelayMs = 175,
 			enterSlideMs = 500,
 			enterSlideDp = null,
 			enterEasing = PageEasing.Emphasized,
-			exitFadeMs = 250,
-			exitSlideMs = 300,
+			exitFadeMs = 175,
+			exitSlideMs = 500,
 			exitSlideDp = 30,
 			sharedBoundsMs = 500,
 			sheetShowMs = 400,

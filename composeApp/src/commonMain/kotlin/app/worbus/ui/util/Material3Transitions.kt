@@ -89,8 +89,9 @@ object Material3Transitions {
 			PageEasing.Emphasized -> EmphasizedEasing
 			PageEasing.EmphasizedDecelerate -> EmphasizedDecelerateEasing
 		}
+		// B-378: the fade waits for the outgoing page's to end (pageFadeWindows); the slide does not.
 		return fadeIn(
-			animationSpec = tween(durationMillis = motion.enterFadeMs, easing = easing)
+			animationSpec = tween(durationMillis = motion.enterFadeMs, delayMillis = motion.enterFadeDelayMs, easing = easing)
 		) +
 			slideInHorizontally(
 				animationSpec = tween(durationMillis = motion.enterSlideMs, easing = easing)
@@ -108,10 +109,14 @@ object Material3Transitions {
 				easing = EmphasizedAccelerateEasing
 			)
 		) +
+			// B-378: the outgoing page keeps moving for the whole change, with the incoming one.
 			slideOutHorizontally(
 				animationSpec = tween(
 					durationMillis = motion.exitSlideMs,
-					easing = EmphasizedAccelerateEasing
+					easing = when (motion.enterEasing) {
+						PageEasing.Emphasized -> EmphasizedEasing
+						PageEasing.EmphasizedDecelerate -> EmphasizedDecelerateEasing
+					}
 				)
 			) {
 				sign * with(density) { motion.exitSlideDp.dp.roundToPx() }

@@ -12,7 +12,12 @@ import app.worbus.domain.models.settings.AnimationStyle
  * move. Quick's live in [QuickPageMotion]: retuning it is a one-number edit there.
  */
 data class PageMotion(
+	/**
+	 * The incoming page's fade in, after [enterFadeDelayMs]: it starts when the outgoing page's fade
+	 * out has ended, so the two pages' text is never drawn over each other (B-378).
+	 */
 	val enterFadeMs: Int,
+	val enterFadeDelayMs: Int,
 	val enterSlideMs: Int,
 	/** How far the incoming page travels; null is half the screen width. */
 	val enterSlideDp: Int?,
@@ -34,14 +39,20 @@ data class PageMotion(
 /** Which of [Material3Transitions]' easings the incoming page uses. */
 enum class PageEasing { Emphasized, EmphasizedDecelerate }
 
-/** Expressive and Standard: what Worbus has always done (450/500 ms from half the width). */
+/**
+ * Expressive and Standard: 500 ms from half the width. B-378 (the owner, 2026-11-09): Material's
+ * shared-axis timing, both pages sliding the whole 500 ms, the outgoing page fading out over the
+ * first 35 % (175 ms) and the incoming fading in over the rest, never both at once. It was a
+ * 450 ms fade in from the first frame over a 250 ms fade out, the two titles drawn over each other.
+ */
 val DefaultPageMotion = PageMotion(
-	enterFadeMs = 450,
+	enterFadeMs = 325,
+	enterFadeDelayMs = 175,
 	enterSlideMs = 500,
 	enterSlideDp = null,
 	enterEasing = PageEasing.Emphasized,
-	exitFadeMs = 250,
-	exitSlideMs = 300,
+	exitFadeMs = 175,
+	exitSlideMs = 500,
 	exitSlideDp = 30,
 	sharedBoundsMs = 500,
 	sheetShowMs = 400,
@@ -50,12 +61,13 @@ val DefaultPageMotion = PageMotion(
 
 /** Quick: a starting proposal (lb-bot's web UI enters in 220 ms over 18 px), tuned on the phone. */
 val QuickPageMotion = PageMotion(
-	enterFadeMs = 220,
+	enterFadeMs = 165,
+	enterFadeDelayMs = 85,
 	enterSlideMs = 250,
 	enterSlideDp = 30,
 	enterEasing = PageEasing.EmphasizedDecelerate,
-	exitFadeMs = 100,
-	exitSlideMs = 200,
+	exitFadeMs = 85,
+	exitSlideMs = 250,
 	exitSlideDp = 30,
 	sharedBoundsMs = 350,
 	sheetShowMs = 300,
@@ -67,9 +79,9 @@ val QuickPageMotion = PageMotion(
 /** When each page's fade runs, in ms from the start of a page change (B-378). */
 data class PageFadeWindows(val exitStartMs: Int, val exitEndMs: Int, val enterStartMs: Int, val enterEndMs: Int)
 
-/** Today: both fades start at once. */
+/** The outgoing page from the first frame, the incoming one after it. */
 fun pageFadeWindows(motion: PageMotion): PageFadeWindows =
-	PageFadeWindows(0, motion.exitFadeMs, 0, motion.enterFadeMs)
+	PageFadeWindows(0, motion.exitFadeMs, motion.enterFadeDelayMs, motion.enterFadeDelayMs + motion.enterFadeMs)
 
 /** The fold's time under [motion], or null for the motion scheme's springs. */
 fun foldMs(motion: PageMotion, tall: Boolean): Int? = if (tall) motion.foldTallMs else motion.foldMs

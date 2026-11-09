@@ -1,16 +1,12 @@
 package app.worbus
 
-import app.worbus.ui.util.PREDICTIVE_POP_MS
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.core.EaseOutQuart
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
@@ -477,18 +473,17 @@ fun App() {
 											density
 										)
 									},
+									// B-378 (the owner, 2026-11-09): ONE back animation. A dragged Back drives
+									// the same slide and fade as the button by its progress; it was a
+									// full-width slide of its own, or, with predictive animations off, no
+									// transition at all (the page under the finger was simply gone).
 									predictivePopTransitionSpec = {
-										if (preferenceManager.enablePredictiveBackAnimations) {
-											slideInHorizontally(
-												animationSpec = tween(PREDICTIVE_POP_MS, easing = EaseOutQuart),
-												initialOffsetX = { -it }
-											) togetherWith slideOutHorizontally(
-												animationSpec = tween(PREDICTIVE_POP_MS, easing = EaseOutQuart),
-												targetOffsetX = { it }
-											)
-										} else {
-											ContentTransform(EnterTransition.None, ExitTransition.None)
-										}
+										val motion = pageMotionOf(preferenceManager.animationStyle)
+										Material3Transitions.popEnter(motion)(
+											density
+										) togetherWith Material3Transitions.popExit(motion)(
+											density
+										)
 									}
 								)
 							}

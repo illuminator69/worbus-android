@@ -49,9 +49,6 @@ const val ARRIVAL_REST_MS = 150
 /** A real cover fades in over its tinted placeholder (`CoverArt.crossfadeMs`). */
 const val COVER_FADE_MS = 280
 
-/** A predictive back's pop (the page settling back when a back gesture is let go). */
-const val PREDICTIVE_POP_MS = 300
-
 /** A page's wash, the mini player's ring and the sheets' ambient easing to a new cover's colours. */
 const val WASH_MS = 450
 
