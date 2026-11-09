@@ -178,4 +178,39 @@ class AudioGainProcessorTest {
 		}
 		assertTrue(refused)
 	}
+
+	// --- B-282 / B-366 ------------------------------------------------------------------------
+
+	@Test
+	fun aPositiveGainNeverPushesTheSongsPeakPastFullScale() {
+		// B-282: +6 dB on a song whose loudest sample is 0.99 of full scale clipped it; the
+		// song's own peak says how much gain it can take (ReplayGain's clipping prevention).
+		val p = processor()
+		val tags = DomainReplayGain(albumGain = null, albumPeak = null, trackGain = 6f, trackPeak = 0.99f, baseGain = null, fallbackGain = null)
+		p.set(tags, ReplayGainMode.Track)
+		assertTrue(p.linearGain * 0.99f <= 1.0001f, "gain ${p.linearGain} pushes the 0.99 peak past full scale")
+		val loudest = (0.99f * Short.MAX_VALUE).toInt().toShort()
+		val out = run(p, shortArrayOf(loudest, (-loudest).toShort()))
+		assertTrue(out[0] < Short.MAX_VALUE || out[0] == Short.MAX_VALUE && loudest * p.linearGain <= Short.MAX_VALUE + 0.5f, "no clipped sample")
+	}
+
+	@Test
+	fun aGainChangeDoesNotDiscardWhatThePlaybackThreadAlreadyProduced() {
+		// B-366: update() is called on the main thread (the player's applyAudioGain) and used to
+		// flush() the processor there, while the playback thread was between queueInput and
+		// getOutput: the buffer it had just produced was thrown away (and the two threads wrote
+		// the processor's buffers at once).
+		val p = processor()
+		p.set(null, ReplayGainMode.Off, amp = -6.0206f) // x0.5
+		val input = ShortArray(256) { 1000 }
+		val bytes = ByteBuffer.allocateDirect(input.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+		bytes.asShortBuffer().put(input)
+		p.queueInput(bytes) // the playback thread's step; its output not read yet
+
+		p.set(null, ReplayGainMode.Off, amp = 0f) // the main thread's update at a transition
+
+		val out = p.output.order(ByteOrder.LITTLE_ENDIAN)
+		assertEquals(input.size * 2, out.remaining(), "the produced buffer survives the update")
+		assertEquals(500, out.asShortBuffer().get(0).toInt())
+	}
 }
