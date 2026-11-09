@@ -48,7 +48,7 @@ fun outputGainDb(replayGainDb: Float?, rgAmpDb: Float, ampDb: Float): Float =
 /**
  * The song's peak (linear, 1 = full scale) for the gain [mode] applies, or null when it has none:
  * the album's in Album mode, else the track's, each falling back to the other as [effectiveGain]
- * does. Off reads the track's, since the plain amplifier is applied to the same samples.
+ * does. The player caps only a ReplayGain gain with it, never the plain amplifier (B-282 review).
  */
 fun DomainReplayGain.peak(mode: ReplayGainMode): Float? = when (mode) {
 	ReplayGainMode.Album -> albumPeak ?: trackPeak

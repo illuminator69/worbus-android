@@ -37,8 +37,8 @@ import kotlin.math.roundToInt
  * main thread while the playback thread was inside [queueInput], so both wrote the processor's
  * buffers at once, and the buffer just produced was thrown away. The playback thread picks the
  * new gain up at its next buffer and ramps to it across that buffer, which is what keeps a change
- * from clicking. A song's peak caps the gain (B-282): a positive gain never pushes it past full
- * scale.
+ * from clicking. While ReplayGain applies, a song's peak caps the gain (B-282): a positive gain
+ * never pushes it past full scale. The plain amplifier is never capped.
  */
 @UnstableApi
 class AudioGainProcessor : BaseAudioProcessor() {
@@ -52,7 +52,11 @@ class AudioGainProcessor : BaseAudioProcessor() {
 		/** The song's peak for the mode (linear); null when not known. */
 		peak: Float?
 	) {
-		val linear: Float = peakLimited(outputGainDb(replayGainDb, rgAmpDb, ampDb).decibelsToLinear(), peak)
+		// The cap is ReplayGain's clipping prevention, applied only while a ReplayGain gain is in
+		// force (the controller's ruling on the B-282 review): the plain amplifier, with ReplayGain
+		// Off or for a song without a gain tag, is the same gain on every song, as before.
+		val linear: Float = outputGainDb(replayGainDb, rgAmpDb, ampDb).decibelsToLinear()
+			.let { if (replayGainDb != null) peakLimited(it, peak) else it }
 	}
 
 	@Volatile
