@@ -46,8 +46,10 @@ fun NowPlayingArtworkPager(
 	val hubManager = koinInject<HubManager>()
 	val isRemoteActive by hubManager.isRemoteActive.collectAsState()
 	val playerState by player.steadyState.collectAsState()
-	// B-343: which row each page shows (pagerRow / pagerPage).
-	val order: List<Int>? = null
+	// B-343: under shuffle the pages follow the play order (pagerRow / pagerPage), the state's own
+	// (the local player's, or the session's when the hub vouches for it), as the peek strip and the
+	// queue list do.
+	val order = playerState.playOrder
 
 	val pagerState = rememberPagerState(
 		initialPage = pagerPage(playerState.currentIndex, playerState.queue.size, order).coerceAtLeast(0),
@@ -108,14 +110,15 @@ fun NowPlayingArtworkPager(
 	LaunchedEffect(pagerState) {
 		// Every scroll's end, including one that ends on the page it left (B-142).
 		snapshotFlow { pagerState.isScrollInProgress to pagerState.settledPage }.collect { (scrolling, page) ->
+			// Read here, not captured: this collector outlives the composition it started in.
 			val state = playerState
 			val targetPage = gate.onFrame(
 				scrolling = scrolling,
 				settledPage = page,
-				currentIndex = pagerPage(state.currentIndex, state.queue.size, order)
+				currentIndex = pagerPage(state.currentIndex, state.queue.size, state.playOrder)
 			) ?: return@collect
 			// The row the settled page shows, never the page number itself (B-343).
-			val target = pagerRow(targetPage, state.queue.size, order)
+			val target = pagerRow(targetPage, state.queue.size, state.playOrder)
 			if (isRemoteActive) {
 				// The hub's jump preserves play/pause state for the session.
 				hubManager.actJump(target)
