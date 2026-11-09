@@ -3448,6 +3448,7 @@ class LbBotManager(
 	}
 
 	private val watchLock = Mutex()
+	private val fillLedger = FillLedgerStore(preferenceManager, json, ::nowMs)
 	private var pollJob: Job? = null
 
 	/**
@@ -3459,38 +3460,11 @@ class LbBotManager(
 	 * capped at [LEDGER_MAX] rows so a heavy week can't grow the preference without
 	 * bound. Before this, settling and deleting were the same act.
 	 */
-	private fun loadWatches(): Map<String, LbWatch> = try {
-		val now = nowMs()
-		// Decode and prune SETTLED rows only.
-		//
-		// An unsettled row past WATCH_TIMEOUT_MS used to be dropped right here, which made the
-		// poll loop's "time out the stale ones first" step unreachable: it takes `live` from
-		// this function, so the rows it wanted to settle had already ceased to exist. They were
-		// deleted instead of finished — no `gave_up` history row, no notification, and a fill
-		// the user had been watching simply vanished from the Download Center. Expiry is a state
-		// transition and belongs to [applyAlbumStatus], not to the deserializer.
-		val all = json.decodeFromString<Map<String, LbWatch>>(preferenceManager.lbBotWatches)
-			.filterValues { watch ->
-				!watch.settled || now - watch.finishedAtOrStart() < LEDGER_RETAIN_MS
-			}
-		if (all.size <= LEDGER_MAX) all
-		else all.entries
-			.sortedByDescending { it.value.finishedAtOrStart() }
-			.take(LEDGER_MAX)
-			.associate { it.key to it.value }
-	} catch (e: Exception) {
-		Logger.w("LbBotManager", "could not read persisted fills, starting empty", e)
-		emptyMap()
-	}
+	private fun loadWatches(): Map<String, LbWatch> = fillLedger.load()
 
 	/** The single write point, so publishing the ledger cannot be forgotten anywhere. */
 	private fun saveWatches(watches: Map<String, LbWatch>) {
-		preferenceManager.lbBotWatches = try {
-			json.encodeToString(watches)
-		} catch (e: Exception) {
-			Logger.e("LbBotManager", "could not persist fills", e)
-			"{}"
-		}
+		fillLedger.save(watches)
 		_ledger.value = watches.values
 			.sortedWith(
 				// In flight first — that is what someone opening this view came to see —
@@ -4155,8 +4129,8 @@ class LbBotManager(
 
 		/** How long a *finished* row stays readable, and how many are kept at all.
 		 *  Running rows are still bounded by WATCH_TIMEOUT_MS — different question. */
-		private const val LEDGER_RETAIN_MS = 7 * 24 * 60 * 60 * 1000L
-		private const val LEDGER_MAX = 50
+		internal const val LEDGER_RETAIN_MS = 7 * 24 * 60 * 60 * 1000L
+		internal const val LEDGER_MAX = 50
 
 		const val OUTCOME_RUNNING = "running"
 		const val OUTCOME_DONE = "done"
@@ -5574,7 +5548,7 @@ data class LbGapCoverage(
  * its next tick. A decode failure is caught and degrades to "no history", never a crash.
  */
 @Serializable
-private data class LbWatch(
+internal data class LbWatch(
 	val kind: String,
 	val key: String,
 	val releaseMbid: String = "",
