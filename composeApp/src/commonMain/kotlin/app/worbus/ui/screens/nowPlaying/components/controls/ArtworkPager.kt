@@ -46,9 +46,11 @@ fun NowPlayingArtworkPager(
 	val hubManager = koinInject<HubManager>()
 	val isRemoteActive by hubManager.isRemoteActive.collectAsState()
 	val playerState by player.steadyState.collectAsState()
+	// B-343: which row each page shows (pagerRow / pagerPage).
+	val order: List<Int>? = null
 
 	val pagerState = rememberPagerState(
-		initialPage = playerState.currentIndex.coerceAtLeast(0),
+		initialPage = pagerPage(playerState.currentIndex, playerState.queue.size, order).coerceAtLeast(0),
 		pageCount = { playerState.queue.size }
 	)
 
@@ -59,6 +61,7 @@ fun NowPlayingArtworkPager(
 	// "back" to the right one. From the queue sheet that read as the player skipping to the next
 	// song and returning every time a card was dropped.
 	var renderQueue by remember { mutableStateOf(playerState.queue) }
+	var renderOrder by remember { mutableStateOf(order) }
 
 	// Which settles are the user's swipe (B-142): see below.
 	val gate = remember(pagerState) { PagerSwipeGate() }
@@ -72,18 +75,20 @@ fun NowPlayingArtworkPager(
 		visible = true
 	}
 
-	LaunchedEffect(playerState.queue, playerState.currentIndex) {
+	LaunchedEffect(playerState.queue, playerState.currentIndex, order) {
 		val index = playerState.currentIndex
-		if (index != -1 && index != pagerState.currentPage) {
+		val page = pagerPage(index, playerState.queue.size, order)
+		if (index != -1 && page != pagerState.currentPage) {
 			// A real track change slides. A mere REORDER must not: the same song is simply in a
 			// different slot now, and animating there reads as skipping away and back.
 			val samePlayingSong = playerState.queue.getOrNull(index)?.id ==
-				renderQueue.getOrNull(pagerState.currentPage)?.id
+				renderQueue.getOrNull(pagerRow(pagerState.currentPage, renderQueue.size, renderOrder))?.id
 			gate.onProgrammaticScroll()
-			if (samePlayingSong) pagerState.scrollToPage(index)
-			else pagerState.animateScrollToPage(index)
+			if (samePlayingSong) pagerState.scrollToPage(page)
+			else pagerState.animateScrollToPage(page)
 		}
 		renderQueue = playerState.queue
+		renderOrder = order
 	}
 
 	// Only a real USER swipe may change the track (PagerSwipeGate). The pager is also scrolled
@@ -103,8 +108,14 @@ fun NowPlayingArtworkPager(
 	LaunchedEffect(pagerState) {
 		// Every scroll's end, including one that ends on the page it left (B-142).
 		snapshotFlow { pagerState.isScrollInProgress to pagerState.settledPage }.collect { (scrolling, page) ->
-			val target = gate.onFrame(scrolling = scrolling, settledPage = page, currentIndex = playerState.currentIndex)
-				?: return@collect
+			val state = playerState
+			val targetPage = gate.onFrame(
+				scrolling = scrolling,
+				settledPage = page,
+				currentIndex = pagerPage(state.currentIndex, state.queue.size, order)
+			) ?: return@collect
+			// The row the settled page shows, never the page number itself (B-343).
+			val target = pagerRow(targetPage, state.queue.size, order)
 			if (isRemoteActive) {
 				// The hub's jump preserves play/pause state for the session.
 				hubManager.actJump(target)
@@ -129,8 +140,8 @@ fun NowPlayingArtworkPager(
 	) { page ->
 		// pageCount follows the live queue, so the snapshot can lag it by a frame — fall back
 		// rather than index out of it.
-		val song = renderQueue.getOrNull(page)
-			?: playerState.queue.getOrNull(page)
+		val song = renderQueue.getOrNull(pagerRow(page, renderQueue.size, renderOrder))
+			?: playerState.queue.getOrNull(pagerRow(page, playerState.queue.size, order))
 			?: return@HorizontalPager
 		Box(
 			modifier = Modifier.fillMaxSize(),
