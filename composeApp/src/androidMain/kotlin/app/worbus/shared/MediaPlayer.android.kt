@@ -1557,12 +1557,6 @@ class AndroidMediaPlayerViewModel(
 				state.queue.map { it.toMediaItem() }
 			}
 
-			player.setMediaItems(mediaItems)
-
-			player.shuffleModeEnabled = state.isShuffleEnabled
-			player.repeatMode = state.repeatMode
-			player.playbackParameters = PlaybackParameters(state.playbackSpeed)
-
 			val index = if (state.currentIndex in mediaItems.indices) state.currentIndex else 0
 
 			val songDurationMs = state.queue.getOrNull(index)?.duration?.inWholeMilliseconds ?: 0L
@@ -1573,7 +1567,15 @@ class AndroidMediaPlayerViewModel(
 				0L
 			}
 
-			player.seekTo(index, position)
+			// B-155 (cold start): the items, the index and the position in ONE call. A bare
+			// setMediaItems(items) put the player on the FIRST song until the seekTo below it, and
+			// the restored state passed through that song for as long as the restore took.
+			player.setMediaItems(mediaItems, index, position)
+
+			player.shuffleModeEnabled = state.isShuffleEnabled
+			player.repeatMode = state.repeatMode
+			player.playbackParameters = PlaybackParameters(state.playbackSpeed)
+
 			player.prepare()
 			if (!state.isPaused) {
 				player.play()
@@ -1676,8 +1678,9 @@ class AndroidMediaPlayerViewModel(
 		// scope rather than viewModelScope.
 		return try {
 			withContext(Dispatchers.Main) {
-				player.setMediaItems(mediaItems)
-				player.seekTo(idx, positionMs)
+				// B-155: items, index and position in one call; a bare setMediaItems put the player
+				// on the first song until the seek, and the state just set passed through it.
+				player.setMediaItems(mediaItems, idx, positionMs)
 				player.prepare()
 				if (play) player.play() else player.pause()
 			}
@@ -2189,23 +2192,29 @@ class AndroidMediaPlayerViewModel(
 		viewModelScope.launch {
 			val items = withContext(Dispatchers.Default) { songs.map { it.toMediaItem() } }
 			val start = startIndex.coerceIn(0, (songs.size - 1).coerceAtLeast(0))
-			controller?.let { player ->
-				player.setMediaItems(items, start, 0L)
-				player.prepare()
-				player.play()
+			// B-155: the player and the queue change as one edit, then derive once (see
+			// withQueueMutation): the listeners setMediaItems runs inline would otherwise read the
+			// new start index against the old queue.
+			withQueueMutation {
+				controller?.let { player ->
+					player.setMediaItems(items, start, 0L)
+					player.prepare()
+					player.play()
+				}
+				// What clearQueue used to set, with the new queue in it: not a collection's session.
+				_uiState.update { state ->
+					state.copy(
+						queue = songs,
+						currentIndex = if (songs.isEmpty()) -1 else start,
+						currentSong = songs.getOrNull(start),
+						currentCollection = null,
+						savedQueueId = null,
+						savedQueueKind = "manual",
+						savedQueueName = null
+					)
+				}
 			}
-			// What clearQueue used to set, with the new queue in it: not a collection's session.
-			_uiState.update { state ->
-				state.copy(
-					queue = songs,
-					currentIndex = if (songs.isEmpty()) -1 else start,
-					currentSong = songs.getOrNull(start),
-					currentCollection = null,
-					savedQueueId = null,
-					savedQueueKind = "manual",
-					savedQueueName = null
-				)
-			}
+			if (songs.isNotEmpty()) updatePlaybackState()
 		}
 	}
 
@@ -2222,6 +2231,8 @@ class AndroidMediaPlayerViewModel(
 
 			val startIndex = newCollection.indexOfFirst { it.id == startSong.id }.coerceAtLeast(0)
 
+			// B-155: one edit, derived once (as playSongsLocal).
+			withQueueMutation {
 			controller?.let { player ->
 				player.setMediaItems(items, startIndex, 0L)
 				player.prepare()
@@ -2246,16 +2257,18 @@ class AndroidMediaPlayerViewModel(
 					savedQueueName = collection.displayName
 				)
 			}
+			}
+			if (newCollection.isNotEmpty()) updatePlaybackState()
 		}
 	}
 
 	override fun playNextSingleLocal(song: DomainSong, andPlay: Boolean) {
 		viewModelScope.launch {
 			val at = _uiState.value.currentIndex + 1
-			controller?.addMediaItem(
-				at,
-				withContext(Dispatchers.Default) { song.toMediaItem() }
-			)
+			val item = withContext(Dispatchers.Default) { song.toMediaItem() }
+			// B-155: the insert and the queue it makes are one edit, derived once.
+			withQueueMutation {
+			controller?.addMediaItem(at, item)
 			_uiState.update { state ->
 				val newQueue =
 					if (state.queue.isEmpty())
@@ -2268,6 +2281,8 @@ class AndroidMediaPlayerViewModel(
 					currentSong = if (state.currentIndex == -1) song else state.currentSong
 				)
 			}
+			}
+			updatePlaybackState()
 			// By index, not seekToNextMediaItem(): under shuffle "next" is not the slot just filled.
 			if (andPlay) playAt(at) else snackBarManager.notifyPlayNext()
 		}
@@ -2284,6 +2299,8 @@ class AndroidMediaPlayerViewModel(
 						)) else collection.songs
 				newCollection.map { it.toMediaItem() } to newCollection
 			}
+			// B-155: one edit, derived once.
+			withQueueMutation {
 			controller?.addMediaItems(_uiState.value.currentIndex + 1, items)
 			_uiState.update { state ->
 				val newQueue =
@@ -2299,6 +2316,8 @@ class AndroidMediaPlayerViewModel(
 					currentSong = if (state.currentIndex == -1) newCollection.firstOrNull() else state.currentSong
 				)
 			}
+			}
+			if (_uiState.value.queue.isNotEmpty()) updatePlaybackState()
 			snackBarManager.notifyPlayNext()
 		}
 	}
@@ -2360,25 +2379,29 @@ class AndroidMediaPlayerViewModel(
 				.setLiveConfiguration(MediaItem.LiveConfiguration.Builder().build())
 				.build()
 
-			controller?.let { player ->
-				player.stop()
-				player.clearMediaItems()
-				player.setMediaItem(mediaItem)
-				player.prepare()
-				player.play()
-			}
+			// B-155: one edit, derived once.
+			withQueueMutation {
+				controller?.let { player ->
+					player.stop()
+					player.clearMediaItems()
+					player.setMediaItem(mediaItem)
+					player.prepare()
+					player.play()
+				}
 
-			_uiState.update { state ->
-				state.copy(
-					queue = listOf(dummyRadioSong),
-					currentIndex = 0,
-					currentSong = dummyRadioSong,
-					isLoading = true,
-					savedQueueId = sessionIdFor(listOf(dummyRadioSong)),
-					savedQueueKind = SavedQueueSource.RADIO,
-					savedQueueName = radio.name
-				)
+				_uiState.update { state ->
+					state.copy(
+						queue = listOf(dummyRadioSong),
+						currentIndex = 0,
+						currentSong = dummyRadioSong,
+						isLoading = true,
+						savedQueueId = sessionIdFor(listOf(dummyRadioSong)),
+						savedQueueKind = SavedQueueSource.RADIO,
+						savedQueueName = radio.name
+					)
+				}
 			}
+			updatePlaybackState()
 		}
 	}
 
@@ -2389,6 +2412,8 @@ class AndroidMediaPlayerViewModel(
 				songs to songs.map { it.toMediaItem() }
 			}
 
+			// B-155: one edit, derived once.
+			withQueueMutation {
 			controller?.let { player ->
 				player.shuffleModeEnabled = false
 				player.setMediaItems(mediaItems, 0, 0L)
@@ -2409,6 +2434,8 @@ class AndroidMediaPlayerViewModel(
 					savedQueueName = collection.displayName
 				)
 			}
+			}
+			if (shuffledSongs.isNotEmpty()) updatePlaybackState()
 		}
 	}
 
