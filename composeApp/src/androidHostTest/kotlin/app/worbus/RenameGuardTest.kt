@@ -89,8 +89,13 @@ class RenameGuardTest {
 			val pkg = Regex("""^package\s+([\w.]+)""", RegexOption.MULTILINE).find(text)?.groupValues?.get(1)
 				?: error("$source declares no package")
 			val annotation = text.substringAfter("@Database(").substringBefore("\nabstract class")
-			val version = Regex("""\bversion\s*=\s*(\d+)""").find(annotation)?.groupValues?.get(1)?.toInt()
+			// A literal, or a const of the same file (`DOWNLOAD_DB_VERSION`, which the downloads
+			// first-open check also reads).
+			val declared = Regex("""\bversion\s*=\s*(\w+)""").find(annotation)?.groupValues?.get(1)
 				?: error("$name's @Database has no version")
+			val version = declared.toIntOrNull()
+				?: Regex("""\bconst\s+val\s+$declared\s*=\s*(\d+)""").find(text)?.groupValues?.get(1)?.toInt()
+				?: error("$name's @Database version $declared is neither a number nor a const in $source")
 			val dir = sourceFile("schemas/$pkg.$name")
 			assertTrue(dir.isDirectory, "${dir.path} is not a directory")
 			val present = dir.listFiles()!!.mapNotNull { it.name.removeSuffix(".json").toIntOrNull() }.toSet()

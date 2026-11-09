@@ -42,7 +42,7 @@ class DownloadMigrationChainTest {
 		 * Where the chain starts: 3, upstream Navic's `downloads.db` before the fork's download-center
 		 * columns (4). `app.worbus.android` (268f1aaf) shipped with downloads already at 5
 		 * (627de526), so nothing older than 5 is on a device under this app ID; 3 -> 4 and 4 -> 5 stay
-		 * for the old `paige.navic` app's history, and both are checked against their schemas
+		 * for the history of the old Navic app ID, and both are checked against their schemas
 		 * (`DownloadMigration34Test`, `CacheDatabase24MigrationTest`).
 		 */
 		const val OLDEST = 3
