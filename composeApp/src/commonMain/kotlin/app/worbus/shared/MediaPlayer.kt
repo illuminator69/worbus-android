@@ -138,7 +138,9 @@ data class QueueUndoSnapshot(
 	val positionMs: Long,
 	val wasPaused: Boolean,
 	val savedQueueId: String?,
-	val savedQueueKind: String
+	val savedQueueKind: String,
+	/** The play order before the edit (W1): an undone removal puts the row back at its play position. */
+	val playOrder: List<Int>? = null
 )
 
 enum class QueueUndoKind { CLEAR, REMOVE, MOVE, REPLACE }
@@ -235,19 +237,12 @@ abstract class MediaPlayerViewModel(
 	}
 
 	/**
-	 * The LOCAL queue's indices in the order the player will play them (its shuffle order), or
-	 * null for queue order. Autoplay counts what is left by it (`playOrderRemaining`): under
-	 * shuffle, the songs after the playing one in the queue are not the songs still to come.
-	 * A player without a shuffle order of its own leaves it null.
+	 * Songs left after the playing one on the LOCAL player, in play order
+	 * ([PlayerUiState.playOrder], the same state as the queue it counts: W1, B-346).
 	 */
-	@Suppress("PropertyName")
-	protected val _playOrder = MutableStateFlow<List<Int>?>(null)
-	val playOrder: StateFlow<List<Int>?> = _playOrder.asStateFlow()
-
-	/** Songs left after the playing one on the LOCAL player, in play order. */
 	fun remainingInPlayOrder(): Int {
 		val state = _uiState.value
-		return app.worbus.domain.manager.playOrderRemaining(_playOrder.value, state.queue.size, state.currentIndex)
+		return app.worbus.domain.manager.playOrderRemaining(state.playOrder, state.queue.size, state.currentIndex)
 	}
 
 	// ------------------------------------------------------------------
@@ -283,7 +278,8 @@ abstract class MediaPlayerViewModel(
 			positionMs = positionMs,
 			wasPaused = state.isPaused,
 			savedQueueId = state.savedQueueId,
-			savedQueueKind = state.savedQueueKind
+			savedQueueKind = state.savedQueueKind,
+			playOrder = state.playOrder
 		)
 		undoStack.addLast(snap)
 		while (undoStack.size > MAX_UNDO) undoStack.removeFirst()
@@ -326,12 +322,12 @@ abstract class MediaPlayerViewModel(
 				)
 			}
 		} else if (edit is QueueUndoEdit.Insert) {
-			insertQueueItem(edit.index, edit.song)
+			insertQueueItem(edit.index, edit.song, snap.playOrder)
 		} else if (edit is QueueUndoEdit.Move) {
 			moveQueueItem(edit.from, edit.to)
 		} else if (keepsPlaying) {
 			// More than one edit: rebuilt around the playing song, which keeps playing.
-			reconcileRemoteQueue(snap.queue, snap.index)
+			reconcileRemoteQueue(snap.queue, snap.index, snap.playOrder)
 		} else {
 			// Preserve the queue's saved-queue identity + kind so its history row isn't orphaned.
 			loadRemoteQueue(
@@ -439,8 +435,11 @@ abstract class MediaPlayerViewModel(
 	abstract fun removeFromQueue(index: Int)
 	abstract fun moveQueueItem(fromIndex: Int, toIndex: Int)
 
-	/** Put [song] back at [index] of the local queue (an undone removal). */
-	open fun insertQueueItem(index: Int, song: DomainSong) {}
+	/**
+	 * Put [song] back at [index] of the local queue (an undone removal). [playOrder] is the order
+	 * from before the removal (W1): under shuffle the row goes back to its own play position.
+	 */
+	open fun insertQueueItem(index: Int, song: DomainSong, playOrder: List<Int>? = null) {}
 	abstract fun clearQueue()
 	abstract fun playAt(index: Int)
 	abstract fun playRadio(radio: DomainRadio)
@@ -652,7 +651,11 @@ abstract class MediaPlayerViewModel(
 		index: Int,
 		positionMs: Long,
 		play: Boolean,
-		budgetMs: Long
+		budgetMs: Long,
+		// W1, from a hub with `playOrder`: the session's shuffle and play order, adopted verbatim.
+		// Null shuffle (an older hub) keeps this player's own shuffle mode.
+		shuffle: Boolean? = null,
+		order: List<Int>? = null
 	): LoadOutcome = LoadOutcome(true)
 
 	open fun setPlayerVolume(volume: Float) {}
@@ -664,13 +667,19 @@ abstract class MediaPlayerViewModel(
 	 */
 	open fun applyAudioGain() {}
 	open fun applyRemoteRepeat(mode: Int) {}
-	open fun applyRemoteShuffle(enabled: Boolean) {}
+	/**
+	 * Shuffle on or off from the hub. [order] (W1, a hub with `playOrder`) is the order to play,
+	 * adopted verbatim when it is an order of this queue; without one, turning on puts the playing
+	 * song first.
+	 */
+	open fun applyRemoteShuffle(enabled: Boolean, order: List<Int>? = null) {}
 
 	/**
 	 * Replace the queue around the currently-playing track WITHOUT restarting
-	 * it (used for hub queueChanged when the current track is unchanged).
+	 * it (used for hub queueChanged when the current track is unchanged). [order] (W1) is the play
+	 * order of [songs] to adopt; without one the edit's own rows keep the rule of `PlayOrder`.
 	 */
-	open fun reconcileRemoteQueue(songs: List<DomainSong>, index: Int) {}
+	open fun reconcileRemoteQueue(songs: List<DomainSong>, index: Int, order: List<Int>? = null) {}
 
 	// The commands a hub directive drives, as the command echo needs them (PROTOCOL §5.3,
 	// duty 2): each returns only once its player calls have RUN and [localUiState] shows the
@@ -692,8 +701,12 @@ abstract class MediaPlayerViewModel(
 	open suspend fun awaitRemoteClear() = clearQueue()
 
 	/** [reconcileRemoteQueue], including the reload it falls back to. */
-	open suspend fun awaitRemoteQueueReconcile(songs: List<DomainSong>, index: Int) =
-		reconcileRemoteQueue(songs, index)
+	open suspend fun awaitRemoteQueueReconcile(
+		songs: List<DomainSong>,
+		index: Int,
+		shuffle: Boolean? = null,
+		order: List<Int>? = null
+	) = reconcileRemoteQueue(songs, index, order)
 
 	/**
 	 * navi-connect autoplay: append songs to the end of the queue without

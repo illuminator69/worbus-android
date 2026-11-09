@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Looper
 import androidx.annotation.OptIn
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.AudioAttributes
@@ -126,6 +127,7 @@ import app.worbus.exoplayer.AudioGainProcessor
 import app.worbus.exoplayer.ExoPlayerCoilBitmapLoader
 import app.worbus.exoplayer.ResumingDataSource
 import app.worbus.exoplayer.installPlayOrder
+import app.worbus.exoplayer.setPlayOrder
 import app.worbus.ui.core.PlayerUiState
 import app.worbus.util.Logger
 import java.io.File
@@ -453,6 +455,7 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 				.buildUpon()
 				.add(SessionCommand(COMMAND_SHUFFLE, Bundle.EMPTY))
 				.add(SessionCommand(COMMAND_REPEAT, Bundle.EMPTY))
+				.add(SessionCommand(COMMAND_SET_PLAY_ORDER, Bundle.EMPTY))
 				.build()
 
 			return MediaSession.ConnectionResult.accept(
@@ -478,6 +481,17 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 						Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
 						Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
 						else -> Player.REPEAT_MODE_OFF
+					}
+				}
+
+				// W1: an explicit play order for the LOCAL player (never the remote facade, whose
+				// order is the hub's): the app's own after an edit, a new queue or a restore, or
+				// one adopted from the hub. Refused unless it is an order of exactly its rows.
+				COMMAND_SET_PLAY_ORDER -> {
+					val order = args.getIntArray(EXTRA_PLAY_ORDER)
+					val local = exoPlayer
+					if (order == null || local == null || !setPlayOrder(local, order)) {
+						return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
 					}
 				}
 			}
@@ -860,6 +874,10 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 	companion object {
 		const val COMMAND_SHUFFLE = "COMMAND_SHUFFLE"
 		const val COMMAND_REPEAT = "COMMAND_REPEAT"
+
+		/** W1: sets the local player's play order; the order as an int array under [EXTRA_PLAY_ORDER]. */
+		const val COMMAND_SET_PLAY_ORDER = "COMMAND_SET_PLAY_ORDER"
+		const val EXTRA_PLAY_ORDER = "playOrder"
 
 		const val MEDIA_ROOT_ID = "navic_root"
 		const val MEDIA_SHUFFLE_ID = "navic_shuffle"
@@ -1332,8 +1350,12 @@ class AndroidMediaPlayerViewModel(
 
 					override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
 						if (showsRemote()) return
-						_uiState.update { it.copy(isShuffleEnabled = shuffleModeEnabled) }
-						publishPlayOrder()
+						// W1: the mode and its order are read together (PlayOrder.resolve). The
+						// mode is also written here for an empty queue, which updatePlaybackState
+						// leaves alone.
+						_uiState.update { it.copy(isShuffleEnabled = shuffleModeEnabled, playOrder = it.playOrder.takeIf { shuffleModeEnabled }) }
+						if (!shuffleModeEnabled) pendingPlayOrder = null
+						updatePlaybackState()
 					}
 
 					override fun onRepeatModeChanged(repeatMode: Int) {
@@ -1555,37 +1577,91 @@ class AndroidMediaPlayerViewModel(
 			}
 		}
 
+		// W1 (B-346): the order is written in the same update as everything else derived here, and
+		// is an order of exactly the state's queue or null.
+		val shown = _uiState.value
+		val reading = PlayOrder.resolve(view.shuffle, timelinePlayOrder(controller), pendingPlayOrder, shown.playOrder, shown.queue.size)
+		pendingPlayOrder = reading.pending
 		_uiState.update { state ->
 			val derived = derivePlayback(state, view)
-			derived.copy(currentCollection = derivedCollection ?: derived.currentCollection)
+			derived.copy(
+				currentCollection = derivedCollection ?: derived.currentCollection,
+				playOrder = reading.order?.takeIf { PlayOrder.isPermutation(it, state.queue.size) }
+			)
 		}
-		publishPlayOrder()
 		applyAudioGain()
 		updateProgress()
 	}
 
 	/**
-	 * The timeline's shuffle order as queue indices, for autoplay's count of what is left
-	 * (`MediaPlayerViewModel.playOrder`); null in queue order. Read here, on the controller's
-	 * thread, because a MediaController may not be touched from autoplay's dispatcher. While
-	 * another device plays, this controller's timeline is the remote mirror's, and autoplay does
-	 * not run then.
+	 * The controller timeline's shuffle order as queue indices; null in queue order. Read on the
+	 * controller's thread. Not always the service player's: see [PlayOrder.resolve].
 	 */
-	private fun publishPlayOrder() {
-		val c = controller ?: return
+	private fun timelinePlayOrder(c: Player): List<Int>? {
 		val timeline = c.currentTimeline
-		if (!c.shuffleModeEnabled || timeline.isEmpty) {
-			_playOrder.value = null
-			return
-		}
+		if (!c.shuffleModeEnabled || timeline.isEmpty) return null
 		val order = ArrayList<Int>(timeline.windowCount)
 		var index = timeline.getFirstWindowIndex(true)
 		while (index != C.INDEX_UNSET && order.size < timeline.windowCount) {
 			order.add(index)
 			index = timeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, true)
 		}
-		if (order != _playOrder.value) _playOrder.value = order
+		return order
 	}
+
+	/**
+	 * An order this controller sent the service's player that its timeline has not shown yet
+	 * (W1, [PlayOrder.resolve]). Main thread.
+	 */
+	private var pendingPlayOrder: List<Int>? = null
+
+	/**
+	 * Sends [order] to the service's player (PlaybackService.COMMAND_SET_PLAY_ORDER), and waits
+	 * for its timeline to show it. Commands reach the player in the order they were sent, so this
+	 * lands after the edit it follows. A refusal (an order of another queue) stops the wait and
+	 * the timeline is read again. Main thread.
+	 */
+	private fun sendPlayOrder(order: List<Int>) {
+		val c = controller ?: return
+		pendingPlayOrder = order
+		val result = c.sendCustomCommand(
+			SessionCommand(PlaybackService.COMMAND_SET_PLAY_ORDER, Bundle.EMPTY),
+			Bundle().apply { putIntArray(PlaybackService.EXTRA_PLAY_ORDER, order.toIntArray()) }
+		)
+		result.addListener({
+			val ok = runCatching { result.get().resultCode == SessionResult.RESULT_SUCCESS }.getOrDefault(false)
+			if (!ok && pendingPlayOrder === order) {
+				Logger.w("MediaPlayer", "W1: the player refused a play order of ${order.size} rows")
+				pendingPlayOrder = null
+				updatePlaybackState()
+			}
+		}, ContextCompat.getMainExecutor(application))
+	}
+
+	/** Sends the state's order, if it has one (after an edit that wrote it). Main thread. */
+	private fun sendStatePlayOrder() {
+		_uiState.value.playOrder?.let { sendPlayOrder(it) }
+	}
+
+	/** The order of a new queue of [size] rows starting at [start]: null unless shuffled. Main thread. */
+	private fun newQueueOrder(size: Int, start: Int): List<Int>? =
+		if (controller?.shuffleModeEnabled == true && size > 0) PlayOrder.currentFirst(size, start) else null
+
+	/**
+	 * The play order after an edit of the local queue: [edit] applied to the order [state] shows.
+	 * Null when not shuffled, or when the state shows no order of its queue (the timeline then
+	 * says). Main thread.
+	 */
+	private fun orderAfterEdit(state: PlayerUiState, edit: (List<Int>) -> List<Int>): List<Int>? {
+		if (controller?.shuffleModeEnabled != true) return null
+		val old = state.playOrder?.takeIf { PlayOrder.isPermutation(it, state.queue.size) } ?: return null
+		return edit(old)
+	}
+
+	/** [count] rows appended: the end of play order, or a new queue's order when it was empty. */
+	private fun appendedOrder(state: PlayerUiState, count: Int): List<Int>? =
+		if (state.queue.isEmpty()) newQueueOrder(count, 0)
+		else orderAfterEdit(state) { PlayOrder.insert(it, state.queue.size, count) }
 
 	/**
 	 * The output gain for the playing song, from the settings, in one update (no flush; the
@@ -1633,12 +1709,21 @@ class AndroidMediaPlayerViewModel(
 				0L
 			}
 
+			// W1: a shuffled queue comes back in its own play order (persisted with it), or, from a
+			// build that kept none, with the playing song first.
+			val order = if (!state.isShuffleEnabled) null
+				else state.playOrder?.takeIf { PlayOrder.isPermutation(it, mediaItems.size) }
+					?: PlayOrder.currentFirst(mediaItems.size, index)
+			_uiState.update { it.copy(playOrder = order?.takeIf { o -> PlayOrder.isPermutation(o, it.queue.size) }) }
+			pendingPlayOrder = order
+
 			// B-155 (cold start): the items, the index and the position in ONE call. A bare
 			// setMediaItems(items) put the player on the FIRST song until the seekTo below it, and
 			// the restored state passed through that song for as long as the restore took.
 			player.setMediaItems(mediaItems, index, position)
 
 			player.shuffleModeEnabled = state.isShuffleEnabled
+			order?.let { sendPlayOrder(it) }
 			player.repeatMode = state.repeatMode
 			player.playbackParameters = PlaybackParameters(state.playbackSpeed)
 
@@ -1671,13 +1756,15 @@ class AndroidMediaPlayerViewModel(
 		index: Int,
 		positionMs: Long,
 		play: Boolean,
-		budgetMs: Long
+		budgetMs: Long,
+		shuffle: Boolean?,
+		order: List<Int>?
 	): LoadOutcome {
 		// Every load gets a generation. A do:load arriving while an earlier one is still
 		// settling supersedes it, and the older attempt must neither keep waiting on a player
 		// that has moved on nor report a verdict for a queue that is no longer loaded.
 		val gen = ++remoteLoadGen
-		val applied = applyRemoteQueue(songs, index, positionMs, play, null, "manual", null)
+		val applied = applyRemoteQueue(songs, index, positionMs, play, null, "manual", null, shuffle = shuffle, order = order)
 		if (applied != null) return applied
 		if (gen != remoteLoadGen) return LoadOutcome(false, "superseded by a newer load")
 		val player = controller ?: return LoadOutcome(false, "no player")
@@ -1702,7 +1789,12 @@ class AndroidMediaPlayerViewModel(
 		savedQueueKind: String,
 		savedQueueName: String?,
 		// The same songs as media items, where the caller has built them already.
-		prepared: List<MediaItem>? = null
+		prepared: List<MediaItem>? = null,
+		// W1: the session's shuffle and order (a hub with `playOrder`), adopted verbatim. A null
+		// shuffle keeps this player's own mode; a shuffled queue without a usable order starts
+		// with its start row.
+		shuffle: Boolean? = null,
+		order: List<Int>? = null
 	): LoadOutcome? {
 		val player = controller ?: return LoadOutcome(false, "no media controller")
 		if (songs.isEmpty()) return LoadOutcome(false, "nothing to play")
@@ -1717,36 +1809,46 @@ class AndroidMediaPlayerViewModel(
 		val idx = if (index in songs.indices) index else 0
 		val durationMs = songs.getOrNull(idx)?.duration?.inWholeMilliseconds ?: 0L
 
-		_uiState.update {
-			it.copy(
-				queue = songs,
-				currentSong = songs.getOrNull(idx),
-				currentCollection = null,
-				currentIndex = idx,
-				isPaused = !play,
-				isLoading = false,
-				// A hub-driven / adopted queue is a transient mirror of the session (savedQueueId
-				// = null), so observeAndSaveState won't overwrite the user's saved-queue row. A
-				// locally-started mix / undo restore passes a real id + kind to persist as its own
-				// history session instead.
-				savedQueueId = savedQueueId,
-				savedQueueKind = savedQueueKind,
-				// currentCollection is null on this path, so without an explicit name a locally
-				// started radio / Mood Flow / journey persisted as an unnamed row ("No name").
-				savedQueueName = savedQueueName,
-				progress = if (durationMs > 0) {
-					(positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-				} else 0f
-			)
-		}
-
 		// Media3 is main-thread-only, and awaitRemoteQueueLoad is called from the hub's own
-		// scope rather than viewModelScope.
+		// scope rather than viewModelScope. The state is written on it too, with its play order,
+		// which needs the player's shuffle mode.
 		return try {
 			withContext(Dispatchers.Main) {
+				val shuffleOn = shuffle ?: player.shuffleModeEnabled
+				val playOrder = if (!shuffleOn) null
+					else order?.takeIf { PlayOrder.isPermutation(it, songs.size) } ?: PlayOrder.currentFirst(songs.size, idx)
+				_uiState.update {
+					it.copy(
+						queue = songs,
+						isShuffleEnabled = shuffleOn,
+						playOrder = playOrder,
+						currentSong = songs.getOrNull(idx),
+						currentCollection = null,
+						currentIndex = idx,
+						isPaused = !play,
+						isLoading = false,
+						// A hub-driven / adopted queue is a transient mirror of the session (savedQueueId
+						// = null), so observeAndSaveState won't overwrite the user's saved-queue row. A
+						// locally-started mix / undo restore passes a real id + kind to persist as its own
+						// history session instead.
+						savedQueueId = savedQueueId,
+						savedQueueKind = savedQueueKind,
+						// currentCollection is null on this path, so without an explicit name a locally
+						// started radio / Mood Flow / journey persisted as an unnamed row ("No name").
+						savedQueueName = savedQueueName,
+						progress = if (durationMs > 0) {
+							(positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+						} else 0f
+					)
+				}
+				// Before the player calls: their listeners run inline, and the controller's
+				// timeline is in queue order until the session's arrives (PlayOrder.resolve).
+				pendingPlayOrder = playOrder
+				if (shuffle != null && player.shuffleModeEnabled != shuffle) player.shuffleModeEnabled = shuffle
 				// B-155: items, index and position in one call; a bare setMediaItems put the player
 				// on the first song until the seek, and the state just set passed through it.
 				player.setMediaItems(mediaItems, idx, positionMs)
+				playOrder?.let { sendPlayOrder(it) }
 				player.prepare()
 				if (play) player.play() else player.pause()
 			}
@@ -1828,11 +1930,11 @@ class AndroidMediaPlayerViewModel(
 		)
 	}
 
-	override fun reconcileRemoteQueue(songs: List<DomainSong>, index: Int) {
-		viewModelScope.launch { awaitRemoteQueueReconcile(songs, index) }
+	override fun reconcileRemoteQueue(songs: List<DomainSong>, index: Int, order: List<Int>?) {
+		viewModelScope.launch { awaitRemoteQueueReconcile(songs, index, null, order) }
 	}
 
-	override suspend fun awaitRemoteQueueReconcile(songs: List<DomainSong>, index: Int) {
+	override suspend fun awaitRemoteQueueReconcile(songs: List<DomainSong>, index: Int, shuffle: Boolean?, order: List<Int>?) {
 		// Built first and off the main thread, so that looking at the player and editing it
 		// below are ONE main-thread block. They used to straddle this conversion: a track that
 		// ended during it was then rebuilt around as if it were still the one playing.
@@ -1856,13 +1958,14 @@ class AndroidMediaPlayerViewModel(
 			}
 
 			val currentIndex = player.currentMediaItemIndex
-			val oldIds = _uiState.value.queue.map { it.id }
+			val before = _uiState.value
+			val oldIds = before.queue.map { it.id }
 			// Only what changed, around the playing item (S-035): the hub's station edit replaces
 			// the songs after a cut, and with under 20 s left that cut keeps the next song, which
 			// may already be loading for a gapless start. Exact only while the player and the
 			// queue agree; otherwise the whole tail and head are rebuilt, the playing item still
 			// left alone.
-			val edit = if (player.mediaItemCount == oldIds.size && currentIndex == _uiState.value.currentIndex)
+			val edit = if (player.mediaItemCount == oldIds.size && currentIndex == before.currentIndex)
 				aroundPlayingEdit(oldIds, currentIndex, songs.map { it.id }, index)
 			else null
 
@@ -1871,33 +1974,59 @@ class AndroidMediaPlayerViewModel(
 			// derived from the pair (current song, replay gain, collection) would be read off
 			// nonsense.
 			withQueueMutation {
+				// W1: the session's shuffle mode first (a hub with `playOrder`).
+				if (shuffle != null && player.shuffleModeEnabled != shuffle) player.shuffleModeEnabled = shuffle
+				// The play order follows the same edits as the player (PlayOrder's rule, which the
+				// service's player applies to each of them); an order the hub sent replaces it.
+				var playOrder = if (player.shuffleModeEnabled) {
+					before.playOrder?.takeIf { PlayOrder.isPermutation(it, oldIds.size) }
+				} else null
+				fun removed(from: Int, to: Int) { playOrder = playOrder?.let { PlayOrder.remove(it, from, to) } }
+				fun inserted(at: Int, count: Int) { playOrder = playOrder?.let { PlayOrder.insert(it, at, count) } }
 				if (edit != null) {
-					if (edit.tailRemove > 0) player.removeMediaItems(edit.tailAt, edit.tailAt + edit.tailRemove)
+					if (edit.tailRemove > 0) {
+						player.removeMediaItems(edit.tailAt, edit.tailAt + edit.tailRemove)
+						removed(edit.tailAt, edit.tailAt + edit.tailRemove)
+					}
 					if (!edit.tailInsert.isEmpty()) {
 						player.addMediaItems(edit.tailAt, items.subList(edit.tailInsert.first, edit.tailInsert.last + 1))
+						inserted(edit.tailAt, edit.tailInsert.last + 1 - edit.tailInsert.first)
 					}
-					if (edit.headRemove > 0) player.removeMediaItems(edit.headAt, edit.headAt + edit.headRemove)
+					if (edit.headRemove > 0) {
+						player.removeMediaItems(edit.headAt, edit.headAt + edit.headRemove)
+						removed(edit.headAt, edit.headAt + edit.headRemove)
+					}
 					if (!edit.headInsert.isEmpty()) {
 						player.addMediaItems(edit.headAt, items.subList(edit.headInsert.first, edit.headInsert.last + 1))
+						inserted(edit.headAt, edit.headInsert.last + 1 - edit.headInsert.first)
 					}
 				} else {
 					if (player.mediaItemCount > currentIndex + 1) {
+						removed(currentIndex + 1, player.mediaItemCount)
 						player.removeMediaItems(currentIndex + 1, player.mediaItemCount)
 					}
 					if (index + 1 < items.size) {
+						inserted(player.mediaItemCount, items.size - index - 1)
 						player.addMediaItems(items.subList(index + 1, items.size))
 					}
 					if (currentIndex > 0) {
 						player.removeMediaItems(0, currentIndex)
+						removed(0, currentIndex)
 					}
 					if (index > 0) {
 						player.addMediaItems(0, items.subList(0, index))
+						inserted(0, index)
 					}
 				}
+				val adopted = if (!player.shuffleModeEnabled) null
+					else order?.takeIf { PlayOrder.isPermutation(it, songs.size) }
+						?: playOrder?.takeIf { PlayOrder.isPermutation(it, songs.size) }
+						?: PlayOrder.currentFirst(songs.size, index)
 
 				_uiState.update {
-					it.copy(queue = songs, currentIndex = index, currentSong = newCurrent)
+					it.copy(queue = songs, currentIndex = index, currentSong = newCurrent, playOrder = adopted)
 				}
+				adopted?.let { sendPlayOrder(it) }
 			}
 			updatePlaybackState()
 			null
@@ -1913,7 +2042,7 @@ class AndroidMediaPlayerViewModel(
 		applyRemoteQueue(
 			songs, index, 0L, !reloadFrom.isPaused,
 			reloadFrom.savedQueueId, reloadFrom.savedQueueKind, reloadFrom.savedQueueName,
-			prepared = items
+			prepared = items, shuffle = shuffle, order = order
 		)
 	}
 
@@ -1930,11 +2059,26 @@ class AndroidMediaPlayerViewModel(
 		}
 	}
 
-	override fun applyRemoteShuffle(enabled: Boolean) {
-		viewModelScope.launch {
-			controller?.shuffleModeEnabled = enabled
-			_uiState.update { it.copy(isShuffleEnabled = enabled) }
-		}
+	override fun applyRemoteShuffle(enabled: Boolean, order: List<Int>?) {
+		viewModelScope.launch { setShuffle(enabled, order) }
+	}
+
+	/**
+	 * Shuffle on or off, with the order to play (W1): [order] when it is an order of this queue
+	 * (one the hub sent), else on puts the playing song first, the rest random. The service's player
+	 * does the same on its own when shuffle is turned on; the order sent after it is the one that
+	 * plays, and the state shows it from this call on. Main thread.
+	 */
+	private fun setShuffle(enabled: Boolean, order: List<Int>?) {
+		val player = controller ?: return
+		val state = _uiState.value
+		val playOrder = if (!enabled || state.queue.isEmpty()) null
+			else order?.takeIf { PlayOrder.isPermutation(it, state.queue.size) }
+				?: PlayOrder.currentFirst(state.queue.size, state.currentIndex)
+		_uiState.update { it.copy(isShuffleEnabled = enabled, playOrder = playOrder?.takeIf { o -> PlayOrder.isPermutation(o, it.queue.size) }) }
+		pendingPlayOrder = playOrder
+		if (player.shuffleModeEnabled != enabled) player.shuffleModeEnabled = enabled
+		playOrder?.let { sendPlayOrder(it) }
 	}
 
 	private var progressJob: Job? = null
@@ -2010,9 +2154,12 @@ class AndroidMediaPlayerViewModel(
 				state.copy(
 					queue = newQueue,
 					currentIndex = if (state.currentIndex == -1) 0 else state.currentIndex,
-					currentSong = if (state.currentIndex == -1) song else state.currentSong
+					currentSong = if (state.currentIndex == -1) song else state.currentSong,
+					// W1: at the end of play order (B-345).
+					playOrder = appendedOrder(state, 1)
 				)
 			}
+			sendStatePlayOrder()
 			snackBarManager.notifyAddedToQueue()
 		}
 	}
@@ -2032,9 +2179,11 @@ class AndroidMediaPlayerViewModel(
 				state.copy(
 					queue = newQueue,
 					currentIndex = if (state.currentIndex == -1) 0 else state.currentIndex,
-					currentSong = if (state.currentIndex == -1) newCollection.firstOrNull() else state.currentSong
+					currentSong = if (state.currentIndex == -1) newCollection.firstOrNull() else state.currentSong,
+					playOrder = appendedOrder(state, newCollection.size)
 				)
 			}
+			sendStatePlayOrder()
 			snackBarManager.notifyAddedToQueue()
 		}
 	}
@@ -2049,9 +2198,12 @@ class AndroidMediaPlayerViewModel(
 				state.copy(
 					queue = newQueue,
 					currentIndex = if (state.currentIndex == -1) 0 else state.currentIndex,
-					currentSong = if (state.currentIndex == -1) newQueue.firstOrNull() else state.currentSong
+					currentSong = if (state.currentIndex == -1) newQueue.firstOrNull() else state.currentSong,
+					// W1: a top-up goes to the end of play order, in its own order (B-345).
+					playOrder = appendedOrder(state, songs.size)
 				)
 			}
+			sendStatePlayOrder()
 		}
 	}
 
@@ -2065,9 +2217,12 @@ class AndroidMediaPlayerViewModel(
 				state.copy(
 					queue = newQueue,
 					currentIndex = if (state.currentIndex == -1) 0 else state.currentIndex,
-					currentSong = if (state.currentIndex == -1) newQueue.firstOrNull() else state.currentSong
+					currentSong = if (state.currentIndex == -1) newQueue.firstOrNull() else state.currentSong,
+					// W1: a top-up goes to the end of play order, in its own order (B-345).
+					playOrder = appendedOrder(state, songs.size)
 				)
 			}
+			sendStatePlayOrder()
 		}
 	}
 
@@ -2092,17 +2247,25 @@ class AndroidMediaPlayerViewModel(
 				.sortedDescending()
 			if (removals.isEmpty() && songs.isEmpty()) return@withContext true
 			withQueueMutation {
-				removals.forEach { controller?.removeMediaItem(it) }
+				// W1: the order follows the same edits (the removed rows dropped, the new ones
+				// after their queue predecessor's play position, at the end for a top-up).
+				var playOrder = orderAfterEdit(state) { it }
+				removals.forEach { r ->
+					controller?.removeMediaItem(r)
+					playOrder = playOrder?.let { PlayOrder.remove(it, r, r + 1) }
+				}
 				val newQueue = state.queue.toMutableList().apply { removals.forEach { removeAt(it) } }
 				val newIndex = current - removals.count { it < current }
 				val newNext = next - removals.count { it < next }
 				val earliest = maxOf(newIndex, newNext) + 1
 				val at = (insertAt ?: newQueue.size).coerceIn(earliest.coerceAtMost(newQueue.size), newQueue.size)
 				if (items.isNotEmpty()) controller?.addMediaItems(at, items)
+				playOrder = playOrder?.let { PlayOrder.insert(it, at, items.size) }
 				newQueue.addAll(at, songs)
 				_uiState.update {
-					it.copy(queue = newQueue, currentIndex = newIndex, currentSong = newQueue.getOrNull(newIndex))
+					it.copy(queue = newQueue, currentIndex = newIndex, currentSong = newQueue.getOrNull(newIndex), playOrder = playOrder)
 				}
+				playOrder?.let { sendPlayOrder(it) }
 			}
 			updatePlaybackState()
 			true
@@ -2115,11 +2278,17 @@ class AndroidMediaPlayerViewModel(
 			// session mirror) — never index out of bounds.
 			if (index !in 0 until _uiState.value.queue.size) return@launch
 			withQueueMutation {
+				val before = _uiState.value
+				// W1: the rest keep their play order; a removed playing row is followed by the row
+				// after it in play order, as the service's player does (PlayOrderPlayerTest).
+				val playOrder = orderAfterEdit(before) { PlayOrder.remove(it, index, index + 1) }?.takeIf { it.isNotEmpty() }
+				val successor = before.playOrder?.takeIf { playOrder != null }?.let { PlayOrder.successor(it, index) }
 				controller?.removeMediaItem(index)
 				_uiState.update { state ->
 					val newQueue = state.queue.toMutableList().apply { removeAt(index) }
 					val newIndex = when {
 						index < state.currentIndex -> state.currentIndex - 1
+						index == state.currentIndex && successor != null -> if (successor > index) successor - 1 else successor
 						index == state.currentIndex -> if (newQueue.isEmpty()) -1 else state.currentIndex.coerceAtMost(
 							newQueue.size - 1
 						)
@@ -2129,9 +2298,11 @@ class AndroidMediaPlayerViewModel(
 					state.copy(
 						queue = newQueue,
 						currentIndex = newIndex,
-						currentSong = if (newIndex == -1) null else newQueue[newIndex]
+						currentSong = if (newIndex == -1) null else newQueue[newIndex],
+						playOrder = playOrder
 					)
 				}
+				playOrder?.let { sendPlayOrder(it) }
 			}
 			// Re-derive from the player now that queue and player agree. The arithmetic above is
 			// the no-controller fallback; where there IS a controller its index wins, which is what
@@ -2145,7 +2316,7 @@ class AndroidMediaPlayerViewModel(
 		}
 	}
 
-	override fun insertQueueItem(index: Int, song: DomainSong) {
+	override fun insertQueueItem(index: Int, song: DomainSong, playOrder: List<Int>?) {
 		viewModelScope.launch {
 			val item = withContext(Dispatchers.Default) { song.toMediaItem() }
 			if (index !in 0.._uiState.value.queue.size) return@launch
@@ -2153,6 +2324,12 @@ class AndroidMediaPlayerViewModel(
 			// the player may already be reading into, stay as they are. Guarded like removal: the
 			// insert flushes the timeline listener inline.
 			withQueueMutation {
+				val before = _uiState.value
+				// W1: an undone removal goes back to its own play position ([playOrder], the order
+				// from before it); any other insert follows the rule.
+				val order = orderAfterEdit(before) { old ->
+					playOrder?.takeIf { PlayOrder.isPermutation(it, old.size + 1) } ?: PlayOrder.insert(old, index, 1)
+				}
 				controller?.addMediaItem(index, item)
 				_uiState.update { state ->
 					val newQueue = state.queue.toMutableList().apply { add(index, song) }
@@ -2160,9 +2337,11 @@ class AndroidMediaPlayerViewModel(
 					state.copy(
 						queue = newQueue,
 						currentIndex = newIndex,
-						currentSong = newQueue.getOrNull(newIndex)
+						currentSong = newQueue.getOrNull(newIndex),
+						playOrder = order
 					)
 				}
+				order?.let { sendPlayOrder(it) }
 			}
 			updatePlaybackState()
 		}
@@ -2178,6 +2357,8 @@ class AndroidMediaPlayerViewModel(
 				return@launch
 			}
 			withQueueMutation {
+				// W1: a move changes queue order only; every row keeps its play position.
+				val order = orderAfterEdit(_uiState.value) { PlayOrder.move(it, fromIndex, fromIndex + 1, toIndex) }
 				controller?.moveMediaItem(fromIndex, toIndex)
 				_uiState.update { state ->
 					val newQueue = state.queue.toMutableList().apply {
@@ -2193,9 +2374,11 @@ class AndroidMediaPlayerViewModel(
 					state.copy(
 						queue = newQueue,
 						currentIndex = newIndex,
-						currentSong = if (newIndex == -1) null else newQueue[newIndex]
+						currentSong = if (newIndex == -1) null else newQueue[newIndex],
+						playOrder = order
 					)
 				}
+				order?.let { sendPlayOrder(it) }
 			}
 			// Same reason as removeFromQueue: a move that CROSSES the playing track changes the
 			// player's index too, so without the guard it was applied twice.
@@ -2224,6 +2407,7 @@ class AndroidMediaPlayerViewModel(
 				queue = emptyList(),
 				currentSong = null,
 				currentIndex = -1,
+				playOrder = null,
 				progress = 0f,
 				isPaused = andPause || it.isPaused,
 				// Clearing ends the session: drop its saved-queue identity so the
@@ -2233,6 +2417,7 @@ class AndroidMediaPlayerViewModel(
 				savedQueueName = null
 			)
 		}
+		pendingPlayOrder = null
 		controller?.clearMediaItems()
 		// The publish path bails on an empty queue, so without this the hub kept serving the
 		// queue we just threw away — open another client and the whole list was back.
@@ -2262,8 +2447,11 @@ class AndroidMediaPlayerViewModel(
 			// withQueueMutation): the listeners setMediaItems runs inline would otherwise read the
 			// new start index against the old queue.
 			withQueueMutation {
+				// W1: a new queue under shuffle starts with its start row.
+				val order = newQueueOrder(songs.size, start)
 				controller?.let { player ->
 					player.setMediaItems(items, start, 0L)
+					order?.let { sendPlayOrder(it) }
 					player.prepare()
 					player.play()
 				}
@@ -2271,6 +2459,7 @@ class AndroidMediaPlayerViewModel(
 				_uiState.update { state ->
 					state.copy(
 						queue = songs,
+						playOrder = order,
 						currentIndex = if (songs.isEmpty()) -1 else start,
 						currentSong = songs.getOrNull(start),
 						currentCollection = null,
@@ -2299,8 +2488,11 @@ class AndroidMediaPlayerViewModel(
 
 			// B-155: one edit, derived once (as playSongsLocal).
 			withQueueMutation {
+			// W1: a new queue under shuffle starts with its start row.
+			val order = newQueueOrder(newCollection.size, startIndex)
 			controller?.let { player ->
 				player.setMediaItems(items, startIndex, 0L)
+				order?.let { sendPlayOrder(it) }
 				player.prepare()
 				player.play()
 			}
@@ -2308,6 +2500,7 @@ class AndroidMediaPlayerViewModel(
 			_uiState.update { state ->
 				state.copy(
 					queue = newCollection,
+					playOrder = order,
 					currentIndex = startIndex,
 					currentSong = newCollection.getOrNull(startIndex),
 					// Stamp the collection we're playing FROM. It was previously only ever
@@ -2334,6 +2527,9 @@ class AndroidMediaPlayerViewModel(
 			val item = withContext(Dispatchers.Default) { song.toMediaItem() }
 			// B-155: the insert and the queue it makes are one edit, derived once.
 			withQueueMutation {
+			// W1: right after the playing row in play order (B-362).
+			val before = _uiState.value
+			val order = if (before.queue.isEmpty()) newQueueOrder(1, 0) else orderAfterEdit(before) { PlayOrder.insert(it, at, 1) }
 			controller?.addMediaItem(at, item)
 			_uiState.update { state ->
 				val newQueue =
@@ -2344,12 +2540,15 @@ class AndroidMediaPlayerViewModel(
 				state.copy(
 					queue = newQueue,
 					currentIndex = if (state.currentIndex == -1) 0 else state.currentIndex,
-					currentSong = if (state.currentIndex == -1) song else state.currentSong
+					currentSong = if (state.currentIndex == -1) song else state.currentSong,
+					playOrder = order
 				)
 			}
+			order?.let { sendPlayOrder(it) }
 			}
 			updatePlaybackState()
-			// By index, not seekToNextMediaItem(): under shuffle "next" is not the slot just filled.
+			// By index: the slot just filled is the next in play order too (B-362), but a seek by
+			// index does not depend on the order having landed.
 			if (andPlay) playAt(at) else snackBarManager.notifyPlayNext()
 		}
 	}
@@ -2367,6 +2566,10 @@ class AndroidMediaPlayerViewModel(
 			}
 			// B-155: one edit, derived once.
 			withQueueMutation {
+			// W1: right after the playing row in play order, in the order given.
+			val before = _uiState.value
+			val order = if (before.queue.isEmpty()) newQueueOrder(newCollection.size, 0)
+				else orderAfterEdit(before) { PlayOrder.insert(it, before.currentIndex + 1, newCollection.size) }
 			controller?.addMediaItems(_uiState.value.currentIndex + 1, items)
 			_uiState.update { state ->
 				val newQueue =
@@ -2379,9 +2582,11 @@ class AndroidMediaPlayerViewModel(
 				state.copy(
 					queue = newQueue,
 					currentIndex = if (state.currentIndex == -1) 0 else state.currentIndex,
-					currentSong = if (state.currentIndex == -1) newCollection.firstOrNull() else state.currentSong
+					currentSong = if (state.currentIndex == -1) newCollection.firstOrNull() else state.currentSong,
+					playOrder = order
 				)
 			}
+			order?.let { sendPlayOrder(it) }
 			}
 			if (_uiState.value.queue.isNotEmpty()) updatePlaybackState()
 			snackBarManager.notifyPlayNext()
@@ -2451,6 +2656,7 @@ class AndroidMediaPlayerViewModel(
 					player.stop()
 					player.clearMediaItems()
 					player.setMediaItem(mediaItem)
+					if (player.shuffleModeEnabled) sendPlayOrder(listOf(0))
 					player.prepare()
 					player.play()
 				}
@@ -2458,6 +2664,7 @@ class AndroidMediaPlayerViewModel(
 				_uiState.update { state ->
 					state.copy(
 						queue = listOf(dummyRadioSong),
+						playOrder = listOf(0).takeIf { controller?.shuffleModeEnabled == true },
 						currentIndex = 0,
 						currentSong = dummyRadioSong,
 						isLoading = true,
@@ -2490,6 +2697,8 @@ class AndroidMediaPlayerViewModel(
 			_uiState.update { state ->
 				state.copy(
 					queue = shuffledSongs,
+					// Played in the order drawn above, with shuffle off.
+					playOrder = null,
 					currentIndex = 0,
 					currentSong = shuffledSongs.firstOrNull(),
 					// See playCollectionLocal: the source collection must be known at publish
@@ -2559,9 +2768,7 @@ class AndroidMediaPlayerViewModel(
 
 	override fun toggleShuffle() {
 		viewModelScope.launch {
-			controller?.let { player ->
-				player.shuffleModeEnabled = !player.shuffleModeEnabled
-			}
+			controller?.let { player -> setShuffle(!player.shuffleModeEnabled, null) }
 		}
 	}
 

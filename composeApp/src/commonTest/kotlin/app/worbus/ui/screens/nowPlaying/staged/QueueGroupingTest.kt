@@ -293,9 +293,9 @@ class QueueGroupingTest {
 
 	@Test
 	fun remoteListsInQueueOrder() {
-		// Another device plays: the local player's shuffle order says nothing about that queue.
-		val order = queuePlayOrder(isRemoteActive = true, playOrder = listOf(0, 3, 1, 4, 2))
-		assertNull(order)
+		// Another device plays and nobody vouches for its order (an older hub, or a player without
+		// the playOrder cap): the mirror's state carries none (W1), and the list is in queue order.
+		val order: List<Int>? = null
 		val queueOrder = listOf(
 			Row(0, 100L, QueueGroup.Played),
 			Header(QueueGroup.Playing, 101L),
@@ -307,8 +307,6 @@ class QueueGroupingTest {
 		)
 		assertEquals(queueOrder, queueListItems(ids(5), uids(5), currentIndex = 1, bound = null, userQueued = emptySet(), playOrder = order))
 		assertEquals(queueOrder, queueListItems(ids(5), uids(5), currentIndex = 1, bound = null, userQueued = emptySet()))
-		// This device plays: its own order is used.
-		assertEquals(listOf(0, 3, 1, 4, 2), queuePlayOrder(isRemoteActive = false, playOrder = listOf(0, 3, 1, 4, 2)))
 		// An order for another queue (a frame behind, a mirror mid-rebuild) is not trusted: queue order.
 		assertEquals(queueOrder, queueListItems(ids(5), uids(5), currentIndex = 1, bound = null, userQueued = emptySet(), playOrder = listOf(1, 0, 2)))
 		assertEquals(queueOrder, queueListItems(ids(5), uids(5), currentIndex = 1, bound = null, userQueued = emptySet(), playOrder = listOf(0, 1, 1, 3, 4)))
@@ -547,8 +545,7 @@ class QueueGroupingTest {
 			items.filterIsInstance<Header>().map { it.group }
 		)
 		// And the same with the player's own order of none, another device playing, or shuffle off.
-		assertEquals(items, queueListItems(ids(6), uids(6), 0, station, setOf("s1", "s2"), playOrder = queuePlayOrder(false, null)))
-		assertEquals(items, queueListItems(ids(6), uids(6), 0, station, setOf("s1", "s2"), playOrder = queuePlayOrder(true, listOf(0, 4, 1, 5, 2, 3))))
+		assertEquals(items, queueListItems(ids(6), uids(6), 0, station, setOf("s1", "s2"), playOrder = null))
 	}
 
 	@Test

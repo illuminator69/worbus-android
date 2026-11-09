@@ -169,7 +169,6 @@ import app.worbus.ui.screens.nowPlaying.staged.QueueGroup
 import app.worbus.ui.screens.nowPlaying.staged.QueueListItem
 import app.worbus.ui.screens.nowPlaying.staged.listedUids
 import app.worbus.ui.screens.nowPlaying.staged.queueListItems
-import app.worbus.ui.screens.nowPlaying.staged.queuePlayOrder
 import app.worbus.ui.screens.nowPlaying.staged.queueReorderAllowed
 import app.worbus.ui.screens.nowPlaying.staged.remainingQueueIndices
 import app.worbus.ui.screens.nowPlaying.staged.rowRunPositions
@@ -219,10 +218,11 @@ internal fun QueueContent(layout: QueueLayout) {
 	val isRemoteActive by hubManager.isRemoteActive.collectAsState()
 	val playerState by player.steadyState.collectAsStateWithLifecycle()
 	// B-341 (worbus-android#2): both layouts list the queue in the order it will play, the same order
-	// the peek row reads; none while another device plays. Rows keep their queue index, and a list in
-	// a shuffle order is not dragged (its neighbours on screen are not its neighbours in the queue).
-	val localPlayOrder by player.playOrder.collectAsStateWithLifecycle()
-	val listOrder = queuePlayOrder(isRemoteActive, localPlayOrder)
+	// the peek row reads. Rows keep their queue index, and a list in a shuffle order is not dragged
+	// (its neighbours on screen are not its neighbours in the queue). The order is the state's own
+	// (W1, B-346): the local player's, or while another device plays the session's when the hub
+	// vouches for it, never an order paired with another state's queue.
+	val listOrder = playerState.playOrder
 	// B-350: "shuffled" is exactly what makes queueListItems take its shuffled branch (a non-null
 	// order), so the autoplay mark and the single "Up next" header never disagree for a frame.
 	val shuffled = listOrder != null

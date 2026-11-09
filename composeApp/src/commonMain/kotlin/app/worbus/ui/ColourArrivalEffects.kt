@@ -2,7 +2,7 @@ package app.worbus.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.koin.compose.koinInject
 import app.worbus.domain.manager.PreferenceManager
@@ -44,8 +44,8 @@ fun ColourArrivalEffects() {
 	val player = koinInject<MediaPlayerViewModel>()
 	val prefetcher = koinInject<CoverSeedPrefetcher>()
 	LaunchedEffect(player, prefetcher) {
-		combine(player.steadyState, player.playOrder) { state, order ->
-			upcomingCoverArtIds(state.queue, state.currentIndex, order, UPCOMING_PREFETCH)
+		player.steadyState.map { state ->
+			upcomingCoverArtIds(state.queue, state.currentIndex, state.playOrder, UPCOMING_PREFETCH)
 		}
 			.distinctUntilChanged()
 			.collect { ids -> ids.forEach { prefetcher.request(it, nextSong = true) } }

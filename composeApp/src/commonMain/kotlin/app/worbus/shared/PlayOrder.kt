@@ -94,4 +94,35 @@ object PlayOrder {
 		val p = order.indexOf(current)
 		return if (p < 0) null else order.getOrNull(p + 1)
 	}
+
+	/**
+	 * The order the app's player state shows, read on the app's controller (B-346).
+	 *
+	 * The controller's timeline is not always the service player's: right after a queue edit made
+	 * through it, media3's MediaController masks the edit with a timeline in QUEUE order
+	 * (`MediaUtils.generateUnshuffledIndices`, 1.11.0) until the session's own arrives. So an
+	 * order the app worked out and sent ([pending]) is shown until the timeline shows it; the
+	 * timeline is believed otherwise (the notification's shuffle button, another controller).
+	 * The result is always an order of exactly [queueSize] rows, or null.
+	 *
+	 * [timeline] is the controller timeline's shuffle order, [shown] what the state shows now.
+	 */
+	fun resolve(shuffle: Boolean, timeline: List<Int>?, pending: List<Int>?, shown: List<Int>?, queueSize: Int): Reading {
+		if (!shuffle) return Reading(null, null)
+		if (pending != null) {
+			if (timeline == pending) return Reading(pending, null)
+			if (isPermutation(pending, queueSize)) return Reading(pending, pending)
+			// Sent for a queue the state does not hold yet (an edit still going in): keep waiting,
+			// and show what is an order of this one.
+			val holding = shown?.takeIf { isPermutation(it, queueSize) } ?: timeline?.takeIf { isPermutation(it, queueSize) }
+			return Reading(holding, pending)
+		}
+		return Reading(
+			timeline?.takeIf { isPermutation(it, queueSize) } ?: shown?.takeIf { isPermutation(it, queueSize) },
+			null
+		)
+	}
+
+	/** What [resolve] shows, and the order still waited for. */
+	data class Reading(val order: List<Int>?, val pending: List<Int>?)
 }

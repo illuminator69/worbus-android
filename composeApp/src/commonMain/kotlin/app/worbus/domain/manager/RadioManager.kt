@@ -408,7 +408,7 @@ class RadioManager(
 		} else {
 			val state = mediaPlayer.localUiState.value
 			Upcoming(
-				state.queue.map { it.id }, mediaPlayer.playOrder.value, state.currentIndex,
+				state.queue.map { it.id }, state.playOrder, state.currentIndex,
 				state.currentSong?.duration?.inWholeMilliseconds?.takeIf { it > 0 }
 					?.let { (it * (1f - state.progress.coerceIn(0f, 1f))).toLong() }
 			)
@@ -1282,8 +1282,8 @@ class RadioManager(
 			var trigger = ""
 			var transientAttempts = 0
 			combine(
-				mediaPlayer.localUiState, mediaPlayer.playOrder, _autoplayOn, stationManager.available, driverKick
-			) { _, _, _, _, kick -> kick }
+				mediaPlayer.localUiState, _autoplayOn, stationManager.available, driverKick
+			) { _, _, _, kick -> kick }
 				.collect { kick ->
 					// The emission is the cue to look, not what to look at. `combine` hands over
 					// values queued while the last step ran, so one combined before that step's
@@ -1293,7 +1293,7 @@ class RadioManager(
 					// path, seen on the emulator against a hub that had lost the station). What the
 					// player holds NOW is what decides.
 					val state = mediaPlayer.localUiState.value
-					val order = mediaPlayer.playOrder.value
+					val order = state.playOrder
 					val on = _autoplayOn.value
 					val available = stationManager.available.value
 					val remaining = playOrderRemaining(order, state.queue.size, state.currentIndex)
@@ -1431,7 +1431,7 @@ class RadioManager(
 	 * name when the seed is not known here, in its own character ([stationRestart], B-139).
 	 */
 	private suspend fun restartStation(state: PlayerUiState, bound: StationProvenance, autoplayOn: Boolean): DriverRetry? {
-		val recent = playOrderRecent(mediaPlayer.playOrder.value, state.queue.size, state.currentIndex, SEED_TRACKS_FROM_QUEUE)
+		val recent = playOrderRecent(state.playOrder, state.queue.size, state.currentIndex, SEED_TRACKS_FROM_QUEUE)
 			.mapNotNull { state.queue.getOrNull(it)?.id }
 			.filterNot { PreviewManager.isPreviewId(it) || it.startsWith("radio_") }
 			.distinct()

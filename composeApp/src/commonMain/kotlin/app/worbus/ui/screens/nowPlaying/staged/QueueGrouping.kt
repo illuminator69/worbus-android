@@ -49,8 +49,8 @@ sealed interface QueueListItem {
  * (B-350), and a row keeps its own group so the screen can mark the autoplay ones. Each row
  * keeps its QUEUE index and that index's uid, so a tap, a swipe or a remove acts on the song shown
  * (B-341, worbus-android#2: under shuffle "Up next" listed the queue, not what plays next). [songIds]
- * and [uids] are the mirror's, index for index. Null [playOrder] (no shuffle, another device playing:
- * [queuePlayOrder]) is today's list exactly.
+ * and [uids] are the mirror's, index for index. Null [playOrder] (no shuffle, or another device
+ * playing with no order the hub vouches for: `PlayerUiState.playOrder`, W1) is today's list exactly.
  *
  * [lastShown]: the uids of the listing on screen, in its order ([listedUids]). The player publishes a
  * new order the moment its queue changes, and the mirror catches up a composition or more later, so
@@ -157,13 +157,6 @@ private fun isOrderOf(count: Int, order: List<Int>): Boolean {
 	}
 	return true
 }
-
-/**
- * The play order the queue lists by: the LOCAL player's ([playOrder], null without shuffle), and
- * none while another device plays, whose queue the local order says nothing about. The peek row and
- * the queue's list read the same value.
- */
-fun queuePlayOrder(isRemoteActive: Boolean, playOrder: List<Int>?): List<Int>? = if (isRemoteActive) null else playOrder
 
 /**
  * Whether the [count] rows may be dragged: with no play order, or one that is this queue's in queue

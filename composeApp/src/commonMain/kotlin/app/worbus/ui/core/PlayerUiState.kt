@@ -12,6 +12,15 @@ data class PlayerUiState(
 	val currentIndex: Int = -1,
 	val isPaused: Boolean = false,
 	val isShuffleEnabled: Boolean = false,
+	/**
+	 * The rows of [queue] in the order the player plays them while shuffled (`playOrder[p]` is the
+	 * row played at play position p), null in queue order (W1). Written in the same update as
+	 * [queue], so it is always an order of exactly these rows or null: no reader can pair one queue
+	 * with another queue's order (B-346). Persisted with the queue and restored with it. While
+	 * another device plays (the mirror), the session's order when the hub and that device vouch
+	 * for it, else null.
+	 */
+	val playOrder: List<Int>? = null,
 	val repeatMode: Int = 0,
 	val progress: Float = 0f,
 	val isLoading: Boolean = false,

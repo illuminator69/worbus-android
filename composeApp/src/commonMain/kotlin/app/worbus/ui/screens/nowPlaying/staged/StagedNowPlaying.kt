@@ -189,7 +189,6 @@ fun StagedNowPlaying() {
 	val coveredBySheet = rememberCoveredBySheet()
 
 	val playerState by player.steadyState.collectAsStateWithLifecycle()
-	val playOrder by player.playOrder.collectAsState()
 	val song = playerState.currentSong
 	val viewModel = koinViewModel<NowPlayingViewModel> { parametersOf(player) }
 	val songIsStarred by viewModel.songIsStarred.collectAsStateWithLifecycle()
@@ -371,7 +370,7 @@ fun StagedNowPlaying() {
 		}
 		if (!isPlayerCurrent) return@Box
 
-		val next = peekRow(playerState.queue.map { it.id }, playerState.currentIndex, queuePlayOrder(isRemoteActive, playOrder))
+		val next = peekRow(playerState.queue.map { it.id }, playerState.currentIndex, playerState.playOrder)
 			?.let { playerState.queue.getOrNull(it) }
 		StagedQueueLayer(
 			state = queueState,

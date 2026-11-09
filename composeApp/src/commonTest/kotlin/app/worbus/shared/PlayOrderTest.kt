@@ -81,4 +81,28 @@ class PlayOrderTest {
 		assertEquals(1, PlayOrder.successor(six, 4))
 		assertNull(PlayOrder.successor(six, 2))
 	}
+
+	@Test
+	fun aSentOrderIsShownUntilTheTimelineShowsItAndTheMaskIsNot() {
+		val sent = listOf(2, 0, 3, 1)
+		// The controller's mask after the edit: queue order. Not shown; still waiting.
+		assertEquals(PlayOrder.Reading(sent, sent), PlayOrder.resolve(true, listOf(0, 1, 2, 3), sent, sent, 4))
+		// The session's timeline before the order lands (its own rule's result): still waiting.
+		assertEquals(PlayOrder.Reading(sent, sent), PlayOrder.resolve(true, listOf(2, 3, 0, 1), sent, sent, 4))
+		// It lands.
+		assertEquals(PlayOrder.Reading(sent, null), PlayOrder.resolve(true, sent, sent, sent, 4))
+		// Nothing sent: the timeline is believed (the notification's shuffle button).
+		assertEquals(PlayOrder.Reading(listOf(3, 0, 1, 2), null), PlayOrder.resolve(true, listOf(3, 0, 1, 2), null, sent, 4))
+	}
+
+	@Test
+	fun aReadingIsAlwaysAnOrderOfItsQueueOrNothing() {
+		val sent = listOf(4, 0, 3, 1, 2)
+		// Inside an append the state still holds four rows: the five-row order waits, the old one shows.
+		assertEquals(PlayOrder.Reading(listOf(2, 0, 3, 1), sent), PlayOrder.resolve(true, listOf(0, 1, 2, 3, 4), sent, listOf(2, 0, 3, 1), 4))
+		// No order of this queue anywhere: none.
+		assertEquals(PlayOrder.Reading(null, null), PlayOrder.resolve(true, listOf(0, 1), null, listOf(1, 0, 2), 4))
+		// Shuffle off: none, and nothing waited for.
+		assertEquals(PlayOrder.Reading(null, null), PlayOrder.resolve(false, sent, sent, sent, 5))
+	}
 }
