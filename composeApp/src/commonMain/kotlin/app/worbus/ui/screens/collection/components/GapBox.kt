@@ -454,10 +454,10 @@ private fun SourcesContent(
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 						modifier = Modifier.padding(start = 4.dp)
 					)
-					val chosen = gapChosenSource(shown.sources, ui.selected)
+					val chosen = gapChosenSource(shown.sources, ui.selectedId)
 					SourceCards(
 						sources = shown.sources,
-						selected = gapSelectedIndex(shown.sources, ui.selected),
+						selected = gapSelectedIndex(shown.sources, ui.selectedId),
 						enabled = !ui.working,
 						onSelect = { index -> gapSelection(shown.sources, index)?.let(onSelect) },
 						// A gap's folder holds the album; there is no "every file" to ask for.

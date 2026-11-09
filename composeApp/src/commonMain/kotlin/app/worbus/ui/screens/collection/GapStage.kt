@@ -173,11 +173,24 @@ fun gapFillLanded(gap: LbGap, fill: LbFillEntry?): Boolean =
 /** The tracks the album holds by lb-bot's count: what a re-read tracklist should have at least. */
 fun heldTracks(gap: LbGap): Int = gap.tracks.count { it.state in HELD_TRACK_STATES }
 
-/** What the gaps box keeps when the card at [index] of [sources] is chosen (a tap or the preselection). */
-fun gapSelection(sources: List<LbGapSource>, index: Int): Int? = index.takeIf { it in sources.indices }
+/**
+ * What the gaps box keeps when the card at [index] of [sources] is chosen (a tap or the
+ * preselection): the source's `id`, the folder's identity (peer + folder, the same across searches,
+ * lb-bot Phase A W6), never its position (B-370). A search replaces the list whole, and a position
+ * then names another folder, which Request fetched with no error.
+ */
+fun gapSelection(sources: List<LbGapSource>, index: Int): Int? = sources.getOrNull(index)?.id
 
-/** The card [selection] names in [sources]: the one highlighted, and the one Request sends. */
-fun gapChosenSource(sources: List<LbGapSource>, selection: Int?): LbGapSource? = selection?.let { sources.getOrNull(it) }
+/**
+ * The card [selection] (a source id) names in [sources]: the one highlighted, and the one Request
+ * sends. Null when the list no longer holds that folder: nothing is selected then.
+ */
+fun gapChosenSource(sources: List<LbGapSource>, selection: Int?): LbGapSource? =
+	selection?.let { id -> sources.firstOrNull { it.id == id } }
 
-/** Where [selection] sits in [sources], for `SourceCards`' highlight. */
-fun gapSelectedIndex(sources: List<LbGapSource>, selection: Int?): Int? = selection?.takeIf { it in sources.indices }
+/** Where [selection] sits in [sources] now, for `SourceCards`' highlight; null when it is gone. */
+fun gapSelectedIndex(sources: List<LbGapSource>, selection: Int?): Int? =
+	selection?.let { id -> sources.indexOfFirst { it.id == id }.takeIf { it >= 0 } }
+
+/** lb-bot's 409 when a source id is not in today's list: a newer search replaced it (Phase A W6). */
+const val STALE_SOURCE_CODE = "stale_source"

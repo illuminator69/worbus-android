@@ -301,7 +301,10 @@ fun CollectionDetailScreen(
 	val choosing = gapStage as? GapStage.Choosing
 	val preselect = choosing?.preselected?.let { gapSelection(choosing.sources, it) }
 	LaunchedEffect(preselect) {
-		if (preselect != null && gapBox.selected == null) viewModel.selectGapSource(preselect, fetchListing = false)
+		// A choice whose folder left the list is no choice (B-370): the safe default may stand in.
+		if (preselect != null && gapChosenSource(choosing.sources, gapBox.selectedId) == null) {
+			viewModel.selectGapSource(preselect, fetchListing = false)
+		}
 	}
 	// Opened to fill its gaps: unfold once, on the first visit to this entry.
 	var gapsOpened by rememberSaveable { mutableStateOf(false) }

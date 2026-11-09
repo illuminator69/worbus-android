@@ -1,6 +1,7 @@
 package app.worbus.ui.screens.collection.viewmodels
 
 import app.worbus.ui.screens.collection.gapChosenSource
+import app.worbus.ui.screens.collection.STALE_SOURCE_CODE
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -227,7 +228,7 @@ class CollectionDetailViewModel(
 	/** Ask lb-bot to search; [GapBoxUi.searchAsked] covers the time until its record says so. */
 	fun searchGap() {
 		val groupId = gapGroupId ?: return
-		_gapBox.update { it.copy(view = GapView.SOURCES, searchAsked = true, selected = null, error = null) }
+		_gapBox.update { it.copy(view = GapView.SOURCES, searchAsked = true, selectedId = null, error = null) }
 		viewModelScope.launch {
 			val result = lbBotManager.gapSearch(groupId)
 			if (result is LbBotManager.LbResult.Failed) _gapBox.update { it.copy(error = gapError(result.error)) }
@@ -242,13 +243,14 @@ class CollectionDetailViewModel(
 	 */
 	fun selectGapSource(selection: Int, fetchListing: Boolean) {
 		val groupId = gapGroupId ?: return
-		_gapBox.update { it.copy(selected = selection) }
+		_gapBox.update { it.copy(selectedId = selection) }
 		if (!fetchListing) return
 		val source = gapChosenSource(lbBotManager.gaps.value[groupId]?.sources.orEmpty(), selection) ?: return
 		if (source.id in _gapBox.value.listings) return
 		viewModelScope.launch {
-			(lbBotManager.gapSourceFiles(groupId, source.id) as? LbBotManager.LbResult.Ok)?.let { ok ->
-				_gapBox.update { it.copy(listings = it.listings + (source.id to ok.value)) }
+			when (val result = lbBotManager.gapSourceFiles(groupId, source.id)) {
+				is LbBotManager.LbResult.Ok -> _gapBox.update { it.copy(listings = it.listings + (source.id to result.value)) }
+				is LbBotManager.LbResult.Failed -> if (isStaleSource(result.error)) staleSourceList(groupId, result.error)
 			}
 		}
 	}
@@ -262,7 +264,10 @@ class CollectionDetailViewModel(
 		_gapBox.update { it.copy(working = true, error = null) }
 		viewModelScope.launch {
 			when (val result = lbBotManager.gapFetch(groupId, source.id)) {
-				is LbBotManager.LbResult.Failed -> _gapBox.update { it.copy(working = false, error = gapError(result.error)) }
+				is LbBotManager.LbResult.Failed -> {
+					_gapBox.update { it.copy(working = false, error = gapError(result.error)) }
+					if (isStaleSource(result.error)) staleSourceList(groupId, result.error)
+				}
 				is LbBotManager.LbResult.Ok -> {
 					// The sources are done with: when the fill ends the box answers from its line.
 					_gapBox.update { it.copy(working = false, committed = true, fetched = source, view = GapView.TRACKS) }
@@ -274,6 +279,19 @@ class CollectionDetailViewModel(
 			}
 		}
 	}
+
+	/**
+	 * B-370: lb-bot refused a source id its list no longer holds (409 `stale_source`: a newer search,
+	 * here or on another device, replaced the list this card came from). Its sentence stays on the
+	 * error line, the choice is dropped, and the list is read again for the user to pick from.
+	 */
+	private fun staleSourceList(groupId: String, error: LbBotManager.LbError) {
+		_gapBox.update { it.copy(selectedId = null, error = gapError(error)) }
+		viewModelScope.launch { lbBotManager.refreshGap(groupId) }
+	}
+
+	private fun isStaleSource(error: LbBotManager.LbError): Boolean =
+		(error as? LbBotManager.LbError.Rejected)?.let { it.status == 409 && it.code == STALE_SOURCE_CODE } == true
 
 	/** "Pick the best source for me": lb-bot walks the same ranked list. */
 	fun autoGap() {
@@ -820,7 +838,11 @@ data class GapBoxUi(
 	val committed: Boolean = false,
 	/** A search tap whose answer has not come back yet. */
 	val searchAsked: Boolean = false,
-	val selected: Int? = null,
+	/**
+	 * The chosen card's source `id` (B-370: the folder's identity, never its position); a card the
+	 * list no longer holds is no selection (`gapChosenSource`).
+	 */
+	val selectedId: Int? = null,
 	val working: Boolean = false,
 	val error: LbBotManager.LbError? = null,
 	/** The source this device requested from, for the steps' "FLAC · from …" line. */
