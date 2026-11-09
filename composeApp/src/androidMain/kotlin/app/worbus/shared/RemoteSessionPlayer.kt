@@ -1,6 +1,7 @@
 package app.worbus.shared
 
 import android.net.Uri
+import android.os.Bundle
 import android.os.Looper
 import android.os.SystemClock
 import androidx.annotation.OptIn
@@ -307,6 +308,9 @@ class RemoteSessionPlayer(
 				Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
 			)
 			.setPlaylist(playlist)
+			// B-148: says, in the same state update as the playlist and the play state, that this is
+			// the remote session and not the local player (`marksRemoteFacade`).
+			.setPlaylistMetadata(remoteFacadePlaylistMetadata)
 			.setCurrentMediaItemIndex(session.index.coerceIn(0, maxOf(0, tracks.size - 1)))
 			.setContentPositionMs(
 				PositionSupplier.getExtrapolating(positionMs, if (session.isPlaying) 1f else 0f)
@@ -387,3 +391,20 @@ class RemoteSessionPlayer(
 		const val ARTWORK_CACHE_MAX = 600
 	}
 }
+
+/**
+ * The extra that marks [RemoteSessionPlayer]'s state (B-148). The app's own MediaController is a
+ * client of the same session, so while the facade is the session's player that controller reports
+ * the REMOTE session's playlist, index and play state. `AndroidMediaPlayerViewModel` must not write
+ * those into the local player's state; it tells them apart by this mark, which arrives in the same
+ * state update as the values it qualifies (a flag set beside the swap would race the session's
+ * own delivery to the controller).
+ */
+internal const val REMOTE_FACADE_EXTRA = "app.worbus.remoteFacade"
+
+private val remoteFacadePlaylistMetadata: MediaMetadata = MediaMetadata.Builder()
+	.setExtras(Bundle().apply { putBoolean(REMOTE_FACADE_EXTRA, true) })
+	.build()
+
+/** True for the playlist metadata of [RemoteSessionPlayer]'s state. */
+internal fun MediaMetadata.marksRemoteFacade(): Boolean = extras?.getBoolean(REMOTE_FACADE_EXTRA) == true

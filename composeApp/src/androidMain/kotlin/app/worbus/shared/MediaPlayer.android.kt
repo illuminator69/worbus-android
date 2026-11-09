@@ -1148,6 +1148,12 @@ class AndroidMediaPlayerViewModel(
 	 */
 	private fun reresolveQueueUris(downloadedMap: Map<String, String>) {
 		val player = controller ?: return
+		if (showsRemote()) {
+			// B-148: these items are the remote session's (the facade's), not the local queue's.
+			// Run again at the next local transition, when the local player is shown again.
+			currentItemReresolvePending = true
+			return
+		}
 		currentItemReresolvePending = false
 
 		for (i in 0 until player.mediaItemCount) {
@@ -1195,6 +1201,10 @@ class AndroidMediaPlayerViewModel(
 				addListener(object : Player.Listener {
 					override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
 						updatePlaybackState()
+						// B-148: a transition of the remote session's. Nothing below concerns it:
+						// re-resolving and warming are the local queue's, and the availability skip
+						// would skip the REMOTE session's song through the facade.
+						if (showsRemote()) return
 
 						// The widget broadcast that used to live here now comes off the merged
 						// uiState collector in init: a track change moves currentSong, which is
@@ -1237,7 +1247,7 @@ class AndroidMediaPlayerViewModel(
 					}
 
 					override fun onIsPlayingChanged(isPlaying: Boolean) {
-						if (isPlaying) startProgressLoop()
+						if (isPlaying && !showsRemote()) startProgressLoop()
 					}
 
 					/**
@@ -1271,6 +1281,10 @@ class AndroidMediaPlayerViewModel(
 					}
 
 					override fun onPlaybackStateChanged(playbackState: Int) {
+						if (showsRemote()) {
+							updatePlaybackState()
+							return
+						}
 						_uiState.update { it.copy(isLoading = playbackState == Player.STATE_BUFFERING) }
 						// Playback actually recovered, so a LATER error deserves a fresh budget
 						// rather than inheriting an exhausted one from an earlier bad patch.
@@ -1307,23 +1321,27 @@ class AndroidMediaPlayerViewModel(
 					}
 
 					override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+						if (showsRemote()) return
 						_uiState.update { it.copy(isShuffleEnabled = shuffleModeEnabled) }
 						publishPlayOrder()
 					}
 
 					override fun onRepeatModeChanged(repeatMode: Int) {
+						if (showsRemote()) return
 						_uiState.update { it.copy(repeatMode = repeatMode) }
 					}
 
 					override fun onTracksChanged(tracks: Tracks) {
+						if (showsRemote()) return
 						updatePlaybackProperties(tracks)
 					}
 
 					override fun onTimelineChanged(timeline: Timeline, reason: Int) {
 						updatePlaybackState()
 						// A new or reordered queue: its first songs need warming before the
-						// player reaches them, not only after the next track change.
-						if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) warmUpcomingTranscodes()
+						// player reaches them, not only after the next track change. Not the
+						// remote session's (B-148).
+						if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED && !showsRemote()) warmUpcomingTranscodes()
 					}
 				})
 				updatePlaybackState()
@@ -1464,6 +1482,13 @@ class AndroidMediaPlayerViewModel(
 		}
 	}
 
+	/**
+	 * The controller shows `RemoteSessionPlayer` (another device plays), not the local player
+	 * (B-148). Read from the controller's own state, so it changes in the same update as the values
+	 * it qualifies.
+	 */
+	private fun showsRemote(): Boolean = controller?.playlistMetadata?.marksRemoteFacade() == true
+
 	private fun updatePlaybackState() {
 		if (queueMutationDepth > 0) return
 		val controller = controller ?: return
@@ -1475,8 +1500,15 @@ class AndroidMediaPlayerViewModel(
 			mediaId = controller.currentMediaItem?.mediaId,
 			playWhenReady = controller.playWhenReady,
 			shuffle = controller.shuffleModeEnabled,
-			repeatMode = controller.repeatMode
+			repeatMode = controller.repeatMode,
+			showsRemote = showsRemote()
 		)
+		if (view.showsRemote) {
+			// B-148: the remote session's values are not the local player's; only "paused" is
+			// written (derivePlayback). No collection, play order, gain or progress from them.
+			_uiState.update { derivePlayback(it, view) }
+			return
+		}
 		val currentSong = derivePlayback(_uiState.value, view).currentSong
 
 		val derivedCollection = currentSong?.let { song ->
@@ -1879,7 +1911,7 @@ class AndroidMediaPlayerViewModel(
 		// Cancel the previous one before starting a new one so only ever one runs.
 		progressJob?.cancel()
 		progressJob = viewModelScope.launch {
-			while (controller?.isPlaying == true) {
+			while (controller?.isPlaying == true && !showsRemote()) {
 				val player = controller ?: break
 				val duration = currentDurationMs(player)
 				if (duration > 0) {
