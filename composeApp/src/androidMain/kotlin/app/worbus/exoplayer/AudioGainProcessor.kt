@@ -77,7 +77,10 @@ class AudioGainProcessor : BaseAudioProcessor() {
 	 * (`resolveGainMode`: Dynamic is never passed). Any thread; it only swaps the state, and the
 	 * playback thread ramps to it at its next buffer (B-366).
 	 */
-	fun update(rgAmpDb: Float, ampDb: Float, metadata: DomainReplayGain?, mode: ReplayGainMode) {
+	/** The tags of every song in the queue, by media id (not read yet). */
+	fun setQueueTags(tags: Map<String, DomainReplayGain?>) = Unit
+
+	fun update(rgAmpDb: Float, ampDb: Float, metadata: DomainReplayGain?, mode: ReplayGainMode, mediaId: String? = null) {
 		state = GainState(
 			replayGainEnabled = mode != ReplayGainMode.Off,
 			rgAmpDb = rgAmpDb,

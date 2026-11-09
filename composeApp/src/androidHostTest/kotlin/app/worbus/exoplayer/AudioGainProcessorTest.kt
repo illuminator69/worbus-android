@@ -1,6 +1,8 @@
 package app.worbus.exoplayer
 
 import androidx.media3.common.C
+import androidx.media3.common.Timeline
+import androidx.media3.common.MediaItem
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import app.worbus.domain.models.DomainReplayGain
@@ -8,6 +10,7 @@ import app.worbus.domain.models.settings.ReplayGainMode
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -231,5 +234,76 @@ class AudioGainProcessorTest {
 		val out = p.output.order(ByteOrder.LITTLE_ENDIAN)
 		assertEquals(input.size * 2, out.remaining(), "the produced buffer survives the update")
 		assertEquals(500, out.asShortBuffer().get(0).toInt())
+	}
+
+	// --- B-282, the start of a song (the open half) ----------------------------------------------
+
+	/** The player's playlist as media3 hands it to the processor: one window and period per song. */
+	private class QueueTimeline(private val ids: List<String>) : Timeline() {
+		override fun getWindowCount() = ids.size
+		override fun getWindow(windowIndex: Int, window: Window, defaultPositionProjectionUs: Long): Window =
+			window.also { it.mediaItem = MediaItem.Builder().setMediaId(ids[windowIndex]).build() }
+		override fun getPeriodCount() = ids.size
+		override fun getPeriod(periodIndex: Int, period: Period, setIds: Boolean): Period =
+			period.also { it.windowIndex = periodIndex; it.uid = "period-$periodIndex" }
+		override fun getIndexOfPeriod(uid: Any): Int = (uid as? String)?.removePrefix("period-")?.toIntOrNull() ?: C.INDEX_UNSET
+		override fun getUidOfPeriod(periodIndex: Int): Any = "period-$periodIndex"
+	}
+
+	private fun boundaryTo(ids: List<String>, index: Int) = AudioProcessor.StreamMetadata.Builder()
+		.setTimeline(QueueTimeline(ids))
+		.setPeriodUid("period-$index")
+		.build()
+
+	private fun db(gain: Float) = 10.0.pow(gain / 20.0).toFloat()
+
+	@Test
+	fun theNewSongsGainIsInForceFromItsFirstBufferAtAGaplessBoundary() {
+		// B-282 (the VM walk, 2026-11-09): at a same-format boundary media3 1.11 calls onConfigure and
+		// onFlush(StreamMetadata) on the playback thread, the period being the NEW song's, 0.5-0.6 s
+		// before the player's update() on main. Until then the new song's first buffers went
+		// through at the previous song's gain.
+		val p = processor()
+		val queue = listOf("a", "b", "c")
+		p.setQueueTags(mapOf("a" to rg(track = -6f), "b" to rg(track = 3f), "c" to null))
+		p.update(0f, 0f, rg(track = -6f), ReplayGainMode.Track, mediaId = "a")
+		assertEquals(db(-6f), p.linearGain, 0.0001f)
+
+		p.flush(boundaryTo(queue, 1))
+		assertEquals(db(3f), p.linearGain, 0.0001f, "b's gain from b's first buffer, before main says so")
+		val half = (0.5f * Short.MAX_VALUE).toInt().toShort()
+		assertEquals((half * db(3f)).roundToInt().toShort(), run(p, shortArrayOf(half, half))[0], "no ramp from a's gain")
+
+		// main's update for b, half a second later, changes nothing; nor does a late one still for a
+		p.update(0f, 0f, rg(track = 3f), ReplayGainMode.Track, mediaId = "b")
+		assertEquals(db(3f), p.linearGain, 0.0001f)
+		p.update(0f, 0f, rg(track = -6f), ReplayGainMode.Track, mediaId = "a")
+		assertEquals(db(3f), p.linearGain, 0.0001f, "an update for a song that is not the stream's does not take its gain back")
+
+		// c has no tags: the plain amplifier (0 dB here), not b's gain
+		p.flush(boundaryTo(queue, 2))
+		assertEquals(1f, p.linearGain, 0.0001f)
+	}
+
+	@Test
+	fun aSettingsChangeStillAppliesToTheStreamsSong() {
+		val p = processor()
+		p.setQueueTags(mapOf("a" to rg(track = -6f), "b" to rg(track = 3f)))
+		p.flush(boundaryTo(listOf("a", "b"), 1))
+		p.update(2f, 0f, rg(track = 3f), ReplayGainMode.Track, mediaId = "b")
+		assertEquals(db(5f), p.linearGain, 0.0001f, "the pre-amp moves")
+		p.update(2f, 4f, rg(track = 3f), ReplayGainMode.Off, mediaId = "b")
+		assertEquals(db(4f), p.linearGain, 0.0001f, "ReplayGain off: the plain amplifier")
+	}
+
+	@Test
+	fun aStreamTheQueueDoesNotNameKeepsTheMainThreadsTags() {
+		// An item added by a path that published no tags (or the timeline media3 sends before a
+		// queue): the player's update() is the only word, as before.
+		val p = processor()
+		p.setQueueTags(mapOf("a" to rg(track = -6f)))
+		p.flush(boundaryTo(listOf("a", "x"), 1))
+		p.update(0f, 0f, rg(track = 2f), ReplayGainMode.Track, mediaId = "x")
+		assertEquals(db(2f), p.linearGain, 0.0001f)
 	}
 }
