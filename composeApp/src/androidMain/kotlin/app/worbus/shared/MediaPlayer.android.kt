@@ -1229,6 +1229,10 @@ class AndroidMediaPlayerViewModel(
 									viewModelScope.launch {
 										delay(AVAILABILITY_GRACE_MS)
 										val c = controller ?: return@launch
+										// B-148: the facade was swapped in meanwhile. Both devices
+										// play the same session queue, so the id can still match,
+										// and a skip or a pause would go to the OTHER device.
+										if (showsRemote()) return@launch
 										// Moved on by itself, or the network came back.
 										if (c.currentMediaItem?.mediaId != id) return@launch
 										if (isAvailable(id)) return@launch
@@ -1487,7 +1491,21 @@ class AndroidMediaPlayerViewModel(
 	 * (B-148). Read from the controller's own state, so it changes in the same update as the values
 	 * it qualifies.
 	 */
-	private fun showsRemote(): Boolean = controller?.playlistMetadata?.marksRemoteFacade() == true
+	private fun showsRemote(): Boolean {
+		val shows = controller?.playlistMetadata?.marksRemoteFacade() == true
+		if (shows != lastShowsRemote) {
+			// One line per swap, so a walk can see the mark arrive (and a media3 change that
+			// stopped delivering it would show as no line at all while another device plays).
+			if (lastShowsRemote != null || shows) {
+				Logger.i("MediaPlayer", "B-148: the controller shows ${if (shows) "the remote session (facade)" else "the local player"}")
+			}
+			lastShowsRemote = shows
+		}
+		return shows
+	}
+
+	/** What [showsRemote] last answered; null before the first read. Controller thread only. */
+	private var lastShowsRemote: Boolean? = null
 
 	private fun updatePlaybackState() {
 		if (queueMutationDepth > 0) return
