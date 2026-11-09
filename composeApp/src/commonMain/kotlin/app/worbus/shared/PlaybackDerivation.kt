@@ -55,7 +55,8 @@ fun derivePlayback(state: PlayerUiState, view: ControllerView): PlayerUiState {
 
 /**
  * What the controller and the app's queue disagree on, in words for the log, or null when the queue
- * holds the controller's song at its index (or the facade is shown, whose items are not the queue's).
+ * holds the controller's song at its index, when the controller has no item yet, or when the facade
+ * is shown (its items are not the queue's). Only an item that is set and differs is said.
  *
  * [derivePlayback] keeps the last song while they disagree, which is right for the moment inside a
  * queue edit; outside one (`updatePlaybackState` runs only then) a disagreement means some path
@@ -63,9 +64,11 @@ fun derivePlayback(state: PlayerUiState, view: ControllerView): PlayerUiState {
  * nothing said (B-155 review). The caller logs it once per distinct disagreement.
  */
 fun playbackDisagreement(state: PlayerUiState, view: ControllerView): String? {
-	if (view.showsRemote) return null
+	// A controller with no item yet is the start (a first launch, a cold start before the restore
+	// has given it the queue), not a disagreement: the VM walk saw the line at every start.
+	if (view.showsRemote || view.mediaId == null) return null
 	val entry = state.queue.getOrNull(view.index)
-	if (view.mediaId != null && entry?.id == view.mediaId) return null
-	return "controller at ${view.index} on ${view.mediaId ?: "no item"}, " +
+	if (entry?.id == view.mediaId) return null
+	return "controller at ${view.index} on ${view.mediaId}, " +
 		"the queue (${state.queue.size}) holds ${entry?.id ?: "nothing"} there"
 }
