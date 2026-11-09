@@ -195,9 +195,14 @@ fun gapSelectedIndex(sources: List<LbGapSource>, selection: Int?): Int? =
 /**
  * The source id the box chooses for the user when the sources land (the safe default at
  * [preselected], a position in [sources]), or null to leave the choice alone: a choice whose folder
- * is still in the list stands, and one whose folder left it is no choice (B-370).
+ * is still in the list stands, and one whose folder left it is no choice (B-370); none at all
+ * while [pickAgain].
  */
 fun gapPreselection(sources: List<LbGapSource>, preselected: Int?, selectedId: Int?, pickAgain: Boolean): Int? {
+	// After lb-bot refused the chosen folder as stale the user picks again: a default standing in
+	// would sit highlighted under lb-bot's sentence, and a quick second Request would send a folder
+	// the user never chose (B-370 review).
+	if (pickAgain) return null
 	val id = preselected?.let { gapSelection(sources, it) } ?: return null
 	return id.takeIf { gapChosenSource(sources, selectedId) == null }
 }

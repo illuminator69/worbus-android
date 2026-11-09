@@ -228,7 +228,7 @@ class CollectionDetailViewModel(
 	/** Ask lb-bot to search; [GapBoxUi.searchAsked] covers the time until its record says so. */
 	fun searchGap() {
 		val groupId = gapGroupId ?: return
-		_gapBox.update { it.copy(view = GapView.SOURCES, searchAsked = true, selectedId = null, error = null) }
+		_gapBox.update { it.copy(view = GapView.SOURCES, searchAsked = true, selectedId = null, pickAgain = false, error = null) }
 		viewModelScope.launch {
 			val result = lbBotManager.gapSearch(groupId)
 			if (result is LbBotManager.LbResult.Failed) _gapBox.update { it.copy(error = gapError(result.error)) }
@@ -243,7 +243,8 @@ class CollectionDetailViewModel(
 	 */
 	fun selectGapSource(selection: Int, fetchListing: Boolean) {
 		val groupId = gapGroupId ?: return
-		_gapBox.update { it.copy(selectedId = selection) }
+		// While pickAgain only a tap gets here (the preselection is off): it is the user's pick.
+		_gapBox.update { it.copy(selectedId = selection, pickAgain = false) }
 		if (!fetchListing) return
 		val source = gapChosenSource(lbBotManager.gaps.value[groupId]?.sources.orEmpty(), selection) ?: return
 		if (source.id in _gapBox.value.listings) return
@@ -283,10 +284,11 @@ class CollectionDetailViewModel(
 	/**
 	 * B-370: lb-bot refused a source id its list no longer holds (409 `stale_source`: a newer search,
 	 * here or on another device, replaced the list this card came from). Its sentence stays on the
-	 * error line, the choice is dropped, and the list is read again for the user to pick from.
+	 * error line, the choice is dropped, and the list is read again for the user to pick from: nothing
+	 * is preselected until a tap or a new search (`pickAgain`).
 	 */
 	private fun staleSourceList(groupId: String, error: LbBotManager.LbError) {
-		_gapBox.update { it.copy(selectedId = null, error = gapError(error)) }
+		_gapBox.update { it.copy(selectedId = null, pickAgain = true, error = gapError(error)) }
 		viewModelScope.launch { lbBotManager.refreshGap(groupId) }
 	}
 
