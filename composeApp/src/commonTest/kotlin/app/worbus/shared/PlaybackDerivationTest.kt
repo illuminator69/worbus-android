@@ -90,4 +90,20 @@ class PlaybackDerivationTest {
 		assertTrue(derived.isPaused, "adoptIfNoLiveReceiver must not read the remote's play state as local playing")
 		assertEquals(0, derived.currentIndex)
 	}
+
+	@Test
+	fun aDisagreementIsPutInWordsAndAnAgreementIsNot() {
+		// B-155 review: a persistent disagreement froze the player on the old song silently; it is
+		// logged now, so it has to be told apart from an agreement.
+		assertEquals(
+			"controller at 2 on n3, the queue (3) holds o3 there",
+			playbackDisagreement(playingOld, view(index = 2, mediaId = "n3"))
+		)
+		assertEquals(
+			"controller at 5 on n6, the queue (3) holds nothing there",
+			playbackDisagreement(playingOld, view(index = 5, mediaId = "n6"))
+		)
+		assertEquals(null, playbackDisagreement(playingOld, view(index = 1, mediaId = "o2")))
+		assertEquals(null, playbackDisagreement(playingOld, view(index = 2, mediaId = "x", remote = true)), "the facade's items are not the queue's")
+	}
 }

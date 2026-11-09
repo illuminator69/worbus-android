@@ -52,3 +52,20 @@ fun derivePlayback(state: PlayerUiState, view: ControllerView): PlayerUiState {
 		repeatMode = view.repeatMode
 	)
 }
+
+/**
+ * What the controller and the app's queue disagree on, in words for the log, or null when the queue
+ * holds the controller's song at its index (or the facade is shown, whose items are not the queue's).
+ *
+ * [derivePlayback] keeps the last song while they disagree, which is right for the moment inside a
+ * queue edit; outside one (`updatePlaybackState` runs only then) a disagreement means some path
+ * changed the controller's items without the queue, and the player would sit on the old song with
+ * nothing said (B-155 review). The caller logs it once per distinct disagreement.
+ */
+fun playbackDisagreement(state: PlayerUiState, view: ControllerView): String? {
+	if (view.showsRemote) return null
+	val entry = state.queue.getOrNull(view.index)
+	if (view.mediaId != null && entry?.id == view.mediaId) return null
+	return "controller at ${view.index} on ${view.mediaId ?: "no item"}, " +
+		"the queue (${state.queue.size}) holds ${entry?.id ?: "nothing"} there"
+}

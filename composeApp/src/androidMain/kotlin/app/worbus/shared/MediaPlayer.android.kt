@@ -1504,6 +1504,9 @@ class AndroidMediaPlayerViewModel(
 		return shows
 	}
 
+	/** The last disagreement [updatePlaybackState] logged (B-155), so each is said once. */
+	private var lastDisagreement: String? = null
+
 	/** What [showsRemote] last answered; null before the first read. Controller thread only. */
 	private var lastShowsRemote: Boolean? = null
 
@@ -1527,6 +1530,12 @@ class AndroidMediaPlayerViewModel(
 			_uiState.update { derivePlayback(it, view) }
 			return
 		}
+		// B-155 review: outside a queue edit the two should agree; say so once when they do not.
+		val disagreement = playbackDisagreement(_uiState.value, view)
+		if (disagreement != null && disagreement != lastDisagreement) {
+			Logger.w("MediaPlayer", "B-155: the controller and the queue disagree, the playing song is held ($disagreement)")
+		}
+		lastDisagreement = disagreement
 		val currentSong = derivePlayback(_uiState.value, view).currentSong
 
 		val derivedCollection = currentSong?.let { song ->
