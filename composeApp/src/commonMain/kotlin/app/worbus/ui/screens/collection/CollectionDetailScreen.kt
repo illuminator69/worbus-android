@@ -298,7 +298,8 @@ fun CollectionDetailScreen(
 	)
 	// A safe source is chosen for the user when the sources land (recommended, the artist found in
 	// the folder, the folder read as this album); anything less waits for a tap.
-	val preselect = (gapStage as? GapStage.Choosing)?.preselected
+	val choosing = gapStage as? GapStage.Choosing
+	val preselect = choosing?.preselected?.let { gapSelection(choosing.sources, it) }
 	LaunchedEffect(preselect) {
 		if (preselect != null && gapBox.selected == null) viewModel.selectGapSource(preselect, fetchListing = false)
 	}

@@ -1,5 +1,6 @@
 package app.worbus.ui.screens.collection.viewmodels
 
+import app.worbus.ui.screens.collection.gapChosenSource
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -235,12 +236,15 @@ class CollectionDetailViewModel(
 		}
 	}
 
-	/** A card chosen. A tap also fetches its folder listing (the poll carries none); a preselection does not. */
-	fun selectGapSource(index: Int, fetchListing: Boolean) {
+	/**
+	 * A card chosen, as [gapSelection] keeps it. A tap also fetches its folder listing (the poll
+	 * carries none); a preselection does not.
+	 */
+	fun selectGapSource(selection: Int, fetchListing: Boolean) {
 		val groupId = gapGroupId ?: return
-		_gapBox.update { it.copy(selected = index) }
+		_gapBox.update { it.copy(selected = selection) }
 		if (!fetchListing) return
-		val source = lbBotManager.gaps.value[groupId]?.sources?.getOrNull(index) ?: return
+		val source = gapChosenSource(lbBotManager.gaps.value[groupId]?.sources.orEmpty(), selection) ?: return
 		if (source.id in _gapBox.value.listings) return
 		viewModelScope.launch {
 			(lbBotManager.gapSourceFiles(groupId, source.id) as? LbBotManager.LbResult.Ok)?.let { ok ->

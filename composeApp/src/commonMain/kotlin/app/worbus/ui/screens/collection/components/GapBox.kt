@@ -1,5 +1,8 @@
 package app.worbus.ui.screens.collection.components
 
+import app.worbus.ui.screens.collection.gapChosenSource
+import app.worbus.ui.screens.collection.gapSelectedIndex
+import app.worbus.ui.screens.collection.gapSelection
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateContentSize
@@ -451,12 +454,12 @@ private fun SourcesContent(
 						color = MaterialTheme.colorScheme.onSurfaceVariant,
 						modifier = Modifier.padding(start = 4.dp)
 					)
-					val chosen = ui.selected?.let { shown.sources.getOrNull(it) }
+					val chosen = gapChosenSource(shown.sources, ui.selected)
 					SourceCards(
 						sources = shown.sources,
-						selected = ui.selected,
+						selected = gapSelectedIndex(shown.sources, ui.selected),
 						enabled = !ui.working,
-						onSelect = onSelect,
+						onSelect = { index -> gapSelection(shown.sources, index)?.let(onSelect) },
 						// A gap's folder holds the album; there is no "every file" to ask for.
 						onRequestAll = onRequest,
 						listingFor = { ui.listings[it.id] },

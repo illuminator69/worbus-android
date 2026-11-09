@@ -172,3 +172,12 @@ fun gapFillLanded(gap: LbGap, fill: LbFillEntry?): Boolean =
 
 /** The tracks the album holds by lb-bot's count: what a re-read tracklist should have at least. */
 fun heldTracks(gap: LbGap): Int = gap.tracks.count { it.state in HELD_TRACK_STATES }
+
+/** What the gaps box keeps when the card at [index] of [sources] is chosen (a tap or the preselection). */
+fun gapSelection(sources: List<LbGapSource>, index: Int): Int? = index.takeIf { it in sources.indices }
+
+/** The card [selection] names in [sources]: the one highlighted, and the one Request sends. */
+fun gapChosenSource(sources: List<LbGapSource>, selection: Int?): LbGapSource? = selection?.let { sources.getOrNull(it) }
+
+/** Where [selection] sits in [sources], for `SourceCards`' highlight. */
+fun gapSelectedIndex(sources: List<LbGapSource>, selection: Int?): Int? = selection?.takeIf { it in sources.indices }
