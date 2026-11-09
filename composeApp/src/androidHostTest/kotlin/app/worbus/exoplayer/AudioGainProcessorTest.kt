@@ -7,6 +7,7 @@ import app.worbus.domain.models.DomainReplayGain
 import app.worbus.domain.models.settings.ReplayGainMode
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.pow
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -192,6 +193,24 @@ class AudioGainProcessorTest {
 		val loudest = (0.99f * Short.MAX_VALUE).toInt().toShort()
 		val out = run(p, shortArrayOf(loudest, (-loudest).toShort()))
 		assertTrue(out[0] < Short.MAX_VALUE || out[0] == Short.MAX_VALUE && loudest * p.linearGain <= Short.MAX_VALUE + 0.5f, "no clipped sample")
+	}
+
+	@Test
+	fun thePlainAmplifierIsNotCappedByTheSongsPeak() {
+		// Review finding 5 (the controller's ruling): the peak cap is ReplayGain's clipping
+		// prevention. With ReplayGain Off the plain amplifier behaves as before B-282: +6 dB is +6 dB
+		// on every song, a tagged modern master (peak about 1.0) as much as an untagged one.
+		val sixDb = 6f.let { 10.0.pow(it / 20.0).toFloat() }
+		val tagged = DomainReplayGain(albumGain = -8f, albumPeak = 1.0f, trackGain = -9f, trackPeak = 0.99f, baseGain = null, fallbackGain = null)
+		val p = processor()
+		p.set(tagged, ReplayGainMode.Off, amp = 6f)
+		assertEquals(sixDb, p.linearGain, 0.0001f, "ReplayGain Off: the tagged song gets the whole amplifier")
+		p.set(null, ReplayGainMode.Off, amp = 6f)
+		assertEquals(sixDb, p.linearGain, 0.0001f, "and the untagged one the same")
+		// ReplayGain on, a song without a gain tag but with a peak: the plain amplifier again, as before.
+		val peakOnly = DomainReplayGain(albumGain = null, albumPeak = null, trackGain = null, trackPeak = 0.99f, baseGain = null, fallbackGain = null)
+		p.set(peakOnly, ReplayGainMode.Track, amp = 6f)
+		assertEquals(sixDb, p.linearGain, 0.0001f, "no ReplayGain in force: the amplifier is not capped")
 	}
 
 	@Test
