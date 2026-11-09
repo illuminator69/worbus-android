@@ -180,30 +180,39 @@ internal class CheckedFirstOpenDriver(
  * The check as the app runs it, on the thread of Room's first open of `cache.db`
  * ([CheckedFirstOpenDriver]), before any connection exists. One log line under the tag `CacheDb` with what it found and how long it took.
  */
-internal fun checkCacheDbAtOpen(db: File) {
+internal fun checkCacheDbAtOpen(db: File) = checkDbAtOpen(db, "CacheDb")
+
+/**
+ * The same check for any Room file: `cache.db` (B-167) and `downloads.db` (B-306), each under its own
+ * log [tag]. A file that fails it is moved aside and Room creates it afresh; for `downloads.db` the
+ * files already on disk are then adopted by [AdoptDownloadsOnCreate].
+ */
+internal fun checkDbAtOpen(db: File, tag: String) {
 	val started = System.nanoTime()
 	val sizeKb = if (db.exists()) db.length() / 1024 else 0
+	val warn: (String) -> Unit = { Logger.w(tag, it) }
 	val result = try {
-		guardCacheDb(db, System.currentTimeMillis(), ::bundledQuickCheck)
+		guardCacheDb(db, System.currentTimeMillis(), ::bundledQuickCheck, warn = warn)
 	} catch (e: Exception) {
 		CacheDbCheck.Unchecked("${e::class.simpleName}: ${e.message}")
 	}
 	val ms = (System.nanoTime() - started) / 1_000_000
 	val where = Thread.currentThread().name
+	val name = db.name
 	when (result) {
-		CacheDbCheck.Missing -> Logger.i("CacheDb", "cache.db check: no file yet ($ms ms, thread $where)")
-		CacheDbCheck.Healthy -> Logger.i("CacheDb", "cache.db check: ok in $ms ms ($sizeKb KiB, thread $where)")
+		CacheDbCheck.Missing -> Logger.i(tag, "$name check: no file yet ($ms ms, thread $where)")
+		CacheDbCheck.Healthy -> Logger.i(tag, "$name check: ok in $ms ms ($sizeKb KiB, thread $where)")
 		is CacheDbCheck.Quarantined -> Logger.w(
-			"CacheDb",
-			"cache.db failed its check (${result.why}); " +
+			tag,
+			"$name failed its check (${result.why}); " +
 				(result.movedTo?.let { "moved aside to ${it.name}" } ?: "could not be moved, deleted it") +
-				", starting an empty cache ($ms ms, $sizeKb KiB, thread $where)"
+				", Room creates it afresh ($ms ms, $sizeKb KiB, thread $where)"
 		)
 		is CacheDbCheck.Stuck -> Logger.e(
-			"CacheDb",
-			"cache.db failed its check (${result.why}) and could be neither moved nor deleted; " +
+			tag,
+			"$name failed its check (${result.why}) and could be neither moved nor deleted; " +
 				"Room opens it as it is ($ms ms, $sizeKb KiB, thread $where)"
 		)
-		is CacheDbCheck.Unchecked -> Logger.w("CacheDb", "cache.db could not be checked (${result.why}); left as it is ($ms ms, thread $where)")
+		is CacheDbCheck.Unchecked -> Logger.w(tag, "$name could not be checked (${result.why}); left as it is ($ms ms, thread $where)")
 	}
 }

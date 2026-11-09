@@ -94,7 +94,8 @@ class CacheDatabase24MigrationTest {
 		).forEach { path ->
 			val text = sourceFile(path).readText()
 			assertTrue("MIGRATION_CACHE_23_24\n" in text.substringAfter(".addMigrations("), path)
-			assertTrue("MIGRATION_DOWNLOAD_4_5)" in text, path)
+			assertTrue(".addMigrations(*DOWNLOAD_MIGRATIONS)" in text, path)
 		}
+		assertTrue(MIGRATION_DOWNLOAD_4_5 in DOWNLOAD_MIGRATIONS)
 	}
 }

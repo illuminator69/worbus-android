@@ -15,8 +15,9 @@ import app.worbus.data.database.MIGRATION_CACHE_17_18
 import app.worbus.data.database.MIGRATION_CACHE_18_19
 import app.worbus.data.database.MIGRATION_CACHE_22_23
 import app.worbus.data.database.MIGRATION_CACHE_23_24
-import app.worbus.data.database.MIGRATION_DOWNLOAD_3_4
-import app.worbus.data.database.MIGRATION_DOWNLOAD_4_5
+import app.worbus.data.database.AdoptDownloadsOnCreate
+import app.worbus.data.database.DOWNLOAD_MIGRATIONS
+import app.worbus.data.database.checkDbAtOpen
 import app.worbus.data.database.checkCacheDbAtOpen
 import app.worbus.domain.manager.AndroidHubLocalDevice
 import app.worbus.domain.manager.AndroidLocalNetworkAccess
@@ -57,8 +58,8 @@ actual val platformModule = module {
 			.absolutePath
 		// B-167: a corrupt cache is moved aside before Room opens its first connection, on the
 		// thread of that open (a DAO's coroutine, not the main thread at startKoin); one log line
-		// (tag CacheDb) says what was found and how long the check took. downloads.db below is
-		// never checked or moved: its rows are the only record of the downloaded files.
+		// (tag CacheDb) says what was found and how long the check took. downloads.db below has the
+		// same check (B-306) and adopts the files on disk when it starts afresh.
 		Room
 			.databaseBuilder<CacheDatabase>(get(), dbPath)
 			.setDriver(CheckedFirstOpenDriver(BundledSQLiteDriver()) { checkCacheDbAtOpen(File(dbPath)) })
@@ -79,18 +80,22 @@ actual val platformModule = module {
 	}
 
 	single<DownloadDatabase> {
-		val dbPath = androidApplication()
-			.getDatabasePath("downloads.db")
-			.absolutePath
+		val app = androidApplication()
+		val dbPath = app.getDatabasePath("downloads.db").absolutePath
+		// Unlike the cache DB, this one must NOT be dropped: its rows are the only record of which
+		// audio files exist on disk. Dropping it would orphan every downloaded file — invisible to
+		// the app, still occupying the user's storage. So:
+		// - B-306: a corrupt file is checked and moved aside before Room's first open, as cache.db is
+		//   (B-167); it used to throw from the first DAO read on every launch.
+		// - a database Room creates afresh (that move, or a lost file) adopts the files already in the
+		//   downloads directory (`AdoptDownloadsOnCreate`).
+		// - B-365: no destructive fallback. A version with no migration in DOWNLOAD_MIGRATIONS stops
+		//   at open rather than erasing every record; DownloadMigrationChainTest catches it first.
 		Room
 			.databaseBuilder<DownloadDatabase>(get(), dbPath)
-			.setDriver(BundledSQLiteDriver())
-			// Unlike the cache DB, this one must NOT be dropped on upgrade: its rows are the only
-			// record of which audio files exist on disk. Dropping it would orphan every downloaded
-			// file — invisible to the app, still occupying the user's storage. The destructive
-			// fallback stays only as a last resort for versions with no migration path.
-			.addMigrations(MIGRATION_DOWNLOAD_3_4, MIGRATION_DOWNLOAD_4_5)
-			.fallbackToDestructiveMigration(true)
+			.setDriver(CheckedFirstOpenDriver(BundledSQLiteDriver()) { checkDbAtOpen(File(dbPath), "DownloadsDb") })
+			.addMigrations(*DOWNLOAD_MIGRATIONS)
+			.addCallback(AdoptDownloadsOnCreate({ File(app.filesDir, "downloads") }))
 			.build()
 	}
 

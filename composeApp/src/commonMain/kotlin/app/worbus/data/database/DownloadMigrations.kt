@@ -58,10 +58,11 @@ private suspend fun SQLiteConnection.addDownloadCenterColumns() {
 /**
  * v3 → v4: the download center's columns.
  *
- * This has to be a REAL migration. The databases are built with
- * `fallbackToDestructiveMigration(true)`, so simply bumping the version would drop the table —
- * and the audio files it points at would stay on disk as orphans, invisible to the app but still
- * eating the user's storage. Every added column is nullable or has a default, so existing rows
+ * This has to be a REAL migration. The databases used to be built with
+ * `fallbackToDestructiveMigration(true)` (the cache still is), so simply bumping the version would
+ * have dropped the table — and the audio files it points at would stay on disk as orphans,
+ * invisible to the app but still eating the user's storage. `downloads.db` has no fallback since
+ * B-365: a missing migration fails at open instead. Every added column is nullable or has a default, so existing rows
  * carry over as-is and keep working.
  *
  * `fileSize` backfills as 0 for pre-existing downloads rather than being measured here: this runs
@@ -285,3 +286,11 @@ val MIGRATION_DOWNLOAD_4_5 = object : Migration(4, 5) {
 		DOWNLOAD_INDEX_SQL.forEach { connection.execSQL(it) }
 	}
 }
+
+/**
+ * Every `downloads.db` migration, oldest first: a chain from 3 to [DownloadDatabase]'s version
+ * with no gap (B-365). The database has no destructive fallback, so a version with no path here
+ * stops the app at open instead of erasing every download record; `DownloadMigrationChainTest`
+ * fails first, when the version moves without a migration.
+ */
+val DOWNLOAD_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_DOWNLOAD_3_4, MIGRATION_DOWNLOAD_4_5)
