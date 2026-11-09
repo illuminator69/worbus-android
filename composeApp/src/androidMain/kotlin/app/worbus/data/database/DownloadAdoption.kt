@@ -66,18 +66,32 @@ internal class AdoptDownloadsOnCreate(
 		}
 		if (files.isEmpty()) return
 		val nowMs = now()
+		// This runs inside Room's create transaction: a throw here rolls the creation back, and every
+		// launch would repeat it and die at the first DAO read (the review of B-306). A file that
+		// cannot be adopted is logged and left out; the database stands with the rest.
+		var failed = 0
 		files.forEach { file ->
-			connection.prepare(ADOPT_DOWNLOAD_SQL).use { statement ->
-				adoptDownloadArgs(file, nowMs).forEachIndexed { i, value ->
-					when (value) {
-						is String -> statement.bindText(i + 1, value)
-						is Long -> statement.bindLong(i + 1, value)
-						else -> error("unexpected bind $value")
+			try {
+				connection.prepare(ADOPT_DOWNLOAD_SQL).use { statement ->
+					adoptDownloadArgs(file, nowMs).forEachIndexed { i, value ->
+						when (value) {
+							is String -> statement.bindText(i + 1, value)
+							is Long -> statement.bindLong(i + 1, value)
+							else -> error("unexpected bind $value")
+						}
 					}
+					statement.step()
 				}
-				statement.step()
+			} catch (e: Exception) {
+				if (e is kotlinx.coroutines.CancellationException) throw e
+				failed++
+				warn("downloads.db is new; could not adopt ${file.songId} (${file.path})", e)
 			}
 		}
-		warn("downloads.db is new; adopted ${files.size} downloaded files already on disk", null)
+		warn(
+			"downloads.db is new; adopted ${files.size - failed} downloaded files already on disk" +
+				(if (failed > 0) ", $failed could not be" else ""),
+			null
+		)
 	}
 }
