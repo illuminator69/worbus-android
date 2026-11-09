@@ -7,6 +7,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.RenderersFactory
+import androidx.media3.exoplayer.audio.MediaCodecAudioRenderer
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.ShuffleOrder
 import org.junit.After
 import org.junit.Test
@@ -39,9 +41,11 @@ class PlayOrderPlayerTest {
 	}
 
 	private fun newPlayer(installed: Boolean): ExoPlayer {
+		val context = RuntimeEnvironment.getApplication()
+		// ExoPlayer refuses a player without renderers; one audio renderer, never prepared.
 		val player = ExoPlayer.Builder(
-			RuntimeEnvironment.getApplication(),
-			RenderersFactory { _, _, _, _, _ -> emptyArray<Renderer>() }
+			context,
+			RenderersFactory { _, _, _, _, _ -> arrayOf<Renderer>(MediaCodecAudioRenderer(context, MediaCodecSelector.DEFAULT)) }
 		).build()
 		if (installed) installPlayOrder(player)
 		players += player
