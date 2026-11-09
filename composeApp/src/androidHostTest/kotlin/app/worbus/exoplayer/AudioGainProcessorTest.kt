@@ -133,18 +133,18 @@ class AudioGainProcessorTest {
 	}
 
 	@Test
-	fun oneUpdateFlushesAtMostOnceAndOnlyOnAChange() {
-		// B-278 review: a transition used to make up to three main-thread flushes (the amps, the
-		// tags, the mode), each of which can skip a bit of the music.
+	fun aChangeMidStreamRampsAcrossTheNextBufferThenHolds() {
+		// B-366: no flush on an update; the playback thread steps to the new gain over one buffer
+		// (no click), and the buffer after it is at the new gain throughout.
 		val p = processor()
-		p.set(rg(track = -6f), ReplayGainMode.Track, rgAmp = 2f, amp = 1f)
-		assertEquals(1, p.gainFlushes, "the amps, the tags and the mode changed: one flush")
-		p.set(rg(track = -6f), ReplayGainMode.Track, rgAmp = 2f, amp = 1f)
-		assertEquals(1, p.gainFlushes, "nothing changed: no flush")
-		p.set(rg(track = -6f, album = -9f), ReplayGainMode.Track, rgAmp = 2f, amp = 1f)
-		assertEquals(1, p.gainFlushes, "new tags, same output gain: no flush")
-		p.set(null, ReplayGainMode.Off, rgAmp = 5f, amp = 3f)
-		assertEquals(2, p.gainFlushes)
+		p.set(null, ReplayGainMode.Off, amp = 0f)
+		run(p, ShortArray(64) { 1000 }) // audio has gone through at unity
+		p.set(null, ReplayGainMode.Off, amp = -6.0206f) // x0.5
+		val ramp = run(p, ShortArray(64) { 1000 })
+		assertTrue(ramp.first() > 500 && ramp.first() < 1000, "the ramp starts near the old gain: ${ramp.first()}")
+		assertEquals(500, ramp.last().toInt(), "and ends at the new one")
+		assertTrue(ramp.toList().zipWithNext().all { (a, b) -> b <= a }, "monotonic")
+		assertTrue(run(p, ShortArray(64) { 1000 }).all { it.toInt() == 500 })
 	}
 
 	@Test

@@ -11,6 +11,8 @@ import app.worbus.util.decibelsToLinear
 import app.worbus.util.effectiveGain
 import app.worbus.util.isUnityGain
 import app.worbus.util.outputGainDb
+import app.worbus.util.peak
+import app.worbus.util.peakLimited
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.roundToInt
@@ -27,12 +29,16 @@ import kotlin.math.roundToInt
  * fraction of a second after a transition still can**: the player calls [update] on the main
  * thread from its transition callback, while this processor runs ahead of what is heard by the
  * AudioTrack's buffer (about 0.25 to 0.75 s), so the new song's first samples went through at the
- * old gain. Pre-existing, inherited from upstream; the fix is to resolve the gain on the playback
- * thread in [onFlush] from the period's MediaItem (BACKLOG B-282).
+ * old gain. Pre-existing, inherited from upstream; resolving the gain on the playback thread at
+ * the stream boundary is still open (B-282).
  *
  * Everything the output gain depends on is one immutable [GainState] in one volatile field, so the
- * playback thread never reads half of an update, and an [update] flushes at most once, only when
- * the output gain changed.
+ * playback thread never reads half of an update. [update] never flushes (B-366): it ran on the
+ * main thread while the playback thread was inside [queueInput], so both wrote the processor's
+ * buffers at once, and the buffer just produced was thrown away. The playback thread picks the
+ * new gain up at its next buffer and ramps to it across that buffer, which is what keeps a change
+ * from clicking. A song's peak caps the gain (B-282): a positive gain never pushes it past full
+ * scale.
  */
 @UnstableApi
 class AudioGainProcessor : BaseAudioProcessor() {
@@ -42,17 +48,20 @@ class AudioGainProcessor : BaseAudioProcessor() {
 		rgAmpDb: Float,
 		ampDb: Float,
 		/** The ReplayGain in force, in dB; null when none applies. */
-		replayGainDb: Float?
+		replayGainDb: Float?,
+		/** The song's peak for the mode (linear); null when not known. */
+		peak: Float?
 	) {
-		val linear: Float = outputGainDb(replayGainDb, rgAmpDb, ampDb).decibelsToLinear()
+		val linear: Float = peakLimited(outputGainDb(replayGainDb, rgAmpDb, ampDb).decibelsToLinear(), peak)
 	}
 
 	@Volatile
-	private var state = GainState(replayGainEnabled = false, rgAmpDb = 0f, ampDb = 0f, replayGainDb = null)
+	private var state = GainState(replayGainEnabled = false, rgAmpDb = 0f, ampDb = 0f, replayGainDb = null, peak = null)
 
-	/** Flushes caused by a gain change, for the tests. */
-	internal var gainFlushes = 0
-		private set
+	// Playback thread only: the gain the last buffer ended at, and whether any audio has gone
+	// through since the last flush (before that there is nothing a step could click against).
+	private var appliedLinear = 1f
+	private var processedSinceFlush = false
 
 	/** The output gain as a linear factor. */
 	val linearGain: Float
@@ -61,22 +70,17 @@ class AudioGainProcessor : BaseAudioProcessor() {
 	/**
 	 * The whole input to the output gain, at once: the ReplayGain pre-amp and the plain amplifier
 	 * (dB), the playing song's tags (null: none) and the mode, already resolved
-	 * (`resolveGainMode`: Dynamic is never passed). Flushes once, and only when the output gain
-	 * changed: a needless flush skips a bit of the music, and a change without one can crackle.
+	 * (`resolveGainMode`: Dynamic is never passed). Any thread; it only swaps the state, and the
+	 * playback thread ramps to it at its next buffer (B-366).
 	 */
 	fun update(rgAmpDb: Float, ampDb: Float, metadata: DomainReplayGain?, mode: ReplayGainMode) {
-		val next = GainState(
+		state = GainState(
 			replayGainEnabled = mode != ReplayGainMode.Off,
 			rgAmpDb = rgAmpDb,
 			ampDb = ampDb,
-			replayGainDb = metadata?.effectiveGain(mode)
+			replayGainDb = metadata?.effectiveGain(mode),
+			peak = metadata?.peak(mode)
 		)
-		val before = state.linear
-		state = next
-		if (next.linear != before) {
-			gainFlushes++
-			flush(StreamMetadata.DEFAULT)
-		}
 	}
 
 	/**
@@ -98,6 +102,13 @@ class AudioGainProcessor : BaseAudioProcessor() {
 		throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
 	}
 
+	override fun onFlush(streamMetadata: StreamMetadata) {
+		// The playback thread's own flush (a seek, a new configuration): nothing is in flight, so
+		// the next buffer starts at the gain in force, with no ramp.
+		appliedLinear = state.linear
+		processedSinceFlush = false
+	}
+
 	override fun queueInput(inputBuffer: ByteBuffer) {
 		val pos = inputBuffer.position()
 		val limit = inputBuffer.limit()
@@ -106,24 +117,34 @@ class AudioGainProcessor : BaseAudioProcessor() {
 		inputBuffer.order(ByteOrder.LITTLE_ENDIAN)
 		outputBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
-		val computedVolume = linearGain
+		val target = linearGain
+		// A change since the last buffer ramps across this one; before any audio has gone through
+		// since a flush there is nothing to ramp from.
+		val from = if (processedSinceFlush) appliedLinear else target
+		appliedLinear = target
+		processedSinceFlush = true
 
-		if (isUnityGain(computedVolume)) {
+		if (isUnityGain(from) && isUnityGain(target)) {
 			outputBuffer.put(inputBuffer)
 		} else {
 			val shortBufferInput = inputBuffer.asShortBuffer()
 			val shortBufferOutput = outputBuffer.asShortBuffer()
+			val channels = inputAudioFormat.channelCount.coerceAtLeast(1)
+			val frames = (shortBufferInput.remaining() / channels).coerceAtLeast(1)
+			val step = (target - from) / frames
+			var i = 0
 
 			while (shortBufferInput.hasRemaining()) {
-				// prevent popping
+				val gain = if (from == target) target else from + step * (i / channels + 1)
 				val sample = shortBufferInput.get()
-				val scaledSample = (sample * computedVolume)
+				val scaledSample = (sample * gain)
 					.roundToInt()
 					.coerceAtLeast(Short.MIN_VALUE.toInt())
 					.coerceAtMost(Short.MAX_VALUE.toInt())
 					.toShort()
 
 				shortBufferOutput.put(scaledSample)
+				i++
 			}
 			inputBuffer.position(inputBuffer.position() + shortBufferInput.position() * 2)
 			outputBuffer.position(outputBuffer.position() + shortBufferOutput.position() * 2)

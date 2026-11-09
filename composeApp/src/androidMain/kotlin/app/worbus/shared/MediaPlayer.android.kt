@@ -1555,10 +1555,11 @@ class AndroidMediaPlayerViewModel(
 	}
 
 	/**
-	 * The output gain for the playing song, from the settings, in one update (one flush at most).
-	 * The tags always follow the playing song, so a song without them does not keep the previous
-	 * song's gain for the whole song (B-278); the first fraction of a second after a transition
-	 * still can, since this runs on the main thread after the processor has moved on (B-282).
+	 * The output gain for the playing song, from the settings, in one update (no flush; the
+	 * playback thread ramps to it, B-366). The tags follow the playing song as derivePlayback names
+	 * it (B-155), so a song without them does not keep the previous song's gain for the whole song
+	 * (B-278); the first fraction of a second after a transition still can, since this runs on the
+	 * main thread after the processor has moved on (B-282, open).
 	 */
 	override fun applyAudioGain() {
 		val state = _uiState.value

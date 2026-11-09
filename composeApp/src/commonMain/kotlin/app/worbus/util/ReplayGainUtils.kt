@@ -45,6 +45,23 @@ fun Float.decibelsToLinear(): Float {
 fun outputGainDb(replayGainDb: Float?, rgAmpDb: Float, ampDb: Float): Float =
 	if (replayGainDb != null) replayGainDb + rgAmpDb else ampDb
 
+/**
+ * The song's peak (linear, 1 = full scale) for the gain [mode] applies, or null when it has none:
+ * the album's in Album mode, else the track's, each falling back to the other as [effectiveGain]
+ * does. Off reads the track's, since the plain amplifier is applied to the same samples.
+ */
+fun DomainReplayGain.peak(mode: ReplayGainMode): Float? = when (mode) {
+	ReplayGainMode.Album -> albumPeak ?: trackPeak
+	else -> trackPeak ?: albumPeak
+}?.takeIf { it > 0f }
+
+/**
+ * [linear], lowered so that [peak] lands at full scale at most (B-282: ReplayGain's clipping
+ * prevention). Never raised; no peak, no limit.
+ */
+fun peakLimited(linear: Float, peak: Float?): Float =
+	if (peak == null || linear * peak <= 1f) linear else 1f / peak
+
 /** A linear gain this close to 1 is unity: the samples pass through bit for bit. */
 fun isUnityGain(linear: Float): Boolean = abs(linear - 1f) < UNITY_EPSILON
 
