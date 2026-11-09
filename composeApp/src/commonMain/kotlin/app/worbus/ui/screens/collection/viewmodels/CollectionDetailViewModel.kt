@@ -835,10 +835,11 @@ internal fun gapError(error: LbBotManager.LbError): LbBotManager.LbError? = erro
 
 /**
  * The box after a card is chosen as [selection] (a source id): by the user's tap ([byTap]) or by
- * the safe preselection.
+ * the safe preselection. A tap is a new choice, so the error line, which was about the last one
+ * (lb-bot's stale_source sentence, a fetch that failed), goes with it (the VM walk of B-370).
  */
 internal fun gapPicked(ui: GapBoxUi, selection: Int, byTap: Boolean): GapBoxUi =
-	ui.copy(selectedId = selection, pickAgain = false)
+	ui.copy(selectedId = selection, pickAgain = false, error = if (byTap) null else ui.error)
 
 /** The gaps box's own state; which stage it shows is `gapStage`'s, from this and lb-bot's record. */
 data class GapBoxUi(
