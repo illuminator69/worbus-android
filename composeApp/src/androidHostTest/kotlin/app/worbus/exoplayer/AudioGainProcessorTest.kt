@@ -306,4 +306,41 @@ class AudioGainProcessorTest {
 		p.update(0f, 0f, rg(track = 2f), ReplayGainMode.Track)
 		assertEquals(db(2f), p.linearGain, 0.0001f)
 	}
+
+	@Test
+	fun aGaplessBoundaryRampsToTheNewSongsGainOverAFewMilliseconds() {
+		// Third review (nit, the controller's ruling): at a gapless boundary the audio is continuous,
+		// and a Track-mode step between two songs' gains (-6 dB to +3 dB here) can click. The new
+		// gain is reached over BOUNDARY_RAMP_MS (5 ms = 220 frames at 44.1 kHz), then held.
+		val p = processor()
+		val queue = listOf("a", "b")
+		p.setQueueTags(mapOf("a" to rg(track = -6f), "b" to rg(track = 3f)))
+		p.flush(boundaryTo(queue, 0))
+		p.update(0f, 0f, rg(track = -6f), ReplayGainMode.Track)
+		run(p, ShortArray(128) { 1000 }) // a is playing
+		p.flush(boundaryTo(queue, 1)) // media3 flushes twice at a boundary
+		p.flush(boundaryTo(queue, 1))
+
+		val out = run(p, ShortArray(2 * 400) { 1000 }) // 400 stereo frames
+		val frames = out.toList().chunked(2).map { it[0].toInt() }
+		val from = 1000 * db(-6f)
+		val to = (1000 * db(3f)).roundToInt()
+		assertTrue(frames.first() < from + (to - from) * 0.05f, "the ramp starts at a's gain: ${frames.first()} (a: $from)")
+		assertEquals(to, frames[219], "and reaches b's at frame 220")
+		assertTrue(frames.drop(219).all { it == to }, "then holds")
+		assertTrue(frames.take(220).zipWithNext().all { (x, y) -> y >= x }, "monotonic")
+	}
+
+	@Test
+	fun aSeekWithinTheSongStartsFlat() {
+		// The seek keeps its behaviour: a flush for the same song after audio went through is a
+		// discontinuity, and the next buffer starts at the gain in force.
+		val p = processor()
+		p.setQueueTags(mapOf("a" to rg(track = -6f)))
+		p.flush(boundaryTo(listOf("a"), 0))
+		p.update(0f, 0f, rg(track = -6f), ReplayGainMode.Track)
+		run(p, ShortArray(128) { 1000 })
+		p.flush(boundaryTo(listOf("a"), 0))
+		assertTrue(run(p, ShortArray(64) { 1000 }).all { it.toInt() == (1000 * db(-6f)).roundToInt() })
+	}
 }
