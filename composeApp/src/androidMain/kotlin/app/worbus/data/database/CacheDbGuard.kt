@@ -3,7 +3,7 @@ package app.worbus.data.database
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.SQLiteDriver
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import androidx.sqlite.driver.bundled.SQLITE_OPEN_READWRITE
+import androidx.sqlite.driver.bundled.SQLITE_OPEN_READONLY
 import app.worbus.util.Logger
 import java.io.File
 
@@ -170,17 +170,24 @@ internal fun quarantineCacheDb(
 	return result
 }
 
-/** `PRAGMA quick_check(1)` through the driver Room uses, on a connection closed before Room opens. */
+/**
+ * `PRAGMA quick_check(1)` through the driver Room uses, on a connection closed before Room opens.
+ *
+ * Read-only, and that is load-bearing (the VM walk of B-306): closing the last READ-WRITE connection
+ * to a WAL database checkpoints the WAL into the main file, truncates it and deletes the WAL, so a
+ * read-write check rewrote the very file it then moved aside (24 KiB kept of 64, the WAL lost). A
+ * read-only connection never checkpoints: what is moved aside is the file and its WAL as found.
+ */
 internal fun bundledQuickCheck(file: File): String =
-	BundledSQLiteDriver().open(file.absolutePath, SQLITE_OPEN_READWRITE).use { connection ->
+	BundledSQLiteDriver().open(file.absolutePath, SQLITE_OPEN_READONLY).use { connection ->
 		connection.prepare("PRAGMA quick_check(1)").use { statement ->
 			if (statement.step()) statement.getText(0) else ""
 		}
 	}
 
-/** `PRAGMA user_version` (the schema version Room wrote) through the driver Room uses. */
+/** `PRAGMA user_version` (the schema version Room wrote) through the driver Room uses; read-only as above. */
 internal fun bundledUserVersion(file: File): Int =
-	BundledSQLiteDriver().open(file.absolutePath, SQLITE_OPEN_READWRITE).use { connection ->
+	BundledSQLiteDriver().open(file.absolutePath, SQLITE_OPEN_READONLY).use { connection ->
 		connection.prepare("PRAGMA user_version").use { statement ->
 			if (statement.step()) statement.getLong(0).toInt() else 0
 		}
