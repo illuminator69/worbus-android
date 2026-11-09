@@ -125,6 +125,7 @@ import app.worbus.domain.repositories.SongRepository
 import app.worbus.exoplayer.AudioGainProcessor
 import app.worbus.exoplayer.ExoPlayerCoilBitmapLoader
 import app.worbus.exoplayer.ResumingDataSource
+import app.worbus.exoplayer.installPlayOrder
 import app.worbus.ui.core.PlayerUiState
 import app.worbus.util.Logger
 import java.io.File
@@ -284,6 +285,7 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 					true
 				)
 				setMediaNotificationProvider(notificationProvider)
+				installPlayOrder(this)
 				trackSelectionParameters =
 					trackSelectionParameters.buildUpon().setAudioOffloadPreferences(
 						TrackSelectionParameters.AudioOffloadPreferences

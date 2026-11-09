@@ -1,6 +1,9 @@
 [versions]
 # Fork: the host tests run the list SQL on a real SQLite (androidHostTest only).
 sqlite-jdbc = "3.50.3.0"
+# Fork: the host tests run media3's real ExoPlayer under Robolectric (androidHostTest only, W1).
+robolectric = "4.16.1"
+junit4 = "4.13.2"
 agp = "9.3.2"
 #noinspection UnusedVersionCatalogEntry
 android-compileSdk = "37"
@@ -41,6 +44,8 @@ koin = "4.2.2"
 
 [libraries]
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+junit4 = { module = "junit:junit", version.ref = "junit4" }
 # Compose
 cmp-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 cmp-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "material3" }

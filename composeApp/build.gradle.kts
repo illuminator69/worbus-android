@@ -178,6 +178,9 @@ kotlin {
 		// Fork: SongAndAlbumListSqlTest runs the list queries on a real SQLite (JVM driver).
 		getByName("androidHostTest").dependencies {
 			implementation(libs.sqlite.jdbc)
+			// Fork (W1): PlayOrderPlayerTest drives media3's ExoPlayer itself, which needs a Looper.
+			implementation(libs.robolectric)
+			implementation(libs.junit4)
 		}
 	}
 
