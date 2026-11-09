@@ -31,7 +31,8 @@ import kotlin.math.roundToInt
  * ones included, media3 calls [onFlush] on the playback thread with the NEW item's period in its
  * `StreamMetadata` (watched on the VM, media3 1.11: 0.5 to 0.6 s before the player's transition
  * callback on main). The item's media id picks its tags out of the queue's ([setQueueTags]), so the
- * new song's first buffer is already at its own gain. The player's [update] (main thread, at the
+ * new song's gain is reached within its first 5 ms (a ramp from the previous song's, so a step on
+ * continuous audio cannot click; a seek within a song starts flat). The player's [update] (main thread, at the
  * transition) carries the settings and the playing song's tags; those tags are used only for a
  * stream the queue's tags do not name (no flush with a known item yet, or an item a path added
  * without publishing its tags), as before.
@@ -87,6 +88,13 @@ class AudioGainProcessor : BaseAudioProcessor() {
 	// through since the last flush (before that there is nothing a step could click against).
 	private var appliedLinear = 1f
 	private var processedSinceFlush = false
+
+	// Playback thread only: a ramp into a new song's gain after a boundary (third review): from the
+	// gain the previous song ended at, over [boundaryFrames] frames, [boundaryDone] of them gone
+	// through. 0 frames: none pending.
+	private var boundaryFrom = 1f
+	private var boundaryFrames = 0
+	private var boundaryDone = 0
 
 	/** The gain state for the inputs as they are now; recomputed only when one of them changed. */
 	private fun state(): GainState {
@@ -144,8 +152,26 @@ class AudioGainProcessor : BaseAudioProcessor() {
 	override fun onFlush(streamMetadata: StreamMetadata) {
 		// The playback thread's own flush (an item boundary, gapless ones too; a seek; a new
 		// configuration). The metadata names the stream about to go through: its song's gain is in
-		// force from its first buffer (B-282). Nothing is in flight, so no ramp.
-		streamId = streamMediaId(streamMetadata)
+		// force from its first buffer (B-282).
+		val previous = streamId
+		val next = streamMediaId(streamMetadata)
+		// Audio went through since the last flush: the stream so far was playing.
+		val wasPlaying = processedSinceFlush
+		streamId = next
+		when {
+			// Another song after one that was playing (a gapless boundary, or a skip): the new gain is
+			// reached over BOUNDARY_RAMP_MS from where the last one ended, so a step between two
+			// songs' gains on continuous audio cannot click (third review).
+			next != null && next != previous && wasPlaying -> {
+				boundaryFrom = appliedLinear
+				boundaryFrames = (inputAudioFormat.sampleRate * BOUNDARY_RAMP_MS / 1000).coerceAtLeast(1)
+				boundaryDone = 0
+			}
+			// media3 flushes twice at a boundary, with nothing between: the ramp set by the first stays.
+			next == previous && !wasPlaying -> Unit
+			// A seek within the song, or a first stream: the next buffer starts flat at the gain in force.
+			else -> boundaryFrames = 0
+		}
 		appliedLinear = state().linear
 		processedSinceFlush = false
 	}
@@ -159,13 +185,14 @@ class AudioGainProcessor : BaseAudioProcessor() {
 		outputBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
 		val target = state().linear
+		val boundary = boundaryFrames > 0
 		// A change since the last buffer ramps across this one; before any audio has gone through
-		// since a flush there is nothing to ramp from.
+		// since a flush there is nothing to ramp from, except into a new song (the boundary ramp).
 		val from = if (processedSinceFlush) appliedLinear else target
 		appliedLinear = target
 		processedSinceFlush = true
 
-		if (isUnityGain(from) && isUnityGain(target)) {
+		if (!boundary && isUnityGain(from) && isUnityGain(target)) {
 			outputBuffer.put(inputBuffer)
 		} else {
 			val shortBufferInput = inputBuffer.asShortBuffer()
@@ -176,7 +203,15 @@ class AudioGainProcessor : BaseAudioProcessor() {
 			var i = 0
 
 			while (shortBufferInput.hasRemaining()) {
-				val gain = if (from == target) target else from + step * (i / channels + 1)
+				val frame = i / channels
+				val gain = when {
+					boundary -> {
+						val k = boundaryDone + frame + 1
+						if (k >= boundaryFrames) target else boundaryFrom + (target - boundaryFrom) * k / boundaryFrames
+					}
+					from == target -> target
+					else -> from + step * (frame + 1)
+				}
 				val sample = shortBufferInput.get()
 				val scaledSample = (sample * gain)
 					.roundToInt()
@@ -186,6 +221,10 @@ class AudioGainProcessor : BaseAudioProcessor() {
 
 				shortBufferOutput.put(scaledSample)
 				i++
+			}
+			if (boundary) {
+				boundaryDone += frames
+				if (boundaryDone >= boundaryFrames) boundaryFrames = 0
 			}
 			inputBuffer.position(inputBuffer.position() + shortBufferInput.position() * 2)
 			outputBuffer.position(outputBuffer.position() + shortBufferOutput.position() * 2)
@@ -212,3 +251,6 @@ internal fun streamMediaId(metadata: StreamMetadata): String? {
 		null
 	}
 }
+
+/** How long a new song's gain takes to be reached after an item boundary (third review). */
+private const val BOUNDARY_RAMP_MS = 5
