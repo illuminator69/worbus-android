@@ -54,13 +54,14 @@ internal fun adoptDownloadArgs(file: DownloadOnDisk, nowMs: Long): List<Any> = l
  */
 internal class AdoptDownloadsOnCreate(
 	private val downloadsDir: () -> File,
-	private val now: () -> Long = System::currentTimeMillis
+	private val now: () -> Long = System::currentTimeMillis,
+	private val warn: (String, Throwable?) -> Unit = { message, e -> Logger.w("DownloadsDb", message, e) }
 ) : RoomDatabase.Callback() {
 	override suspend fun onCreate(connection: SQLiteConnection) {
 		val files = try {
 			downloadsOnDisk(downloadsDir())
 		} catch (e: Exception) {
-			Logger.w("DownloadsDb", "downloads.db is new; could not list the downloads directory", e)
+			warn("downloads.db is new; could not list the downloads directory", e)
 			return
 		}
 		if (files.isEmpty()) return
@@ -77,6 +78,6 @@ internal class AdoptDownloadsOnCreate(
 				statement.step()
 			}
 		}
-		Logger.w("DownloadsDb", "downloads.db is new; adopted ${files.size} downloaded files already on disk")
+		warn("downloads.db is new; adopted ${files.size} downloaded files already on disk", null)
 	}
 }

@@ -3,6 +3,7 @@ package app.worbus.data.database
 import app.worbus.data.database.entities.DownloadSource
 import app.worbus.data.database.entities.DownloadStatus
 import app.worbus.sourceFile
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -114,12 +115,40 @@ class DownloadAdoptionTest {
 		assertEquals(emptyList(), downloadsOnDisk(File(dir, "absent")))
 	}
 
+	private fun downloadTableSql(): String = Json.parseToJsonElement(
+		sourceFile("schemas/app.worbus.data.database.DownloadDatabase/5.json").readText()
+	).jsonObject["database"]!!.jsonObject["entities"]!!.jsonArray.single().jsonObject["createSql"]!!
+		.jsonPrimitive.content.replace("\${TABLE_NAME}", "DownloadEntity")
+
+	@Test
+	fun anAdoptionThatFailsDoesNotFailTheDatabasesCreation() {
+		// Review finding 2: onCreate runs inside Room's create transaction. A throw from an insert
+		// (disk full, an I/O error) rolled the creation back, and every launch repeated it and died
+		// in DownloadManager. A file that cannot be adopted is logged; the rest are adopted.
+		val downloads = File(dir, "downloads").apply { mkdirs() }
+		File(downloads, "song-1.flac").writeBytes(ByteArray(10))
+		File(downloads, "song-2.mp3").writeBytes(ByteArray(20))
+		val warnings = mutableListOf<String>()
+
+		DriverManager.getConnection("jdbc:sqlite:${File(dir, "d.db").absolutePath}").use { jdbc ->
+			jdbc.createStatement().use { it.executeUpdate(downloadTableSql()) }
+			val connection = jdbcSQLiteConnection(jdbc) { sql, call -> call == 0 && sql == ADOPT_DOWNLOAD_SQL }
+			val adopt = AdoptDownloadsOnCreate({ downloads }, now = { 1_800_000_000_000L }, warn = { message, _ -> warnings += message })
+
+			runBlocking { adopt.onCreate(connection) }
+
+			jdbc.createStatement().use { statement ->
+				statement.executeQuery("SELECT songId FROM DownloadEntity").use { rows ->
+					assertEquals(listOf("song-2"), buildList { while (rows.next()) add(rows.getString(1)) }, "the file that could be adopted is")
+				}
+			}
+		}
+		assertTrue(warnings.any { "song-1" in it }, "the one that could not is logged: $warnings")
+	}
+
 	@Test
 	fun theAdoptionRowFitsTheTableRoomCreates() {
-		val createSql = Json.parseToJsonElement(
-			sourceFile("schemas/app.worbus.data.database.DownloadDatabase/5.json").readText()
-		).jsonObject["database"]!!.jsonObject["entities"]!!.jsonArray.single().jsonObject["createSql"]!!
-			.jsonPrimitive.content.replace("\${TABLE_NAME}", "DownloadEntity")
+		val createSql = downloadTableSql()
 		val file = DownloadOnDisk("song-1", "/data/files/downloads/song-1.flac", 1234L, 1_700_000_000_000L)
 
 		DriverManager.getConnection("jdbc:sqlite:${File(dir, "d.db").absolutePath}").use { connection ->
