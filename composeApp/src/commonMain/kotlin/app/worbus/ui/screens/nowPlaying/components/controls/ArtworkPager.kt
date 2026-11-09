@@ -82,32 +82,31 @@ fun NowPlayingArtworkPager(
 		renderQueue = playerState.queue
 	}
 
-	// Only a real USER swipe may change the track. The pager is also scrolled
+	// Only a real USER swipe may change the track (PagerSwipeGate). The pager is also scrolled
 	// PROGRAMMATICALLY whenever currentIndex changes (playback advancing — local
 	// or, via the remote mirror, on another device). Acting on those programmatic
 	// settles caused an infinite jump/skip loop when remote (the resolved queue
 	// index space can drift from the hub's, so settledPage never equals
 	// currentIndex and keeps re-firing actJump). Gate on drag interactions.
-	var userDragging by remember { mutableStateOf(false) }
+	val gate = remember(pagerState) { PagerSwipeGate(pagerState.settledPage) }
 	LaunchedEffect(pagerState) {
 		pagerState.interactionSource.interactions.collect { interaction ->
 			if (interaction is DragInteraction.Start) {
-				userDragging = true
+				gate.onDragStart()
 			}
 		}
 	}
 
 	LaunchedEffect(pagerState) {
 		snapshotFlow { pagerState.settledPage }.collect { page ->
-			val wasUserSwipe = userDragging
-			userDragging = false
-			if (page == playerState.currentIndex || !wasUserSwipe) return@collect
+			val target = gate.onFrame(scrolling = false, settledPage = page, currentIndex = playerState.currentIndex)
+				?: return@collect
 			if (isRemoteActive) {
 				// The hub's jump preserves play/pause state for the session.
-				hubManager.actJump(page)
+				hubManager.actJump(target)
 			} else {
 				val wasPaused = playerState.isPaused
-				player.playAt(page)
+				player.playAt(target)
 				if (wasPaused) {
 					player.pause()
 				}
