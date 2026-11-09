@@ -60,6 +60,9 @@ fun NowPlayingArtworkPager(
 	// song and returning every time a card was dropped.
 	var renderQueue by remember { mutableStateOf(playerState.queue) }
 
+	// Which settles are the user's swipe (B-142): see below.
+	val gate = remember(pagerState) { PagerSwipeGate() }
+
 	var visible by rememberSaveable { mutableStateOf(false) }
 	val scale by animateFloatAsState(if (visible) 1f else 0f)
 	val offset by animateDpAsState(if (visible) 0.dp else 200.dp)
@@ -76,6 +79,7 @@ fun NowPlayingArtworkPager(
 			// different slot now, and animating there reads as skipping away and back.
 			val samePlayingSong = playerState.queue.getOrNull(index)?.id ==
 				renderQueue.getOrNull(pagerState.currentPage)?.id
+			gate.onProgrammaticScroll()
 			if (samePlayingSong) pagerState.scrollToPage(index)
 			else pagerState.animateScrollToPage(index)
 		}
@@ -88,7 +92,6 @@ fun NowPlayingArtworkPager(
 	// settles caused an infinite jump/skip loop when remote (the resolved queue
 	// index space can drift from the hub's, so settledPage never equals
 	// currentIndex and keeps re-firing actJump). Gate on drag interactions.
-	val gate = remember(pagerState) { PagerSwipeGate(pagerState.settledPage) }
 	LaunchedEffect(pagerState) {
 		pagerState.interactionSource.interactions.collect { interaction ->
 			if (interaction is DragInteraction.Start) {
@@ -98,8 +101,9 @@ fun NowPlayingArtworkPager(
 	}
 
 	LaunchedEffect(pagerState) {
-		snapshotFlow { pagerState.settledPage }.collect { page ->
-			val target = gate.onFrame(scrolling = false, settledPage = page, currentIndex = playerState.currentIndex)
+		// Every scroll's end, including one that ends on the page it left (B-142).
+		snapshotFlow { pagerState.isScrollInProgress to pagerState.settledPage }.collect { (scrolling, page) ->
+			val target = gate.onFrame(scrolling = scrolling, settledPage = page, currentIndex = playerState.currentIndex)
 				?: return@collect
 			if (isRemoteActive) {
 				// The hub's jump preserves play/pause state for the session.

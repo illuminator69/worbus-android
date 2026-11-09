@@ -18,7 +18,7 @@ import kotlin.test.assertNull
 class PagerSwipeGateTest {
 	@Test
 	fun aDragThatComesBackToItsPageLeavesNothingArmed() {
-		val gate = PagerSwipeGate(initialPage = 64)
+		val gate = PagerSwipeGate()
 		gate.onDragStart()
 		assertNull(gate.onFrame(scrolling = true, settledPage = 64, currentIndex = 64))
 		assertNull(gate.onFrame(scrolling = false, settledPage = 64, currentIndex = 64), "back on its own page: nothing to play")
@@ -31,7 +31,7 @@ class PagerSwipeGateTest {
 
 	@Test
 	fun aSwipeToAnotherPagePlaysIt() {
-		val gate = PagerSwipeGate(initialPage = 3)
+		val gate = PagerSwipeGate()
 		gate.onDragStart()
 		assertNull(gate.onFrame(scrolling = true, settledPage = 3, currentIndex = 3))
 		assertEquals(4, gate.onFrame(scrolling = false, settledPage = 4, currentIndex = 3))
@@ -39,8 +39,18 @@ class PagerSwipeGateTest {
 
 	@Test
 	fun aSettleWithNoDragNeverPlays() {
-		val gate = PagerSwipeGate(initialPage = 3)
+		val gate = PagerSwipeGate()
 		assertNull(gate.onFrame(scrolling = true, settledPage = 3, currentIndex = 9))
 		assertNull(gate.onFrame(scrolling = false, settledPage = 9, currentIndex = 8))
+	}
+
+	@Test
+	fun aProgrammaticScrollTakesOverFromADragStillSettling() {
+		val gate = PagerSwipeGate()
+		gate.onDragStart()
+		assertNull(gate.onFrame(scrolling = true, settledPage = 3, currentIndex = 3))
+		// The queue moved under the finger: the app scrolls to follow it before the fling ends.
+		gate.onProgrammaticScroll()
+		assertNull(gate.onFrame(scrolling = false, settledPage = 7, currentIndex = 6))
 	}
 }
