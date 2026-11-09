@@ -1,5 +1,6 @@
 package app.worbus.domain.manager
 
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -54,7 +55,11 @@ class FillLedgerStoreTest {
 
 		assertTrue(loaded.isEmpty())
 		assertEquals("{}", prefs.lbBotWatches)
-		assertTrue(broken in everythingStored(), "the unreadable text is kept aside")
+		assertEquals(loaded, store.load(), "a second read sets nothing new aside")
+		// Kept as a JSON string, so it is stored escaped.
+		val escaped = JsonPrimitive(broken).toString().removeSurrounding("\"")
+		val stored = everythingStored()
+		assertTrue(broken in stored || escaped in stored, "the unreadable text is kept aside: $stored")
 	}
 
 	@Test
@@ -65,5 +70,16 @@ class FillLedgerStoreTest {
 		store.save(loaded)
 
 		assertEquals(setOf("rg-a", "rg-b"), store.load().keys)
+	}
+
+	@Test
+	fun aLogoutForgetsTheRowsSetAsideToo() {
+		prefs.lbBotWatches = "{\"rg-bad\": {\"kind\": \"album\", \"key\": \"rg-bad\", \"percent\": \"lots\"}}"
+		store.save(store.load())
+		assertTrue("lots" in everythingStored())
+
+		store.forgetSetAside()
+
+		assertTrue("lots" !in everythingStored(), "the next account inherits nothing")
 	}
 }

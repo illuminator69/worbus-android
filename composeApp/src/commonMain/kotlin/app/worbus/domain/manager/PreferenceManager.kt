@@ -282,6 +282,9 @@ class PreferenceManager(
 	// group id (gap fills). Persisted rather than held in memory because a fill takes
 	// minutes and the app is routinely killed inside that window — see LbBotManager.
 	var lbBotWatches by preference("{}")
+	// B-364: fill-ledger rows that did not decode, kept verbatim (a JSON object, newest last) instead of
+	// erased with the rest. Read by nobody; FillLedgerStore writes it.
+	var lbBotWatchesSetAside by preference("{}")
 
 	// P1: the amber dot on the header avatar when one of this device's lb-bot requests failed or
 	// waits on a choice (`needsAttentionCount`). On by default; the avatar menu has the switch. It

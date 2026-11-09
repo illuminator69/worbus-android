@@ -3955,7 +3955,10 @@ class LbBotManager(
 	suspend fun forgetWatches() {
 		pollJob?.cancel()
 		pollJob = null
-		watchLock.withLock { saveWatches(emptyMap()) }
+		watchLock.withLock {
+			saveWatches(emptyMap())
+			fillLedger.forgetSetAside()
+		}
 	}
 
 	/**
@@ -5545,7 +5548,8 @@ data class LbGapCoverage(
  * Every field added since the first version has a default, which is what lets an older
  * stored map decode straight into the newer shape: a fill written before the ledger
  * existed reads back as a running row with no display fields, which the poll fills in on
- * its next tick. A decode failure is caught and degrades to "no history", never a crash.
+ * its next tick. A row that does not decode is moved aside on its own and the others kept
+ * (`FillLedgerStore`, B-364), never a crash and never the whole history.
  */
 @Serializable
 internal data class LbWatch(
