@@ -75,7 +75,9 @@ internal fun guardCacheDb(
 	quickCheck: (File) -> String,
 	move: (File, File) -> Boolean = { from, to -> from.renameTo(to) },
 	delete: (File) -> Boolean = { it.delete() },
-	warn: (String) -> Unit = { Logger.w("CacheDb", it) }
+	warn: (String) -> Unit = { Logger.w("CacheDb", it) },
+	newestVersion: Int? = null,
+	userVersion: (File) -> Int = ::bundledUserVersion
 ): CacheDbCheck {
 	if (!db.exists()) return CacheDbCheck.Missing
 	val why = try {
@@ -138,6 +140,14 @@ internal fun bundledQuickCheck(file: File): String =
 	BundledSQLiteDriver().open(file.absolutePath, SQLITE_OPEN_READWRITE).use { connection ->
 		connection.prepare("PRAGMA quick_check(1)").use { statement ->
 			if (statement.step()) statement.getText(0) else ""
+		}
+	}
+
+/** `PRAGMA user_version` (the schema version Room wrote) through the driver Room uses. */
+internal fun bundledUserVersion(file: File): Int =
+	BundledSQLiteDriver().open(file.absolutePath, SQLITE_OPEN_READWRITE).use { connection ->
+		connection.prepare("PRAGMA user_version").use { statement ->
+			if (statement.step()) statement.getLong(0).toInt() else 0
 		}
 	}
 

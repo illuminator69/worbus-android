@@ -13,9 +13,11 @@ import java.sql.DriverManager
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /*
  * B-306: a corrupt downloads.db is moved aside like cache.db (B-167), and the database Room then
@@ -46,6 +48,54 @@ class DownloadAdoptionTest {
 
 		assertEquals("downloads.db.corrupt-5000", moved.movedTo?.name)
 		assertFalse(db.exists(), "Room creates downloads.db afresh")
+	}
+
+	private fun jdbcUserVersion(file: File): Int =
+		DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}").use { connection ->
+			connection.createStatement().use { statement ->
+				statement.executeQuery("PRAGMA user_version").use { rows -> if (rows.next()) rows.getInt(1) else 0 }
+			}
+		}
+
+	private fun dbAtVersion(file: File, version: Int) {
+		DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}").use { connection ->
+			connection.createStatement().use { it.executeUpdate("CREATE TABLE DownloadEntity(songId TEXT PRIMARY KEY)") }
+			connection.createStatement().use { it.executeUpdate("PRAGMA user_version = $version") }
+		}
+	}
+
+	@Test
+	fun aDownloadsDbANewerBuildWroteIsMovedAsideNotCrashedOn() {
+		// Review finding 1: a release installed over a dev build whose DownloadDatabase is at 6 (the
+		// versionCode is pinned, so Android takes it). Room finds no 6 -> 5 path and, with no
+		// destructive fallback, throws at the first open, in DownloadManager's scope at startup: a
+		// crash at every launch. Moved aside, Room creates it afresh and the files are adopted.
+		val db = File(dir, "downloads.db")
+		dbAtVersion(db, 6)
+		val bytes = db.readBytes()
+
+		val result = guardCacheDb(
+			db, nowMs = 7000, quickCheck = ::jdbcQuickCheck, newestVersion = 5, userVersion = ::jdbcUserVersion
+		)
+
+		val moved = assertIs<CacheDbCheck.Quarantined>(result, "a newer file is moved aside")
+		assertEquals("downloads.db.newer-7000", moved.movedTo?.name)
+		assertFalse(db.exists(), "Room creates downloads.db afresh")
+		assertContentEquals(bytes, File(dir, "downloads.db.newer-7000").readBytes(), "kept whole, for the newer build")
+	}
+
+	@Test
+	fun aDownloadsDbAtOrBelowTheDeclaredVersionIsLeftForRoom() {
+		listOf(5, 4).forEach { version ->
+			val db = File(dir, "downloads-$version.db")
+			dbAtVersion(db, version)
+			assertEquals(
+				CacheDbCheck.Healthy,
+				guardCacheDb(db, nowMs = 7000, quickCheck = ::jdbcQuickCheck, newestVersion = 5, userVersion = ::jdbcUserVersion),
+				"version $version: Room opens (and migrates) it"
+			)
+			assertTrue(db.exists())
+		}
 	}
 
 	@Test
