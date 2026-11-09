@@ -1470,7 +1470,14 @@ class AndroidMediaPlayerViewModel(
 		val index = controller.currentMediaItemIndex
 		if (index == C.INDEX_UNSET) return
 
-		val currentSong = _uiState.value.queue.getOrNull(index)
+		val view = ControllerView(
+			index = index,
+			mediaId = controller.currentMediaItem?.mediaId,
+			playWhenReady = controller.playWhenReady,
+			shuffle = controller.shuffleModeEnabled,
+			repeatMode = controller.repeatMode
+		)
+		val currentSong = derivePlayback(_uiState.value, view).currentSong
 
 		val derivedCollection = currentSong?.let { song ->
 			val stateCollection = _uiState.value.currentCollection
@@ -1484,14 +1491,8 @@ class AndroidMediaPlayerViewModel(
 		}
 
 		_uiState.update { state ->
-			state.copy(
-				currentIndex = index,
-				currentSong = currentSong,
-				currentCollection = derivedCollection ?: state.currentCollection,
-				isPaused = !controller.playWhenReady,
-				isShuffleEnabled = controller.shuffleModeEnabled,
-				repeatMode = controller.repeatMode
-			)
+			val derived = derivePlayback(state, view)
+			derived.copy(currentCollection = derivedCollection ?: derived.currentCollection)
 		}
 		publishPlayOrder()
 		applyAudioGain()
