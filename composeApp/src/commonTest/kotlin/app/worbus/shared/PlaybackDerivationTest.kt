@@ -106,4 +106,14 @@ class PlaybackDerivationTest {
 		assertEquals(null, playbackDisagreement(playingOld, view(index = 1, mediaId = "o2")))
 		assertEquals(null, playbackDisagreement(playingOld, view(index = 2, mediaId = "x", remote = true)), "the facade's items are not the queue's")
 	}
+
+	@Test
+	fun aControllerWithNoItemYetIsNoDisagreement() {
+		// The VM walk (2026-11-09): the B-155 line fired at every first launch and every cold start
+		// with a saved queue, "controller at 0 on no item", before the controller had been given
+		// anything. That is the restore's ordinary moment, not a path editing the controller without
+		// the queue; an alarm that rings at every start is no alarm.
+		assertEquals(null, playbackDisagreement(PlayerUiState(), view(index = 0, mediaId = null)), "first launch: both empty")
+		assertEquals(null, playbackDisagreement(playingOld, view(index = 0, mediaId = null)), "cold start: the restored queue, the controller still empty")
+	}
 }
