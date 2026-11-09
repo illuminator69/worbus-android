@@ -1,6 +1,9 @@
 package app.worbus.ui.screens.collection
 
+import app.worbus.domain.manager.LbBotManager
 import app.worbus.domain.manager.LbGapSource
+import app.worbus.ui.screens.collection.viewmodels.GapBoxUi
+import app.worbus.ui.screens.collection.viewmodels.gapPicked
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -51,5 +54,19 @@ class GapSelectionTest {
 		// re-reads the list. If the safe default then stood in, a card the user never picked was
 		// highlighted under that sentence, and a quick second tap on Request sent it.
 		assertNull(gapPreselection(listOf(alice, bob), preselected = 0, selectedId = null, pickAgain = true), "the user picks again")
+	}
+
+	@Test
+	fun aNewPickClearsTheStaleSentence() {
+		// The VM walk (2026-11-09): after the 409 stale_source the user tapped a card of the re-read
+		// list, and lb-bot's "no longer in this album's list" stayed on the error line under a valid
+		// choice. The sentence was about the card before; a tap is a new choice.
+		val stale = LbBotManager.LbError.Rejected(409, "That source is no longer in this album's list", STALE_SOURCE_CODE)
+		val refused = GapBoxUi(selectedId = null, pickAgain = true, error = stale)
+
+		val picked = gapPicked(refused, bob.id, byTap = true)
+		assertEquals(bob.id, picked.selectedId)
+		assertNull(picked.error, "the stale sentence goes with the new pick")
+		assertEquals(false, picked.pickAgain)
 	}
 }

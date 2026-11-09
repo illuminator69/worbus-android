@@ -244,7 +244,7 @@ class CollectionDetailViewModel(
 	fun selectGapSource(selection: Int, fetchListing: Boolean) {
 		val groupId = gapGroupId ?: return
 		// While pickAgain only a tap gets here (the preselection is off): it is the user's pick.
-		_gapBox.update { it.copy(selectedId = selection, pickAgain = false) }
+		_gapBox.update { gapPicked(it, selection, byTap = fetchListing) }
 		if (!fetchListing) return
 		val source = gapChosenSource(lbBotManager.gaps.value[groupId]?.sources.orEmpty(), selection) ?: return
 		if (source.id in _gapBox.value.listings) return
@@ -832,6 +832,13 @@ private val GAP_LANDED_REFRESH_DELAYS = listOf(5_000L, 10_000L, 30_000L)
  * the missing-songs list on the next frame, with no red line left behind.
  */
 internal fun gapError(error: LbBotManager.LbError): LbBotManager.LbError? = error.takeUnless(::isDownloadsOffRefusal)
+
+/**
+ * The box after a card is chosen as [selection] (a source id): by the user's tap ([byTap]) or by
+ * the safe preselection.
+ */
+internal fun gapPicked(ui: GapBoxUi, selection: Int, byTap: Boolean): GapBoxUi =
+	ui.copy(selectedId = selection, pickAgain = false)
 
 /** The gaps box's own state; which stage it shows is `gapStage`'s, from this and lb-bot's record. */
 data class GapBoxUi(
