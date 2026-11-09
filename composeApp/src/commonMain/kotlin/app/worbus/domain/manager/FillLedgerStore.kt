@@ -11,7 +11,11 @@ import kotlinx.serialization.json.Json
 internal class FillLedgerStore(
 	private val preferenceManager: PreferenceManager,
 	private val json: Json,
-	private val now: () -> Long
+	private val now: () -> Long,
+	/** The log, replaceable on the JVM, where `android.util.Log` is not there. */
+	private val log: (warn: Boolean, message: String, e: Throwable?) -> Unit = { warn, message, e ->
+		if (warn) Logger.w("LbBotManager", message, e) else Logger.e("LbBotManager", message, e)
+	}
 ) {
 	/**
 	 * Two retention rules, because a running row and a finished one are different things.
@@ -42,7 +46,7 @@ internal class FillLedgerStore(
 			.take(LbBotManager.LEDGER_MAX)
 			.associate { it.key to it.value }
 	} catch (e: Exception) {
-		Logger.w("LbBotManager", "could not read persisted fills, starting empty", e)
+		log(true, "could not read persisted fills, starting empty", e)
 		emptyMap()
 	}
 
@@ -50,7 +54,7 @@ internal class FillLedgerStore(
 		preferenceManager.lbBotWatches = try {
 			json.encodeToString(watches)
 		} catch (e: Exception) {
-			Logger.e("LbBotManager", "could not persist fills", e)
+			log(false, "could not persist fills", e)
 			"{}"
 		}
 	}
