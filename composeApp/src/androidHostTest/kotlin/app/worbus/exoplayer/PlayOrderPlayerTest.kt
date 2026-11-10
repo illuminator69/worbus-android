@@ -279,4 +279,43 @@ class PlayOrderPlayerTest {
 		assertEquals(listOf("s5", "s0", "s1", "s2", "s3", "s4"), player.playOrderIds())
 		assertEquals(true, answer)
 	}
+
+	/** Review 3, the transfer back A to B to A: the released device kept the session's queue. */
+	@Test
+	fun aTransferBackLoadsTheSameQueueWithTheHubsOrder() {
+		val player = shuffledSix(installed = true).apply { pause() }
+		val hubs = listOf(2, 5, 1, 0, 3, 4)
+		var answer: Boolean? = null
+		requestPlayOrder(player, hubs, player.ids(), 21L) { answer = it }
+		player.setMediaItems(withLoadToken(rows(6), 21L), 2, 30_000L)
+		assertEquals(hubs.map { "s$it" }, player.playOrderIds())
+		assertEquals(true, answer)
+	}
+
+	/** Review 3, the orphan reload: the same queue again, only the cursor differs. */
+	@Test
+	fun theOrphanReloadOfTheSameQueueKeepsTheSessionsOrder() {
+		val player = shuffledSix(installed = true)
+		val session = listOf(1, 3, 5, 0, 2, 4)
+		var answer: Boolean? = null
+		requestPlayOrder(player, session, player.ids(), 22L) { answer = it }
+		player.setMediaItems(withLoadToken(rows(6), 22L), 1, 0L)
+		assertEquals(session.map { "s$it" }, player.playOrderIds())
+		assertEquals(true, answer)
+	}
+
+	/**
+	 * Review 3 finding 2: an edit's order arriving after an outside controller (the notification,
+	 * Bluetooth, Android Auto) turned shuffle off must not turn it back on; it is refused.
+	 */
+	@Test
+	fun anEditsOrderDoesNotTurnShuffleBackOn() {
+		val player = shuffledSix(installed = true)
+		player.shuffleModeEnabled = false // the notification's button
+		var answer: Boolean? = null
+		requestPlayOrder(player, listOf(3, 0, 4, 1, 5, 6, 2), player.ids() + "n", null) { answer = it }
+		player.addMediaItem(6, item("n"))
+		assertEquals(false, player.shuffleModeEnabled)
+		assertEquals(false, answer)
+	}
 }
