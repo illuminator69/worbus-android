@@ -455,7 +455,11 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 				.buildUpon()
 				.add(SessionCommand(COMMAND_SHUFFLE, Bundle.EMPTY))
 				.add(SessionCommand(COMMAND_REPEAT, Bundle.EMPTY))
-				.add(SessionCommand(COMMAND_SET_PLAY_ORDER, Bundle.EMPTY))
+				.apply {
+					// W1: the play order is the app's own to set (its controller, in this process);
+					// not Android Auto's, a Bluetooth device's or another app's (W1 review finding 6).
+					if (controller.packageName == packageName) add(SessionCommand(COMMAND_SET_PLAY_ORDER, Bundle.EMPTY))
+				}
 				.build()
 
 			return MediaSession.ConnectionResult.accept(
@@ -488,6 +492,9 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 				// order is the hub's): the app's own after an edit, a new queue or a restore, or
 				// one adopted from the hub. Refused unless it is an order of exactly its rows.
 				COMMAND_SET_PLAY_ORDER -> {
+					if (controller.packageName != packageName) {
+						return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
+					}
 					val order = args.getIntArray(EXTRA_PLAY_ORDER)
 					val local = exoPlayer
 					if (order == null || local == null || !setPlayOrder(local, order)) {
@@ -1350,11 +1357,15 @@ class AndroidMediaPlayerViewModel(
 
 					override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
 						if (showsRemote()) return
-						// W1: the mode and its order are read together (PlayOrder.resolve). The
-						// mode is also written here for an empty queue, which updatePlaybackState
-						// leaves alone.
-						_uiState.update { it.copy(isShuffleEnabled = shuffleModeEnabled, playOrder = it.playOrder.takeIf { shuffleModeEnabled }) }
 						if (!shuffleModeEnabled) pendingPlayOrder = null
+						// W1 review finding 3: the mode and its order in ONE update, so no state says
+						// "shuffled" without an order (updatePlaybackState writes both). Inside a queue
+						// edit the edit derives once afterwards; an empty queue has no order to write.
+						if (queueMutationDepth > 0) return
+						if (_uiState.value.queue.isEmpty()) {
+							_uiState.update { it.copy(isShuffleEnabled = shuffleModeEnabled, playOrder = null) }
+							return
+						}
 						updatePlaybackState()
 					}
 
@@ -1369,6 +1380,8 @@ class AndroidMediaPlayerViewModel(
 					}
 
 					override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+						// W1 review finding 4: a timeline after the service accepted the order sent.
+						if (landedPlayOrder != null && landedPlayOrder === pendingPlayOrder) timelineSinceLanding = true
 						updatePlaybackState()
 						// A new or reordered queue: its first songs need warming before the
 						// player reaches them, not only after the next track change. Not the
@@ -1580,7 +1593,8 @@ class AndroidMediaPlayerViewModel(
 		// W1 (B-346): the order is written in the same update as everything else derived here, and
 		// is an order of exactly the state's queue or null.
 		val shown = _uiState.value
-		val reading = PlayOrder.resolve(view.shuffle, timelinePlayOrder(controller), pendingPlayOrder, shown.playOrder, shown.queue.size, landed = false)
+		val landed = timelineSinceLanding && landedPlayOrder != null && landedPlayOrder === pendingPlayOrder
+		val reading = PlayOrder.resolve(view.shuffle, timelinePlayOrder(controller), pendingPlayOrder, shown.playOrder, shown.queue.size, landed)
 		pendingPlayOrder = reading.pending
 		_uiState.update { state ->
 			val derived = derivePlayback(state, view)
@@ -1615,11 +1629,23 @@ class AndroidMediaPlayerViewModel(
 	 */
 	private var pendingPlayOrder: List<Int>? = null
 
+	/** The [pendingPlayOrder] the service has accepted, and whether a timeline has come since. Main thread. */
+	private var landedPlayOrder: List<Int>? = null
+	private var timelineSinceLanding = false
+
 	/**
 	 * Sends [order] to the service's player (PlaybackService.COMMAND_SET_PLAY_ORDER), and waits
-	 * for its timeline to show it. Commands reach the player in the order they were sent, so this
-	 * lands after the edit it follows. A refusal (an order of another queue) stops the wait and
-	 * the timeline is read again. Main thread.
+	 * for its timeline to show it. It lands after the edit it follows only because the session runs
+	 * that edit at once: media3 1.11 queues player commands per controller but dispatches custom
+	 * commands straight to the application thread (`MediaSessionStub`), and the service keeps
+	 * media3's default `onAddMediaItems` / `onSetMediaItems`, which finish immediately. A service
+	 * callback that resolved items asynchronously would let this overtake its edit (then refused).
+	 *
+	 * The wait ends when the timeline shows the order, on a refusal (an order of another queue: the
+	 * timeline is read again), or once the service has accepted it and a session timeline has come
+	 * since, which is then believed (an outside edit may have moved the order meanwhile); a short
+	 * time limit after the acceptance is the backstop for a timeline that never changes again
+	 * (W1 review finding 4). Main thread.
 	 */
 	private fun sendPlayOrder(order: List<Int>) {
 		val c = controller ?: return
@@ -1630,10 +1656,21 @@ class AndroidMediaPlayerViewModel(
 		)
 		result.addListener({
 			val ok = runCatching { result.get().resultCode == SessionResult.RESULT_SUCCESS }.getOrDefault(false)
-			if (!ok && pendingPlayOrder === order) {
+			if (pendingPlayOrder !== order) return@addListener
+			if (!ok) {
 				Logger.w("MediaPlayer", "W1: the player refused a play order of ${order.size} rows")
 				pendingPlayOrder = null
 				updatePlaybackState()
+				return@addListener
+			}
+			landedPlayOrder = order
+			timelineSinceLanding = false
+			viewModelScope.launch {
+				delay(LANDED_ORDER_BACKSTOP_MS)
+				if (pendingPlayOrder === order) {
+					pendingPlayOrder = null
+					updatePlaybackState()
+				}
 			}
 		}, ContextCompat.getMainExecutor(application))
 	}
@@ -2904,3 +2941,6 @@ class AndroidMediaPlayerViewModel(
 		return builder.build()
 	}
 }
+
+/** How long an order the service accepted is shown without its timeline (W1 review finding 4). */
+private const val LANDED_ORDER_BACKSTOP_MS = 1_500L
