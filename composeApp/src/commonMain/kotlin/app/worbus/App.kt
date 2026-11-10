@@ -167,6 +167,7 @@ import app.worbus.ui.components.snackbars.NavicSnackBar
 import app.worbus.ui.screens.song.SongDetailSheet
 import app.worbus.ui.ColourArrivalEffects
 import app.worbus.ui.util.Material3Transitions
+import app.worbus.ui.util.PageMotion
 import app.worbus.ui.util.pageMotionOf
 import app.worbus.ui.util.rememberLibraryTabBackground
 import app.worbus.ui.components.common.AppWash
@@ -260,7 +261,7 @@ fun App() {
 	// A tab's own page is a root (P6: Home stays under Search and the Library, so it is no longer
 	// "the stack holds one entry"). Back on one still pops only at two entries or more, below.
 	val isRoot by remember(backStack) { derivedStateOf { isRootPage(backStack.lastOrNull()) } }
-	val entries = remember(backStack, isRoot) { entryProvider(isRoot) }
+	val entries = remember(backStack, isRoot) { entryProvider(isRoot) { pageMotionOf(preferenceManager.animationStyle) } }
 
 	// The individual strategies were already remembered; the enclosing list was not, so
 	// NavDisplay still received a new `sceneStrategies` value on every pass.
@@ -524,15 +525,19 @@ fun App() {
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
 private fun entryProvider(
-	isRoot: Boolean
+	isRoot: Boolean,
+	// The animation style's motion, read when a transition starts (Ruling 7's tab fade-through).
+	motion: () -> PageMotion
 ): (NavKey) -> (NavEntry<NavKey>) {
+	// Ruling 7 (2026-11-10): a root-tab switch fades through (the old tab out, then the new one in),
+	// timed as a page push's fades; the two tabs used to cross-fade at once.
 	val navtabMetadata = if (isRoot)
 		listPane("root") + ListPageSceneStrategy.listPage() + transitionSpec {
-			ContentTransform(fadeIn(), fadeOut())
+			ContentTransform(Material3Transitions.tabEnter(motion()), Material3Transitions.tabExit(motion()))
 		} + popTransitionSpec {
-			ContentTransform(fadeIn(), fadeOut())
+			ContentTransform(Material3Transitions.tabEnter(motion()), Material3Transitions.tabExit(motion()))
 		} + predictivePopTransitionSpec {
-			ContentTransform(fadeIn(), fadeOut())
+			ContentTransform(Material3Transitions.tabEnter(motion()), Material3Transitions.tabExit(motion()))
 		}
 	else listPane("root") + ListPageSceneStrategy.listPage()
 	val imageViewMetadata = transitionSpec { ContentTransform(fadeIn(), ExitTransition.None) }

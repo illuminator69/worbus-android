@@ -46,7 +46,6 @@ class PreferenceManager(
 	var expressiveBlur by preference(false)
 	var swipeToSkip by preference(true)
 	var hideIfIdle by preference(false)
-	var enablePredictiveBackAnimations by preference(true)
 	var gridSize by preference(GridSize.TwoByTwo)
 	var coverArtShape by preference(CoverArtShape.Soft)
 	var artistImageShape by preference(CoverArtShape.Soft)

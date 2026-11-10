@@ -76,6 +76,28 @@ object Material3Transitions {
 		pageExit(motion, density, sign = 1)
 	}
 
+	/**
+	 * A root-tab switch (Ruling 7, 2026-11-10): the same staggered fade-through as a page push, no
+	 * slide. The old tab fades out over the first third, then the new one fades in over the rest
+	 * ([pageFadeWindows]); the two were faded at once, their text drawn over each other (B-378's
+	 * overlap on a tab switch).
+	 */
+	fun tabEnter(motion: PageMotion): EnterTransition {
+		val w = pageFadeWindows(motion)
+		return fadeIn(animationSpec = tween(durationMillis = w.enterEndMs - w.enterStartMs, delayMillis = w.enterStartMs))
+	}
+
+	fun tabExit(motion: PageMotion): ExitTransition {
+		val w = pageFadeWindows(motion)
+		return fadeOut(
+			animationSpec = tween(
+				durationMillis = w.exitEndMs - w.exitStartMs,
+				delayMillis = w.exitStartMs,
+				easing = EmphasizedAccelerateEasing
+			)
+		)
+	}
+
 	val SharedXAxisEnterTransition: (Density) -> EnterTransition = enter(DefaultPageMotion)
 
 	val SharedXAxisPopEnterTransition: (Density) -> EnterTransition = popEnter(DefaultPageMotion)

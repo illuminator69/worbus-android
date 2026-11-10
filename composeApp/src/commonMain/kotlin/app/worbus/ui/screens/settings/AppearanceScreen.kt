@@ -35,7 +35,6 @@ import worbus.composeapp.generated.resources.option_choose_app_icon
 import worbus.composeapp.generated.resources.option_choose_theme
 import worbus.composeapp.generated.resources.option_cover_art_size
 import worbus.composeapp.generated.resources.option_dynamic_theming
-import worbus.composeapp.generated.resources.option_enable_predictive_back_animations
 import worbus.composeapp.generated.resources.option_enable_ratings
 import worbus.composeapp.generated.resources.option_expressive_blur
 import worbus.composeapp.generated.resources.option_grid_items_per_row
@@ -267,21 +266,17 @@ fun SettingsAppearanceScreen() {
 						selectedChoice = preferenceManager.animationStyle,
 						onChoiceSelected = { preferenceManager.animationStyle = it },
 						label = { stringResource(it.displayName) },
-						shapes = SegmentedListItemDefaults.segmentedShapes(index = 0, count = 3)
+						shapes = SegmentedListItemDefaults.segmentedShapes(index = 0, count = 2)
 					)
-					SettingsToggleItem(
-						content = { Text(stringResource(Res.string.option_enable_predictive_back_animations)) },
-						checked = preferenceManager.enablePredictiveBackAnimations,
-						onCheckedChange = { preferenceManager.enablePredictiveBackAnimations = it },
-						shapes = SegmentedListItemDefaults.segmentedShapes(index = 1, count = 3)
-					)
+					// Ruling 7 (2026-11-10): no "Predictive back animations" row. B-378 made one back
+					// animation for the button and both gestures, so it no longer changed anything.
 					// navi-connect: the frosted-glass blur over the Mood Flow background.
 					SettingsToggleItem(
 						checked = preferenceManager.expressiveBlur,
 						onCheckedChange = { preferenceManager.expressiveBlur = it },
 						content = { Text(stringResource(Res.string.option_expressive_blur)) },
 						supportingContent = { Text(stringResource(Res.string.subtitle_expressive_blur)) },
-						shapes = SegmentedListItemDefaults.segmentedShapes(index = 2, count = 3)
+						shapes = SegmentedListItemDefaults.segmentedShapes(index = 1, count = 2)
 					)
 				}
 			}
