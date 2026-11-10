@@ -18,7 +18,7 @@ class SessionLogoutTest {
 	private val settings = MemorySettings()
 
 	private fun session(secrets: SecretStore = testSecrets(settings)) =
-		SessionManager(settings, PreferenceManager(settings, secrets), secrets)
+		SessionManager(settings, PreferenceManager(settings, secrets), secrets, ServerReachability())
 
 	@Test
 	fun logoutRemovesThePasswordAndKeepsTheAudioMuseToken() {

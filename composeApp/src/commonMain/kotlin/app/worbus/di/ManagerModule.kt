@@ -35,6 +35,7 @@ import app.worbus.domain.manager.SnackBarManager
 import app.worbus.domain.manager.StationManager
 import app.worbus.domain.manager.MoodManager
 import app.worbus.domain.manager.SyncManager
+import app.worbus.domain.manager.ServerReachability
 import app.worbus.domain.manager.WriteQueue
 import app.worbus.domain.manager.RoomWriteQueueStore
 import app.worbus.data.database.dao.PendingWriteDao
@@ -71,6 +72,8 @@ val managerModule = module {
 	singleOf(::DownloadManager)
 	singleOf(::AlbumModeSmartPlaylists)
 	singleOf(::SessionManager)
+	// Q-165: whether the session's Navidrome answers; read by ConnectivityManager, fed by SessionManager's clients.
+	single { ServerReachability() }
 	singleOf(::PreferenceManager)
 	// B-279: the password and the two tokens, sealed in their own file. The vault (the file and the
 	// cipher) is registered by each platform module; an explicit lambda for the default parameter.

@@ -40,7 +40,9 @@ class SessionManager(
 	private val settings: Settings,
 	private val preferenceManager: PreferenceManager,
 	// B-279: the password is sealed there, and read only through it.
-	private val secrets: SecretStore
+	private val secrets: SecretStore,
+	/** Q-165: what the session's requests meet decides whether Navidrome counts as reachable. */
+	private val reachability: ServerReachability
 ) {
 	private val _isLoggedIn = MutableStateFlow(false)
 	val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
@@ -71,6 +73,7 @@ class SessionManager(
 			}
 			install(UserAgent) { agent = userAgent() }
 			install(HttpTimeout)
+			reachability.observe(this)
 		}
 	}
 
@@ -87,6 +90,8 @@ class SessionManager(
 		// here. The login screen then asks again, with the server and name filled in (B-279).
 		_isLoggedIn.value = settings.getStringOrNull("username") != null && secrets.navidromePassword.isNotEmpty()
 		if (_isLoggedIn.value) getCachedUser()
+		// Q-165: while Navidrome does not answer, this is what asks again (and its answer is observed).
+		reachability.probe = { api.ping() }
 	}
 
 	/** Worbus P3: the Navidrome address this session signed in to ("" for none), for looking beside it. */
@@ -121,10 +126,12 @@ class SessionManager(
 		return NavidromeAccount(username, password)
 	}
 
+	/** [observed]: the session's own client reports to [reachability]; a login's trial of another address does not. */
 	private fun createClient(
 		instanceUrl: String,
 		username: String,
 		password: String,
+		observed: Boolean = true,
 	) = SubsonicClient.Companion(
 		baseUrl = instanceUrl,
 		auth = SubsonicAuth.Token(
@@ -135,6 +142,8 @@ class SessionManager(
 		clientConfig = {
 			// Before anything parses: one album without cover art used to fail every library sync.
 			installSubsonicResponseRepair()
+
+			if (observed) reachability.observe(this)
 
 			install(UserAgent) {
 				agent = userAgent()
@@ -167,7 +176,7 @@ class SessionManager(
 		username: String,
 		password: String
 	) {
-		val client = createClient(instanceUrl, username, password)
+		val client = createClient(instanceUrl, username, password, observed = false)
 
 		try {
 			client.ping()
@@ -184,7 +193,9 @@ class SessionManager(
 		settings["username"] = username
 		secrets.navidromePassword = password
 
-		api = client
+		// The trial client reported nothing; the session's own one is built observed.
+		api = createClient(instanceUrl, username, password)
+		reachability.reset()
 		_isLoggedIn.value = true
 	}
 
@@ -199,6 +210,7 @@ class SessionManager(
 		secrets.navidromePassword = ""
 		_isLoggedIn.value = false
 		currentUser = null
+		reachability.reset()
 	}
 
 	fun refreshClient() {
