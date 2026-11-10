@@ -19,6 +19,7 @@ import app.worbus.domain.manager.ConnectivityManager
 import app.worbus.domain.manager.HubManager
 import app.worbus.domain.manager.BrowseResolver
 import app.worbus.domain.manager.LbBotManager
+import app.worbus.domain.manager.LbFreshFeed
 import app.worbus.data.database.mappers.toDomainModel
 import app.worbus.domain.models.DomainPlaylist
 import app.worbus.domain.manager.LbCachePolicy
@@ -334,7 +335,7 @@ class DiscoverViewModel(
 	 */
 	private suspend fun loadFresh(policy: LbCachePolicy) {
 		lbBotManager.freshReleases(30, policy = policy).collect { feed ->
-			val rows = feed?.releases.orEmpty().filter { it.artistOwned }.take(ROW_LIMIT)
+			val rows = discoverFreshRows(feed, ROW_LIMIT)
 			_state.update { it.copy(fresh = rows) }
 		}
 	}
@@ -517,3 +518,8 @@ class DiscoverViewModel(
 		return picked.name to mbid.ifBlank { null }
 	}
 }
+
+/** Discover's fresh releases (what the stack picks from): the library's artists, in the feed's order. */
+internal fun discoverFreshRows(feed: LbFreshFeed?, limit: Int): List<LbFreshRelease> =
+	feed?.releases.orEmpty().filter { it.artistOwned }.take(limit)
+
