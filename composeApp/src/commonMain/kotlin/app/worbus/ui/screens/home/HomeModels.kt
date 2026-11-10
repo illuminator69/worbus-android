@@ -14,6 +14,7 @@ import androidx.compose.runtime.Immutable
 import androidx.navigation3.runtime.NavKey
 import app.worbus.data.database.entities.SavedQueueEntity
 import app.worbus.domain.manager.LbFreshFeed
+import app.worbus.domain.manager.LbFreshRelease
 import app.worbus.ui.screens.fresh.freshAlbumTarget
 import app.worbus.domain.models.Mix
 import app.worbus.domain.models.YOUR_MIX_ID
@@ -56,12 +57,8 @@ internal fun freshShelf(
 	feed: LbFreshFeed?,
 	limit: Int = 12,
 	filters: FreshFilters = FreshFilters(FreshScope.YOURS, FreshSort.DATE, FreshType.ALL)
-): List<FreshTile> {
-	val rows = feed?.releases ?: return emptyList()
-	return freshOrdered(rows, filters.scope, filters.sort, filters.type).asSequence()
-		.filter { it.releaseGroupMbid.isNotBlank() || it.releaseAlbumId.isNotBlank() }
-		.distinctBy { it.releaseGroupMbid.ifBlank { it.releaseAlbumId } }
-		.take(limit)
+): List<FreshTile> =
+	freshShelfReleases(feed, limit, filters)
 		.map {
 			FreshTile(
 				rgid = it.releaseGroupMbid,
@@ -74,6 +71,23 @@ internal fun freshShelf(
 				artistId = it.artistId.takeIf { id -> id.isNotBlank() }
 			)
 		}
+
+/**
+ * "Which fresh releases", once (B-287): the first [limit] the Fresh page shows under its stored
+ * [filters] (`freshOrdered`), one per release group, each with somewhere to go. Home's shelf and
+ * Discover's row (and so the Discover stack, which picks from it) read this; the Fresh page is the
+ * same order without the limit.
+ */
+internal fun freshShelfReleases(
+	feed: LbFreshFeed?,
+	limit: Int,
+	filters: FreshFilters = FreshFilters(FreshScope.YOURS, FreshSort.DATE, FreshType.ALL)
+): List<LbFreshRelease> {
+	val rows = feed?.releases ?: return emptyList()
+	return freshOrdered(rows, filters.scope, filters.sort, filters.type).asSequence()
+		.filter { it.releaseGroupMbid.isNotBlank() || it.releaseAlbumId.isNotBlank() }
+		.distinctBy { it.releaseGroupMbid.ifBlank { it.releaseAlbumId } }
+		.take(limit)
 		.toList()
 }
 

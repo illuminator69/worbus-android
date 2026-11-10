@@ -4,6 +4,10 @@ import app.worbus.domain.manager.LbFreshFeed
 import app.worbus.domain.manager.LbFreshRelease
 import app.worbus.ui.screens.discover.viewmodels.discoverFreshRows
 import app.worbus.ui.screens.home.freshShelf
+import app.worbus.ui.screens.fresh.viewmodels.FreshFilters
+import app.worbus.ui.screens.fresh.viewmodels.FreshScope
+import app.worbus.ui.screens.fresh.viewmodels.FreshSort
+import app.worbus.ui.screens.fresh.viewmodels.FreshType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -34,4 +38,13 @@ class DiscoverFreshMatchesShelfTest {
 			discoverFreshRows(feed, 20).map { it.releaseGroupMbid }
 		)
 	}
+
+	@Test
+	fun andUnderTheFiltersThePageWasLeftOn() {
+		val filters = FreshFilters(FreshScope.ALL, FreshSort.ARTIST, FreshType.ALL)
+		val shelf = freshShelf(feed, limit = 20, filters = filters).map { it.rgid }
+		assertEquals(shelf, discoverFreshRows(feed, 20, filters).map { it.releaseGroupMbid })
+		assertEquals(true, "rg-unowned" in shelf, "\"Everyone\" reaches Discover too")
+	}
 }
+

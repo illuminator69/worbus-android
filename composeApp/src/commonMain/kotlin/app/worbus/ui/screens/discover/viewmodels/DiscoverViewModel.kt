@@ -20,6 +20,11 @@ import app.worbus.domain.manager.HubManager
 import app.worbus.domain.manager.BrowseResolver
 import app.worbus.domain.manager.LbBotManager
 import app.worbus.domain.manager.LbFreshFeed
+import app.worbus.ui.screens.fresh.viewmodels.FreshType
+import app.worbus.ui.screens.fresh.viewmodels.FreshSort
+import app.worbus.ui.screens.fresh.viewmodels.FreshScope
+import app.worbus.ui.screens.fresh.viewmodels.FreshFilters
+import app.worbus.ui.screens.home.freshShelfReleases
 import app.worbus.data.database.mappers.toDomainModel
 import app.worbus.domain.models.DomainPlaylist
 import app.worbus.domain.manager.LbCachePolicy
@@ -330,12 +335,13 @@ class DiscoverViewModel(
 	 * "See all" rather than at the top of Discover. lb-bot keeps the two ownership
 	 * scopes strictly apart and so does this.
 	 *
-	 * The same request (and so the same cached body) as the Fresh tab's default 30-day window.
+	 * B-287: the Fresh page's stored window and filters, the same request (and cached body) as the
+	 * page and Home's shelf, and the page's first [ROW_LIMIT] in its order (`freshShelfReleases`).
 	 * `null` means nothing was cached and nothing came back — an empty row, as before.
 	 */
 	private suspend fun loadFresh(policy: LbCachePolicy) {
-		lbBotManager.freshReleases(30, policy = policy).collect { feed ->
-			val rows = discoverFreshRows(feed, ROW_LIMIT)
+		lbBotManager.freshReleases(preferenceManager.freshDays, policy = policy).collect { feed ->
+			val rows = discoverFreshRows(feed, ROW_LIMIT, FreshFilters.of(preferenceManager))
 			_state.update { it.copy(fresh = rows) }
 		}
 	}
@@ -519,7 +525,10 @@ class DiscoverViewModel(
 	}
 }
 
-/** Discover's fresh releases (what the stack picks from): the library's artists, in the feed's order. */
-internal fun discoverFreshRows(feed: LbFreshFeed?, limit: Int): List<LbFreshRelease> =
-	feed?.releases.orEmpty().filter { it.artistOwned }.take(limit)
+/** Discover's fresh releases (what the stack picks from): the Fresh page's first ones, as Home's shelf (B-287). */
+internal fun discoverFreshRows(
+	feed: LbFreshFeed?,
+	limit: Int,
+	filters: FreshFilters = FreshFilters(FreshScope.YOURS, FreshSort.DATE, FreshType.ALL)
+): List<LbFreshRelease> = freshShelfReleases(feed, limit, filters)
 
