@@ -48,10 +48,16 @@ class PlayOrderPlayerTest {
 			context,
 			RenderersFactory { _, _, _, _, _ -> arrayOf<Renderer>(MediaCodecAudioRenderer(context, MediaCodecSelector.DEFAULT)) }
 		).build()
-		if (installed) installPlayOrder(player)
+		if (installed) engines[player] = installPlayOrder(player)
 		players += player
 		return player
 	}
+
+	private val engines = mutableMapOf<ExoPlayer, PlayOrderEngine>()
+
+	/** What the service's COMMAND_SET_PLAY_ORDER handler does with an order. */
+	private fun requestPlayOrder(player: ExoPlayer, order: List<Int>, ids: List<String>, loadToken: Long?, turnOn: Boolean = false, done: (Boolean) -> Unit) =
+		engines.getValue(player).request(order, ids, loadToken, turnOn, done)
 
 	private fun item(id: String) = MediaItem.Builder().setMediaId(id).setUri("http://127.0.0.1/$id").build()
 
@@ -229,7 +235,7 @@ class PlayOrderPlayerTest {
 	fun anOrderSentWithShuffleOnSurvivesTheLateShuffleCommand() {
 		val player = newPlayer(installed = true).apply { setMediaItems(rows(6), 4, 0L) }
 		var answer: Boolean? = null
-		requestPlayOrder(player, listOf(3, 0, 4, 1, 5, 2), player.ids(), null) { answer = it }
+		requestPlayOrder(player, listOf(3, 0, 4, 1, 5, 2), player.ids(), null, turnOn = true) { answer = it }
 		player.shuffleModeEnabled = true // the controller's own shuffle-on, landing after the order
 		assertEquals(listOf("s3", "s0", "s4", "s1", "s5", "s2"), player.playOrderIds())
 		assertEquals(true, answer)

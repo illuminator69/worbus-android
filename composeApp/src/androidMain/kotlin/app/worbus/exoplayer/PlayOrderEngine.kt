@@ -80,9 +80,7 @@ class PlayOrderShuffleOrder(
  * ([requestPlayOrder]).
  */
 @UnstableApi
-internal fun installPlayOrder(player: ExoPlayer) {
-	synchronized(engines) { engines[player] = PlayOrderEngine(player) }
-}
+internal fun installPlayOrder(player: ExoPlayer): PlayOrderEngine = PlayOrderEngine(player)
 
 /**
  * Sets an explicit play order at once. False (and nothing changed) when [order] is not an order of
@@ -96,10 +94,10 @@ internal fun setPlayOrder(player: ExoPlayer, order: IntArray): Boolean {
 	return true
 }
 
-/**
- * A play order the app sent (COMMAND_SET_PLAY_ORDER) for the queue it was built for: [ids], the
- * media ids in queue order, and for a whole-queue load its [loadToken] (the load's items carry it,
- * [withLoadToken]). The order is applied the moment the player holds exactly that queue
+/*
+ * PlayOrderEngine.request: a play order the app sent (COMMAND_SET_PLAY_ORDER) for the queue it was
+ * built for: its media ids in queue order, and for a whole-queue load its load token (the load's
+ * items carry it, [withLoadToken]). The order is applied the moment the player holds exactly that queue
  * (now, or when the queue edit it follows lands), with shuffle turned on, and [done] answers true
  * then; false when it is not an order of [ids], when a newer one replaces it, when shuffle is
  * turned off first, or after [ORDER_WAIT_MS] without its queue.
@@ -110,11 +108,6 @@ internal fun setPlayOrder(player: ExoPlayer, order: IntArray): Boolean {
  * follows. Checked against the queue's identity, never its length: an order of another queue with
  * as many rows is never applied.
  */
-@UnstableApi
-internal fun requestPlayOrder(player: ExoPlayer, order: List<Int>, ids: List<String>, loadToken: Long?, done: (Boolean) -> Unit) {
-	val engine = synchronized(engines) { engines[player] }
-	if (engine == null) done(false) else engine.request(order, ids, loadToken, done)
-}
 
 /** The extra under which a whole-queue load stamps its media items with its token. */
 internal const val LOAD_TOKEN_EXTRA = "worbusLoadToken"
@@ -133,11 +126,13 @@ internal fun withLoadToken(items: List<MediaItem>, token: Long): List<MediaItem>
 /** How long an order waits for the queue it was built for. */
 internal const val ORDER_WAIT_MS = 5_000L
 
-private val engines = java.util.WeakHashMap<ExoPlayer, PlayOrderEngine>()
-
+/**
+ * The service player's play-order rule and the app's orders for it; held by the service beside the
+ * player it was made for (review 3: a global map of players to engines kept every player alive).
+ */
 @UnstableApi
-private class PlayOrderEngine(private val player: ExoPlayer) {
-	private class Waiting(val order: List<Int>, val ids: List<String>, val loadToken: Long?, val done: (Boolean) -> Unit)
+internal class PlayOrderEngine(private val player: ExoPlayer) {
+	private class Waiting(val order: List<Int>, val ids: List<String>, val loadToken: Long?, val turnOn: Boolean, val done: (Boolean) -> Unit)
 
 	private var waiting: Waiting? = null
 
@@ -175,13 +170,19 @@ private class PlayOrderEngine(private val player: ExoPlayer) {
 		})
 	}
 
-	fun request(order: List<Int>, ids: List<String>, loadToken: Long?, done: (Boolean) -> Unit) {
+	/**
+	 * [turnOn]: the order is for turning shuffle on (the app's toggle, or adopting a directive with
+	 * `shuffle: true`) and may turn it on. Any other order (an edit's) that finds shuffle off is
+	 * refused: shuffle was turned off from outside meanwhile (the notification, Bluetooth, Android
+	 * Auto), and an order must never undo that (review 3 finding 2).
+	 */
+	fun request(order: List<Int>, ids: List<String>, loadToken: Long?, turnOn: Boolean, done: (Boolean) -> Unit) {
 		waiting?.let { waiting = null; it.done(false) }
 		if (!PlayOrder.isPermutation(order, ids.size)) {
 			done(false)
 			return
 		}
-		val w = Waiting(order, ids, loadToken, done)
+		val w = Waiting(order, ids, loadToken, turnOn, done)
 		if (holds(w)) {
 			apply(w)
 			return
@@ -206,9 +207,12 @@ private class PlayOrderEngine(private val player: ExoPlayer) {
 	private fun apply(w: Waiting) {
 		if (player.shuffleModeEnabled) {
 			player.setShuffleOrder(PlayOrderShuffleOrder(w.order))
-		} else {
+		} else if (w.turnOn) {
 			orderForTurnOn = w.order
 			player.shuffleModeEnabled = true
+		} else {
+			w.done(false)
+			return
 		}
 		w.done(true)
 	}

@@ -128,7 +128,7 @@ import app.worbus.exoplayer.AudioGainProcessor
 import app.worbus.exoplayer.ExoPlayerCoilBitmapLoader
 import app.worbus.exoplayer.ResumingDataSource
 import app.worbus.exoplayer.installPlayOrder
-import app.worbus.exoplayer.requestPlayOrder
+import app.worbus.exoplayer.PlayOrderEngine
 import app.worbus.exoplayer.withLoadToken
 import app.worbus.ui.core.PlayerUiState
 import app.worbus.util.Logger
@@ -148,6 +148,9 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 
 	private var mediaLibrarySession: MediaLibrarySession? = null
 	private var exoPlayer: ExoPlayer? = null
+
+	/** The local player's play-order rule and the app's orders for it (W1), made with it. */
+	private var playOrderEngine: PlayOrderEngine? = null
 	private var remotePlayer: RemoteSessionPlayer? = null
 	private var streamingClient: HttpClient? = null
 	private val serviceScope = MainScope()
@@ -289,7 +292,7 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 					true
 				)
 				setMediaNotificationProvider(notificationProvider)
-				installPlayOrder(this)
+				playOrderEngine = installPlayOrder(this)
 				trackSelectionParameters =
 					trackSelectionParameters.buildUpon().setAudioOffloadPreferences(
 						TrackSelectionParameters.AudioOffloadPreferences
@@ -444,6 +447,7 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 		super.onDestroy()
 		mediaLibrarySession = null
 		exoPlayer = null
+		playOrderEngine = null
 		remotePlayer = null
 		stopSelf()
 	}
@@ -499,8 +503,8 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 					}
 					val order = args.getIntArray(EXTRA_PLAY_ORDER)
 					val ids = args.getStringArrayList(EXTRA_PLAY_ORDER_IDS)
-					val local = exoPlayer
-					if (order == null || ids == null || local == null) {
+					val engine = playOrderEngine
+					if (order == null || ids == null || engine == null) {
 						return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
 					}
 					// W1 walk: applied when the player holds exactly the queue it was built for, which
@@ -508,7 +512,8 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 					// command queue); answered then, or refused (ERROR_BAD_VALUE) if it never does.
 					val answer = SettableFuture.create<SessionResult>()
 					val loadToken = if (args.containsKey(EXTRA_PLAY_ORDER_LOAD)) args.getLong(EXTRA_PLAY_ORDER_LOAD) else null
-					requestPlayOrder(local, order.toList(), ids, loadToken) { applied ->
+					val turnOn = args.getBoolean(EXTRA_PLAY_ORDER_TURN_ON, false)
+					engine.request(order.toList(), ids, loadToken, turnOn) { applied ->
 						answer.set(SessionResult(if (applied) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
 					}
 					return answer
@@ -901,6 +906,8 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 		const val EXTRA_PLAY_ORDER_IDS = "playOrderIds"
 		/** The token of the whole-queue load the order was built for (its items carry it). */
 		const val EXTRA_PLAY_ORDER_LOAD = "playOrderLoad"
+		/** The order is for turning shuffle on and may turn it on; an edit's order may not. */
+		const val EXTRA_PLAY_ORDER_TURN_ON = "playOrderTurnOn"
 
 		const val MEDIA_ROOT_ID = "navic_root"
 		const val MEDIA_SHUFFLE_ID = "navic_shuffle"
@@ -1663,7 +1670,7 @@ class AndroidMediaPlayerViewModel(
 	 * time limit after the acceptance is the backstop for a timeline that never changes again
 	 * (W1 review finding 4). Main thread.
 	 */
-	private fun sendPlayOrder(order: List<Int>, loadToken: Long? = null) {
+	private fun sendPlayOrder(order: List<Int>, loadToken: Long? = null, turnOn: Boolean = false) {
 		val c = controller ?: return
 		// The queue it was built for: every caller has written that queue to the state first.
 		val ids = _uiState.value.queue.map { it.id }
@@ -1678,6 +1685,7 @@ class AndroidMediaPlayerViewModel(
 				putIntArray(PlaybackService.EXTRA_PLAY_ORDER, order.toIntArray())
 				putStringArrayList(PlaybackService.EXTRA_PLAY_ORDER_IDS, ArrayList(ids))
 				loadToken?.let { putLong(PlaybackService.EXTRA_PLAY_ORDER_LOAD, it) }
+				putBoolean(PlaybackService.EXTRA_PLAY_ORDER_TURN_ON, turnOn)
 			}
 		)
 		result.addListener({
@@ -1796,7 +1804,7 @@ class AndroidMediaPlayerViewModel(
 			// the restored state passed through that song for as long as the restore took.
 			val token = nextLoadToken()
 			player.setMediaItems(withLoadToken(mediaItems, token), index, position)
-			order?.let { sendPlayOrder(it, token) }
+			order?.let { sendPlayOrder(it, token, turnOn = true) }
 			player.repeatMode = state.repeatMode
 			player.playbackParameters = PlaybackParameters(state.playbackSpeed)
 
@@ -1924,7 +1932,7 @@ class AndroidMediaPlayerViewModel(
 				// on the first song until the seek, and the state just set passed through it.
 				val token = nextLoadToken()
 				player.setMediaItems(withLoadToken(mediaItems, token), idx, positionMs)
-				playOrder?.let { sendPlayOrder(it, token) }
+				playOrder?.let { sendPlayOrder(it, token, turnOn = shuffle == true) }
 				player.prepare()
 				if (play) player.play() else player.pause()
 			}
@@ -2102,7 +2110,7 @@ class AndroidMediaPlayerViewModel(
 				_uiState.update {
 					it.copy(queue = songs, currentIndex = index, currentSong = newCurrent, playOrder = adopted)
 				}
-				adopted?.let { sendPlayOrder(it) }
+				adopted?.let { sendPlayOrder(it, turnOn = shuffle == true) }
 			}
 			updatePlaybackState()
 			null
@@ -2154,7 +2162,7 @@ class AndroidMediaPlayerViewModel(
 		_uiState.update { it.copy(isShuffleEnabled = enabled, playOrder = playOrder?.takeIf { o -> PlayOrder.isPermutation(o, it.queue.size) }) }
 		pendingPlayOrder = playOrder
 		if (player.shuffleModeEnabled != enabled) player.shuffleModeEnabled = enabled
-		playOrder?.let { sendPlayOrder(it) }
+		playOrder?.let { sendPlayOrder(it, turnOn = true) }
 	}
 
 	private var progressJob: Job? = null

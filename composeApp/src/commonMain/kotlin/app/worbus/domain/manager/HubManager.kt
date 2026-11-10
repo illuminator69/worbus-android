@@ -17,6 +17,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -2993,6 +2994,8 @@ class HubManager(
 	 * claims the active role. Never hijacks: only when no device is active or
 	 * we already are, and never for hub-driven changes (do:load echoes).
 	 */
+	private val publishLock = kotlinx.coroutines.sync.Mutex()
+
 	/** The look again at a publish the hub-driven window held back ([publishRecheckAt]). */
 	private var publishRecheck: Job? = null
 
@@ -3016,62 +3019,66 @@ class HubManager(
 		positionMs: Long,
 		now: Long
 	) {
-		if (!_connected.value) return
-		if (state.queue.isEmpty()) return
-		if (now < hubDrivenUntilMs) {
-			// W1 walk: looked at again when the window ends; a paused player emits no state to do it.
-			schedulePublishRecheck(now)
-			return
+		// Review 3 nit: the held-publish recheck and the state collector both call this; the
+		// signature check and its write are one step, so one setQueue goes out, not two.
+		publishLock.withLock {
+			if (!_connected.value) return
+			if (state.queue.isEmpty()) return
+			if (now < hubDrivenUntilMs) {
+				// W1 walk: looked at again when the window ends; a paused player emits no state to do it.
+				schedulePublishRecheck(now)
+				return
+			}
+			val active = _activeDeviceId.value
+			val me = _myDeviceId.value
+			if (!(active == null || (me != null && active == me))) return
+			val offersPlayOrder = hubOffers(HUB_FEATURE_PLAY_ORDER)
+			// A paused device never claims the session (B-047); the active one keeps the hub's copy
+			// of its queue and order current while paused too (W1).
+			if (state.isPaused && !publishesWhilePaused(offersPlayOrder, active, me, holdsSessionQueue)) return
+			if (publishHeldForOrder(offersPlayOrder, state.isShuffleEnabled, state.playOrder, state.queue.size)) return
+
+			val sig = publishSignature(queueSig(state.queue), state.isShuffleEnabled, state.playOrder, offersPlayOrder)
+			// Normally one publish per queue change. But when NOBODY is active and we're
+			// playing, publishing is also how we CLAIM the session — and after adopting the
+			// hub's queue our signature already equals it, so the dedupe would block the
+			// claim forever (connected, playing locally, but never promoted → no reports).
+			// Re-publish in that state, throttled so the ~5 Hz state flow doesn't spam.
+			val unclaimed = active == null
+			if (sig == lastQueueSig && !(unclaimed && now - lastClaimPublishAtMs >= CLAIM_REPUBLISH_MS)) return
+			if (unclaimed) lastClaimPublishAtMs = now
+			lastQueueSig = sig
+			publishedNonEmptyQueue = true
+			// Its own queue is the session's from this publish on (a paused one needs it already).
+			if (!state.isPaused) holdsSessionQueue = true
+
+			// Remembered on the player, or the claim re-publish loop above would re-derive it every
+			// pass and — before the hub's broadcast round-trips back into the local index — could mint
+			// a different id each time, forking one history card per republish.
+			val savedQueueId = hubSavedQueueIdFor(state)
+			mediaPlayer.adoptQueueSessionId(savedQueueId)
+			sendFrame(buildJsonObject {
+				put("t", "act")
+				put("action", "setQueue")
+				put("index", state.currentIndex.coerceAtLeast(0))
+				put("positionMs", positionMs)
+				put("play", !state.isPaused)
+				// W1: "this is what I play, in this order" (a hub with `playOrder` only).
+				playOrderPublishFields(offersPlayOrder, state.isShuffleEnabled, state.playOrder, state.queue.size)
+					.forEach { (key, value) -> put(key, value) }
+				put("savedQueueId", savedQueueId)
+				put("sourceKind", state.savedQueueKind)
+				savedQueueNameFor(state)?.let { put("sourceName", it) }
+				// The station this queue belongs to, or the session is unbound by this very publish
+				// (PROTOCOL §18.2): every edit, an autoplay top-up included, republishes the queue.
+				if (hubOffers(HUB_FEATURE_STATION)) {
+					stationIdForPublish(state, savedQueueId)?.let { put("stationId", it) }
+				}
+				putJsonArray("tracks") {
+					state.queue.forEach { song -> add(trackJson(song)) }
+				}
+			})
 		}
-		val active = _activeDeviceId.value
-		val me = _myDeviceId.value
-		if (!(active == null || (me != null && active == me))) return
-		val offersPlayOrder = hubOffers(HUB_FEATURE_PLAY_ORDER)
-		// A paused device never claims the session (B-047); the active one keeps the hub's copy
-		// of its queue and order current while paused too (W1).
-		if (state.isPaused && !publishesWhilePaused(offersPlayOrder, active, me, holdsSessionQueue)) return
-		if (publishHeldForOrder(offersPlayOrder, state.isShuffleEnabled, state.playOrder, state.queue.size)) return
-
-		val sig = publishSignature(queueSig(state.queue), state.isShuffleEnabled, state.playOrder, offersPlayOrder)
-		// Normally one publish per queue change. But when NOBODY is active and we're
-		// playing, publishing is also how we CLAIM the session — and after adopting the
-		// hub's queue our signature already equals it, so the dedupe would block the
-		// claim forever (connected, playing locally, but never promoted → no reports).
-		// Re-publish in that state, throttled so the ~5 Hz state flow doesn't spam.
-		val unclaimed = active == null
-		if (sig == lastQueueSig && !(unclaimed && now - lastClaimPublishAtMs >= CLAIM_REPUBLISH_MS)) return
-		if (unclaimed) lastClaimPublishAtMs = now
-		lastQueueSig = sig
-		publishedNonEmptyQueue = true
-		// Its own queue is the session's from this publish on (a paused one needs it already).
-		if (!state.isPaused) holdsSessionQueue = true
-
-		// Remembered on the player, or the claim re-publish loop above would re-derive it every
-		// pass and — before the hub's broadcast round-trips back into the local index — could mint
-		// a different id each time, forking one history card per republish.
-		val savedQueueId = hubSavedQueueIdFor(state)
-		mediaPlayer.adoptQueueSessionId(savedQueueId)
-		sendFrame(buildJsonObject {
-			put("t", "act")
-			put("action", "setQueue")
-			put("index", state.currentIndex.coerceAtLeast(0))
-			put("positionMs", positionMs)
-			put("play", !state.isPaused)
-			// W1: "this is what I play, in this order" (a hub with `playOrder` only).
-			playOrderPublishFields(offersPlayOrder, state.isShuffleEnabled, state.playOrder, state.queue.size)
-				.forEach { (key, value) -> put(key, value) }
-			put("savedQueueId", savedQueueId)
-			put("sourceKind", state.savedQueueKind)
-			savedQueueNameFor(state)?.let { put("sourceName", it) }
-			// The station this queue belongs to, or the session is unbound by this very publish
-			// (PROTOCOL §18.2): every edit, an autoplay top-up included, republishes the queue.
-			if (hubOffers(HUB_FEATURE_STATION)) {
-				stationIdForPublish(state, savedQueueId)?.let { put("stationId", it) }
-			}
-			putJsonArray("tracks") {
-				state.queue.forEach { song -> add(trackJson(song)) }
-			}
-		})
 	}
 
 	private companion object {
