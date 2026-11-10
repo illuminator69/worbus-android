@@ -59,36 +59,31 @@ fun LoginScreenSuggestionChips(
 			) {
 				val url = instanceState.text.toString()
 				Spacer(Modifier.width(8.dp))
-				SuggestionChip(
-					onClick = {
-						instanceState.edit {
-							replace(0, length, "https://$url")
+				for (suggestion in loginSuggestions(url)) {
+					SuggestionChip(
+						onClick = {
+							instanceState.edit {
+								replace(0, length, suggestion)
+							}
+						},
+						label = {
+							Text(
+								text = suggestion,
+								style = MaterialTheme.typography.labelSmall,
+								maxLines = 1
+							)
 						}
-					},
-					label = {
-						Text(
-							text = "https://${url.replace("https://", "").replace("http://", "")}",
-							style = MaterialTheme.typography.labelSmall,
-							maxLines = 1
-						)
-					}
-				)
-				SuggestionChip(
-					onClick = {
-						instanceState.edit {
-							replace(0, length, "http://$url")
-						}
-					},
-					label = {
-						Text(
-							text = "http://${url.replace("https://", "").replace("http://", "")}",
-							style = MaterialTheme.typography.labelSmall,
-							maxLines = 1
-						)
-					}
-				)
+					)
+				}
 				Spacer(Modifier.width(8.dp))
 			}
 		}
 	}
 }
+
+/** The "Did you mean…" addresses for what is typed, first offered first. */
+internal fun loginSuggestions(typed: String): List<String> {
+	val bare = typed.replace("https://", "").replace("http://", "")
+	return listOf("https://$bare", "http://$bare")
+}
+
