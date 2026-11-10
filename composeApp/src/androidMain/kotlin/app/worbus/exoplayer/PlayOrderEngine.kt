@@ -98,7 +98,8 @@ internal fun setPlayOrder(player: ExoPlayer, order: IntArray): Boolean {
 
 /**
  * A play order the app sent (COMMAND_SET_PLAY_ORDER) for the queue it was built for: [ids], the
- * media ids in queue order. The order is applied the moment the player holds exactly that queue
+ * media ids in queue order, and for a whole-queue load its [loadToken] (the load's items carry it,
+ * [withLoadToken]). The order is applied the moment the player holds exactly that queue
  * (now, or when the queue edit it follows lands), with shuffle turned on, and [done] answers true
  * then; false when it is not an order of [ids], when a newer one replaces it, when shuffle is
  * turned off first, or after [ORDER_WAIT_MS] without its queue.
@@ -112,7 +113,7 @@ internal fun setPlayOrder(player: ExoPlayer, order: IntArray): Boolean {
 @UnstableApi
 internal fun requestPlayOrder(player: ExoPlayer, order: List<Int>, ids: List<String>, loadToken: Long?, done: (Boolean) -> Unit) {
 	val engine = synchronized(engines) { engines[player] }
-	if (engine == null) done(false) else engine.request(order, ids, done)
+	if (engine == null) done(false) else engine.request(order, ids, loadToken, done)
 }
 
 /** The extra under which a whole-queue load stamps its media items with its token. */
@@ -136,7 +137,7 @@ private val engines = java.util.WeakHashMap<ExoPlayer, PlayOrderEngine>()
 
 @UnstableApi
 private class PlayOrderEngine(private val player: ExoPlayer) {
-	private class Waiting(val order: List<Int>, val ids: List<String>, val done: (Boolean) -> Unit)
+	private class Waiting(val order: List<Int>, val ids: List<String>, val loadToken: Long?, val done: (Boolean) -> Unit)
 
 	private var waiting: Waiting? = null
 
@@ -166,7 +167,7 @@ private class PlayOrderEngine(private val player: ExoPlayer) {
 
 			override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
 				val w = waiting ?: return
-				if (holds(w.ids)) {
+				if (holds(w)) {
 					waiting = null
 					apply(w)
 				}
@@ -174,14 +175,14 @@ private class PlayOrderEngine(private val player: ExoPlayer) {
 		})
 	}
 
-	fun request(order: List<Int>, ids: List<String>, done: (Boolean) -> Unit) {
+	fun request(order: List<Int>, ids: List<String>, loadToken: Long?, done: (Boolean) -> Unit) {
 		waiting?.let { waiting = null; it.done(false) }
 		if (!PlayOrder.isPermutation(order, ids.size)) {
 			done(false)
 			return
 		}
-		val w = Waiting(order, ids, done)
-		if (holds(ids)) {
+		val w = Waiting(order, ids, loadToken, done)
+		if (holds(w)) {
 			apply(w)
 			return
 		}
@@ -189,8 +190,18 @@ private class PlayOrderEngine(private val player: ExoPlayer) {
 		handler.postDelayed({ if (waiting === w) { waiting = null; w.done(false) } }, ORDER_WAIT_MS)
 	}
 
-	private fun holds(ids: List<String>): Boolean =
-		player.mediaItemCount == ids.size && ids.indices.all { player.getMediaItemAt(it).mediaId == ids[it] }
+	/**
+	 * The player holds exactly the queue [w] was built for: the same media ids in the same order,
+	 * and for a whole-queue load the items of THAT load (its token), so an order for a reload of
+	 * the songs the player already holds waits for the reload (W1 re-walk: applied to the old queue
+	 * first, it was replaced by the reload's new-queue order).
+	 */
+	private fun holds(w: Waiting): Boolean {
+		val ids = w.ids
+		if (player.mediaItemCount != ids.size || !ids.indices.all { player.getMediaItemAt(it).mediaId == ids[it] }) return false
+		val token = w.loadToken ?: return true
+		return ids.isNotEmpty() && player.getMediaItemAt(0).requestMetadata.extras?.getLong(LOAD_TOKEN_EXTRA, Long.MIN_VALUE) == token
+	}
 
 	private fun apply(w: Waiting) {
 		if (player.shuffleModeEnabled) {

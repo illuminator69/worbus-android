@@ -49,10 +49,13 @@ fun playOrderPublishFields(hubOffersPlayOrder: Boolean, shuffle: Boolean, order:
 /**
  * Whether the active device publishes its queue while paused: with a `playOrder` hub, so the hub's
  * copy of the queue and its order stays current through a paused edit (a remote Next then steps
- * what this device will play). Never to claim an empty slot (B-047).
+ * what this device will play). Never to claim an empty slot (B-047), and only once it holds the
+ * session's queue ([holdsSessionQueue]: its load or queue edit from the hub applied, or its own
+ * publish while playing): a transfer makes the target active before its `do:load` is applied, and
+ * in that moment its player still holds its previous queue (W1 re-walk: published, and adopted).
  */
-fun publishesWhilePaused(hubOffersPlayOrder: Boolean, activeId: String?, myId: String?, holdsSessionQueue: Boolean = true): Boolean =
-	hubOffersPlayOrder && myId != null && activeId == myId
+fun publishesWhilePaused(hubOffersPlayOrder: Boolean, activeId: String?, myId: String?, holdsSessionQueue: Boolean): Boolean =
+	hubOffersPlayOrder && myId != null && activeId == myId && holdsSessionQueue
 
 /**
  * The shuffle mode and play order a hub directive (`load`, `queueChanged`, `setShuffle`) hands

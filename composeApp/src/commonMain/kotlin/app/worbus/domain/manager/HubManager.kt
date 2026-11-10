@@ -542,6 +542,13 @@ class HubManager(
 
 	// Mirrors of the desktop client's guards:
 	private var lastQueueSig = ""        // dedupe for publishing our queue
+
+	/**
+	 * This device's player holds the session's queue (W1 re-walk, [publishesWhilePaused]): set by
+	 * an applied `load` or `queueChanged` and by its own publish while playing; cleared whenever
+	 * another device (or none) is the active one, and by a failed load or a release.
+	 */
+	private var holdsSessionQueue = false
 	// Have we ever put a non-empty queue on the wire? Gates the clear-propagation below, so the empty
 	// queue that exists for a moment during startup hydration can't wipe another device's session.
 	private var publishedNonEmptyQueue = false
@@ -2202,6 +2209,7 @@ class HubManager(
 	private fun applySession(obj: JsonObject, keepPins: Boolean = true) {
 		_activeDeviceId.value =
 			obj["activeDeviceId"]?.jsonPrimitive?.contentOrNullSafe()
+		if (_activeDeviceId.value == null || _activeDeviceId.value != _myDeviceId.value) holdsSessionQueue = false
 		val now = nowMs()
 		val snapshot = RemoteSessionState(
 			tracks = obj["queue"]?.asObjectList()?.mapNotNull { t ->
@@ -2419,6 +2427,7 @@ class HubManager(
 					// A superseded load has no standing to answer for a queue it no longer owns.
 					if (outcome.error == "superseded by a newer load") return
 					sendLoaded(outcome.ok, outcome.error, transferId)
+					holdsSessionQueue = outcome.ok
 					if (!outcome.ok) {
 						Logger.w("HubManager", "do:load failed: ${outcome.error}")
 						echo = afterFailedLoad(transferId, index, positionMs, songs)
@@ -2456,6 +2465,7 @@ class HubManager(
 					// Edits the queue around the current track without restarting
 					// it (falls back to a reload when the current track changed).
 					mediaPlayer.awaitRemoteQueueReconcile(songs, index, adopt.shuffle, adopt.order)
+					holdsSessionQueue = true
 					expectIndex = index
 				}
 
@@ -2491,6 +2501,7 @@ class HubManager(
 					// at the spot these two name, so they are read once the pause has run. They
 					// used to leave before it, with the player still moving.
 					mediaPlayer.awaitRemotePause()
+					holdsSessionQueue = false
 					// We're no longer the active device; the next time we claim it, the
 					// guards must not still describe this handed-off session.
 					resetReporterGuards()
@@ -3018,7 +3029,7 @@ class HubManager(
 		val offersPlayOrder = hubOffers(HUB_FEATURE_PLAY_ORDER)
 		// A paused device never claims the session (B-047); the active one keeps the hub's copy
 		// of its queue and order current while paused too (W1).
-		if (state.isPaused && !publishesWhilePaused(offersPlayOrder, active, me)) return
+		if (state.isPaused && !publishesWhilePaused(offersPlayOrder, active, me, holdsSessionQueue)) return
 		if (publishHeldForOrder(offersPlayOrder, state.isShuffleEnabled, state.playOrder, state.queue.size)) return
 
 		val sig = publishSignature(queueSig(state.queue), state.isShuffleEnabled, state.playOrder, offersPlayOrder)
@@ -3032,6 +3043,8 @@ class HubManager(
 		if (unclaimed) lastClaimPublishAtMs = now
 		lastQueueSig = sig
 		publishedNonEmptyQueue = true
+		// Its own queue is the session's from this publish on (a paused one needs it already).
+		if (!state.isPaused) holdsSessionQueue = true
 
 		// Remembered on the player, or the claim re-publish loop above would re-derive it every
 		// pass and — before the hub's broadcast round-trips back into the local index — could mint

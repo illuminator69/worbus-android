@@ -129,6 +129,7 @@ import app.worbus.exoplayer.ExoPlayerCoilBitmapLoader
 import app.worbus.exoplayer.ResumingDataSource
 import app.worbus.exoplayer.installPlayOrder
 import app.worbus.exoplayer.requestPlayOrder
+import app.worbus.exoplayer.withLoadToken
 import app.worbus.ui.core.PlayerUiState
 import app.worbus.util.Logger
 import java.io.File
@@ -1662,7 +1663,7 @@ class AndroidMediaPlayerViewModel(
 	 * time limit after the acceptance is the backstop for a timeline that never changes again
 	 * (W1 review finding 4). Main thread.
 	 */
-	private fun sendPlayOrder(order: List<Int>) {
+	private fun sendPlayOrder(order: List<Int>, loadToken: Long? = null) {
 		val c = controller ?: return
 		// The queue it was built for: every caller has written that queue to the state first.
 		val ids = _uiState.value.queue.map { it.id }
@@ -1676,6 +1677,7 @@ class AndroidMediaPlayerViewModel(
 			Bundle().apply {
 				putIntArray(PlaybackService.EXTRA_PLAY_ORDER, order.toIntArray())
 				putStringArrayList(PlaybackService.EXTRA_PLAY_ORDER_IDS, ArrayList(ids))
+				loadToken?.let { putLong(PlaybackService.EXTRA_PLAY_ORDER_LOAD, it) }
 			}
 		)
 		result.addListener({
@@ -1698,6 +1700,14 @@ class AndroidMediaPlayerViewModel(
 			}
 		}, ContextCompat.getMainExecutor(application))
 	}
+
+	/**
+	 * A token for a whole-queue load: its items carry it ([withLoadToken]) and so does the order
+	 * sent for it, so the service applies that order to that load and not to the songs it held
+	 * before, which may be the same (W1 re-walk). Main thread.
+	 */
+	private var lastLoadToken = kotlin.random.Random.nextLong()
+	private fun nextLoadToken(): Long = ++lastLoadToken
 
 	/** Sends the state's order, if it has one (after an edit that wrote it). Main thread. */
 	private fun sendStatePlayOrder() {
@@ -1784,8 +1794,9 @@ class AndroidMediaPlayerViewModel(
 			// B-155 (cold start): the items, the index and the position in ONE call. A bare
 			// setMediaItems(items) put the player on the FIRST song until the seekTo below it, and
 			// the restored state passed through that song for as long as the restore took.
-			player.setMediaItems(mediaItems, index, position)
-			order?.let { sendPlayOrder(it) }
+			val token = nextLoadToken()
+			player.setMediaItems(withLoadToken(mediaItems, token), index, position)
+			order?.let { sendPlayOrder(it, token) }
 			player.repeatMode = state.repeatMode
 			player.playbackParameters = PlaybackParameters(state.playbackSpeed)
 
@@ -1911,8 +1922,9 @@ class AndroidMediaPlayerViewModel(
 				if (shuffle != null && player.shuffleModeEnabled != shuffle) player.shuffleModeEnabled = shuffle
 				// B-155: items, index and position in one call; a bare setMediaItems put the player
 				// on the first song until the seek, and the state just set passed through it.
-				player.setMediaItems(mediaItems, idx, positionMs)
-				playOrder?.let { sendPlayOrder(it) }
+				val token = nextLoadToken()
+				player.setMediaItems(withLoadToken(mediaItems, token), idx, positionMs)
+				playOrder?.let { sendPlayOrder(it, token) }
 				player.prepare()
 				if (play) player.play() else player.pause()
 			}
@@ -2513,8 +2525,9 @@ class AndroidMediaPlayerViewModel(
 			withQueueMutation {
 				// W1: a new queue under shuffle starts with its start row.
 				val order = newQueueOrder(songs.size, start)
+				val token = nextLoadToken()
 				controller?.let { player ->
-					player.setMediaItems(items, start, 0L)
+					player.setMediaItems(withLoadToken(items, token), start, 0L)
 					player.prepare()
 					player.play()
 				}
@@ -2532,7 +2545,7 @@ class AndroidMediaPlayerViewModel(
 					)
 				}
 				// Sent with the queue it is for, now in the state (W1 walk).
-				order?.let { sendPlayOrder(it) }
+				order?.let { sendPlayOrder(it, token) }
 			}
 			if (songs.isNotEmpty()) updatePlaybackState()
 		}
@@ -2555,8 +2568,9 @@ class AndroidMediaPlayerViewModel(
 			withQueueMutation {
 			// W1: a new queue under shuffle starts with its start row.
 			val order = newQueueOrder(newCollection.size, startIndex)
+			val token = nextLoadToken()
 			controller?.let { player ->
-				player.setMediaItems(items, startIndex, 0L)
+				player.setMediaItems(withLoadToken(items, token), startIndex, 0L)
 				player.prepare()
 				player.play()
 			}
@@ -2581,7 +2595,7 @@ class AndroidMediaPlayerViewModel(
 				)
 			}
 			// Sent with the queue it is for, now in the state (W1 walk).
-			order?.let { sendPlayOrder(it) }
+			order?.let { sendPlayOrder(it, token) }
 			}
 			if (newCollection.isNotEmpty()) updatePlaybackState()
 		}
