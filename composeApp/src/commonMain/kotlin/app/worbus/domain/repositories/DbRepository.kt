@@ -30,6 +30,7 @@ import worbus.composeapp.generated.resources.title_sync_control
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.getString
 import app.worbus.data.database.dao.AlbumDao
+import app.worbus.data.database.dao.AlbumFingerprint
 import app.worbus.data.database.dao.ArtistDao
 import app.worbus.data.database.dao.ArtistMbidRow
 import app.worbus.data.database.dao.GenreDao
@@ -561,10 +562,7 @@ class DbRepository(
 		val remote = listing.albums
 		if (!listing.stable) Logger.i("DbRepository", "- album list moved while it was read; the next sweep catches the rest")
 		val local = albumDao.getAlbumFingerprints().associateBy { it.albumId }
-		val changed = remote.filter { album ->
-			val known = local[album.id]
-			known == null || known.songCount != album.songCount || known.coverArtId != album.coverArtId
-		}.map { it.id }
+		val changed = remote.filter { album -> albumChanged(local[album.id], album.toListingEntry()) }.map { it.id }
 		when {
 			changed.isEmpty() -> 0
 			changed.size > maxChanged -> {
@@ -729,3 +727,26 @@ class DbRepository(
 		updatedEntity.toDomainModel()
 	}
 }
+
+/** One album-list entry as the changed-albums sweep compares it with Room's row (Q-165). */
+data class AlbumListingEntry(
+	val id: String,
+	val songCount: Int,
+	val coverArtId: String?,
+	val name: String? = null,
+	val artistName: String? = null,
+	val artistId: String? = null,
+	val year: Int? = null,
+	val genre: String? = null,
+	val duration: Duration? = null
+)
+
+internal fun ApiAlbum.toListingEntry() = AlbumListingEntry(
+	id = id, songCount = songCount, coverArtId = coverArtId, name = name, artistName = artistName,
+	artistId = artistId, year = year, genre = genre, duration = duration
+)
+
+/** Whether the sweep re-reads an album: it is new, or its track count or cover changed. */
+internal fun albumChanged(known: AlbumFingerprint?, remote: AlbumListingEntry): Boolean =
+	known == null || known.songCount != remote.songCount || known.coverArtId != remote.coverArtId
+

@@ -166,7 +166,7 @@ interface AlbumDao {
 	suspend fun getAllAlbumIds(): List<String>
 
 	/** Just enough of every album to tell whether Navidrome's copy has changed. */
-	@Query("SELECT albumId, songCount, coverArtId FROM AlbumEntity")
+	@Query("SELECT albumId, songCount, coverArtId, name, artistName, artistId, year, genre, duration FROM AlbumEntity")
 	suspend fun getAlbumFingerprints(): List<AlbumFingerprint>
 
 	/**
@@ -215,7 +215,13 @@ interface AlbumDao {
 data class AlbumFingerprint(
 	val albumId: String,
 	val songCount: Int,
-	val coverArtId: String
+	val coverArtId: String,
+	val name: String? = null,
+	val artistName: String? = null,
+	val artistId: String? = null,
+	val year: Int? = null,
+	val genre: String? = null,
+	val duration: kotlin.time.Duration? = null
 )
 
 /** An album's id and when it was added ([AlbumDao.getAlbumAddedTimes]). */
