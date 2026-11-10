@@ -154,11 +154,8 @@ class AudioMuseManager(
 			val results: List<FingerprintItem> =
 				client.get(ep.url("/sonic/fingerprint", "/api/sonic_fingerprint/generate")) {
 					header("Authorization", "Bearer ${ep.token}")
-					parameter("n", count)
-					if (!ep.viaHub) {
-						parameter("navidrome_user", settings.getString("username", ""))
-						parameter("navidrome_password", secrets.navidromePassword)
-					}
+					fingerprintQuery(ep.viaHub, count, settings.getString("username", ""), secrets.navidromePassword)
+						.forEach { (name, value) -> parameter(name, value) }
 				}.body()
 			results.map { it.itemId }
 		} catch (e: Exception) {
@@ -362,3 +359,17 @@ data class ClapStats(
 	val configured: Boolean? = null,
 	val upstreamReachable: Boolean? = null
 )
+
+/**
+ * The fingerprint call's query. Through the hub only `n`: the hub adds the Navidrome account
+ * server-side. Direct, the core reads the listening history of the account it is given, so the
+ * name and password go with it.
+ */
+internal fun fingerprintQuery(viaHub: Boolean, count: Int, user: String, password: String): List<Pair<String, String>> =
+	buildList {
+		add("n" to count.toString())
+		if (!viaHub) {
+			add("navidrome_user" to user)
+			add("navidrome_password" to password)
+		}
+	}
