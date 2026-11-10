@@ -45,9 +45,9 @@ object PlayOrder {
 	/**
 	 * [count] rows inserted into the queue at row [at]. Appended rows ([at] == the old size) go to
 	 * the end of play order; rows inserted inside the queue go right after the play position of
-	 * their queue predecessor (row `at - 1`; Play next at `current + 1` therefore lands right after
-	 * the playing row), and rows inserted at the top right before the old row 0. Either way in the
-	 * order given. Into an empty order they are random: a new queue, whose start row the caller
+	 * their queue predecessor (row `at - 1`, ruling 6), and rows inserted above the first row right
+	 * BEFORE their queue successor, the old row 0 (the controller's ruling, W1 review). Either way in
+	 * the order given. Play next is [playNext], never this. Into an empty order they are random: a new queue, whose start row the caller
 	 * then puts first ([currentFirst]).
 	 */
 	fun insert(order: List<Int>, at: Int, count: Int, random: Random = Random): List<Int> {
@@ -66,10 +66,21 @@ object PlayOrder {
 	}
 
 	/**
-	 * Play next: [count] rows inserted at queue row [at], to play right after the playing row
-	 * [current]. Today: the same as [insert].
+	 * Play next: [count] rows inserted at queue row [at] play right after the playing row [current],
+	 * in the order given (ruling 6). An explicit edit, never inferred from [at]: when the playing row
+	 * is the last queue row, Play next lands where an append does (`at == size`), and [insert] would
+	 * put it at the end of play order (W1 review finding 1). With no playing row it is [insert].
 	 */
-	fun playNext(order: List<Int>, at: Int, count: Int, current: Int): List<Int> = insert(order, at, count)
+	fun playNext(order: List<Int>, at: Int, count: Int, current: Int): List<Int> {
+		if (count <= 0) return order
+		val size = order.size
+		if (size == 0 || current !in 0 until size) return insert(order, at, count)
+		val where = at.coerceIn(0, size)
+		val shifted = order.map { if (it >= where) it + count else it }
+		val playing = if (current >= where) current + count else current
+		val position = shifted.indexOf(playing) + 1
+		return shifted.subList(0, position) + (where until where + count) + shifted.subList(position, shifted.size)
+	}
 
 	/** Rows [from, toExclusive) removed: dropped from the order, the rest keep their order. */
 	fun remove(order: List<Int>, from: Int, toExclusive: Int): List<Int> {
@@ -111,12 +122,16 @@ object PlayOrder {
 	 * timeline is believed otherwise (the notification's shuffle button, another controller).
 	 * The result is always an order of exactly [queueSize] rows, or null.
 	 *
-	 * [timeline] is the controller timeline's shuffle order, [shown] what the state shows now.
+	 * [timeline] is the controller timeline's shuffle order, [shown] what the state shows now,
+	 * [landed] that the service accepted [pending] and a session timeline has arrived since.
 	 */
 	fun resolve(shuffle: Boolean, timeline: List<Int>?, pending: List<Int>?, shown: List<Int>?, queueSize: Int, landed: Boolean = false): Reading {
 		if (!shuffle) return Reading(null, null)
 		if (pending != null) {
 			if (timeline == pending) return Reading(pending, null)
+			// The service has accepted it and a timeline has come since: that timeline is the
+			// player's (W1 review finding 4; an outside edit may have moved the order meanwhile).
+			if (landed && isPermutation(timeline, queueSize)) return Reading(timeline, null)
 			if (isPermutation(pending, queueSize)) return Reading(pending, pending)
 			// Sent for a queue the state does not hold yet (an edit still going in): keep waiting,
 			// and show what is an order of this one.
