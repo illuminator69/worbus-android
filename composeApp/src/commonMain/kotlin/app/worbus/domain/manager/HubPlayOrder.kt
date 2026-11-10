@@ -121,7 +121,8 @@ enum class SessionQueueEvent { LoadArrived, LoadApplied, LoadFailed, QueueChange
 
 /** Whether this device's player holds the session's queue after [event]. */
 fun holdsSessionQueueAfter(holds: Boolean, event: SessionQueueEvent): Boolean = when (event) {
-	SessionQueueEvent.LoadArrived -> holds
+	// Until the load is applied the player holds the queue it replaces (review 4).
+	SessionQueueEvent.LoadArrived -> false
 	SessionQueueEvent.LoadApplied, SessionQueueEvent.QueueChangedApplied, SessionQueueEvent.PublishedPlaying -> true
 	SessionQueueEvent.LoadFailed, SessionQueueEvent.AnotherActive, SessionQueueEvent.Released -> false
 }

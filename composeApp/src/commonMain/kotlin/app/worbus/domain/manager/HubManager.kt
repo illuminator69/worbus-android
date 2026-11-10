@@ -549,6 +549,8 @@ class HubManager(
 	 * an applied `load` or `queueChanged` and by its own publish while playing; cleared whenever
 	 * another device (or none) is the active one, and by a failed load or a release.
 	 */
+	// Written on the frame loop, read by the publish collector on Dispatchers.Default (review 4).
+	@kotlin.concurrent.Volatile
 	private var holdsSessionQueue = false
 	// Have we ever put a non-empty queue on the wire? Gates the clear-propagation below, so the empty
 	// queue that exists for a moment during startup hydration can't wipe another device's session.
