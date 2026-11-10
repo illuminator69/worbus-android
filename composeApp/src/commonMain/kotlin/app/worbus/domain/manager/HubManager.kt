@@ -2982,6 +2982,24 @@ class HubManager(
 	 * claims the active role. Never hijacks: only when no device is active or
 	 * we already are, and never for hub-driven changes (do:load echoes).
 	 */
+	/** The look again at a publish the hub-driven window held back ([publishRecheckAt]). */
+	private var publishRecheck: Job? = null
+
+	private fun schedulePublishRecheck(now: Long) {
+		val at = publishRecheckAt(now, hubDrivenUntilMs) ?: return
+		if (publishRecheck?.isActive == true) return
+		publishRecheck = scope.launch {
+			delay((at - now).coerceAtLeast(0L))
+			publishRecheck = null
+			try {
+				val state = mediaPlayer.localUiState.value
+				publishQueueIfOurs(state, positionOf(state), nowMs())
+			} catch (e: Exception) {
+				Logger.e("HubManager", "held publish failed", e)
+			}
+		}
+	}
+
 	private suspend fun publishQueueIfOurs(
 		state: app.worbus.ui.core.PlayerUiState,
 		positionMs: Long,
@@ -2989,7 +3007,11 @@ class HubManager(
 	) {
 		if (!_connected.value) return
 		if (state.queue.isEmpty()) return
-		if (now < hubDrivenUntilMs) return
+		if (now < hubDrivenUntilMs) {
+			// W1 walk: looked at again when the window ends; a paused player emits no state to do it.
+			schedulePublishRecheck(now)
+			return
+		}
 		val active = _activeDeviceId.value
 		val me = _myDeviceId.value
 		if (!(active == null || (me != null && active == me))) return

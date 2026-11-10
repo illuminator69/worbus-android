@@ -106,6 +106,9 @@ fun mirrorPlayOrder(hubOffersPlayOrder: Boolean, activeDeviceCaps: Set<String>?,
 
 /**
  * When a publish held back by the hub-driven quiet window (2 s after a directive) is looked at
- * again. Today: never; the next state emission does it, and a paused player emits none.
+ * again: when the window ends. Publishes are driven by the player's state emissions, and a paused
+ * player emits none, so a paused active device whose order changed in the window (an adopt the
+ * player could not take) published nothing until it was played (60 s in the W1 walk); the design
+ * has a paused active device publish.
  */
-fun publishRecheckAt(nowMs: Long, hubDrivenUntilMs: Long): Long? = null
+fun publishRecheckAt(nowMs: Long, hubDrivenUntilMs: Long): Long? = hubDrivenUntilMs.takeIf { nowMs < it }
