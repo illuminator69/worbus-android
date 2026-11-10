@@ -23,8 +23,21 @@ class PlayOrderTest {
 	}
 
 	@Test
-	fun anInsertAtTheTopGoesBeforeTheOldFirstRow() {
+	fun anInsertAboveTheFirstRowGoesRightBeforeItsQueueSuccessor() {
+		// Controller ruling (2026-11-10, W1 review): with no queue predecessor, right BEFORE the
+		// queue successor (the old row 0, now row 1) in play order; the mirror of ruling 6.
 		assertEquals(listOf(4, 0, 1, 5, 2, 6, 3), PlayOrder.insert(six, 0, 1))
+		assertEquals(listOf(5, 0, 1, 2, 6, 3, 7, 4), PlayOrder.insert(six, 0, 2))
+	}
+
+	@Test
+	fun playNextGoesRightAfterThePlayingRowEvenWhenItIsTheLastQueueRow() {
+		// W1 review finding 1: row 5 (the last queue row) plays at play position 4; Play next lands at
+		// row 6, which is also where an append lands. Ruling 6: right after the current song.
+		assertEquals(listOf(3, 0, 4, 1, 5, 6, 2), PlayOrder.playNext(six, 6, 1, current = 5))
+		assertEquals(listOf(3, 0, 4, 1, 5, 6, 7, 2), PlayOrder.playNext(six, 6, 2, current = 5))
+		// The ordinary case is unchanged.
+		assertEquals(listOf(3, 0, 4, 5, 6, 1, 7, 2), PlayOrder.playNext(six, 5, 2, current = 4))
 	}
 
 	@Test
@@ -104,5 +117,15 @@ class PlayOrderTest {
 		assertEquals(PlayOrder.Reading(null, null), PlayOrder.resolve(true, listOf(0, 1), null, listOf(1, 0, 2), 4))
 		// Shuffle off: none, and nothing waited for.
 		assertEquals(PlayOrder.Reading(null, null), PlayOrder.resolve(false, sent, sent, sent, 5))
+	}
+
+	@Test
+	fun onceTheSentOrderHasLandedTheNextTimelineIsBelieved() {
+		// W1 review finding 4: the service accepted the order, then its order changed some other way
+		// (an outside controller's same-size edit). Waiting for an exact match would wait forever.
+		val sent = listOf(2, 0, 1)
+		assertEquals(PlayOrder.Reading(listOf(1, 0, 2), null), PlayOrder.resolve(true, listOf(1, 0, 2), sent, sent, 3, landed = true))
+		// Not landed yet: still waiting.
+		assertEquals(PlayOrder.Reading(sent, sent), PlayOrder.resolve(true, listOf(1, 0, 2), sent, sent, 3, landed = false))
 	}
 }

@@ -1580,7 +1580,7 @@ class AndroidMediaPlayerViewModel(
 		// W1 (B-346): the order is written in the same update as everything else derived here, and
 		// is an order of exactly the state's queue or null.
 		val shown = _uiState.value
-		val reading = PlayOrder.resolve(view.shuffle, timelinePlayOrder(controller), pendingPlayOrder, shown.playOrder, shown.queue.size)
+		val reading = PlayOrder.resolve(view.shuffle, timelinePlayOrder(controller), pendingPlayOrder, shown.playOrder, shown.queue.size, landed = false)
 		pendingPlayOrder = reading.pending
 		_uiState.update { state ->
 			val derived = derivePlayback(state, view)
@@ -1742,13 +1742,15 @@ class AndroidMediaPlayerViewModel(
 		play: Boolean,
 		savedQueueId: String?,
 		savedQueueKind: String,
-		savedQueueName: String?
+		savedQueueName: String?,
+		shuffle: Boolean?,
+		order: List<Int>?
 	) {
 		// Fire-and-forget wrapper for the callers that have nobody to answer to (a saved-queue
 		// restore, a locally started mix, a post-edit reconcile). The hub receiver takes the
 		// result-bearing path below instead — see awaitRemoteQueueLoad.
 		viewModelScope.launch {
-			applyRemoteQueue(songs, index, positionMs, play, savedQueueId, savedQueueKind, savedQueueName)
+			applyRemoteQueue(songs, index, positionMs, play, savedQueueId, savedQueueKind, savedQueueName, shuffle = shuffle, order = order)
 		}
 	}
 
@@ -2530,7 +2532,7 @@ class AndroidMediaPlayerViewModel(
 			withQueueMutation {
 			// W1: right after the playing row in play order (B-362).
 			val before = _uiState.value
-			val order = if (before.queue.isEmpty()) newQueueOrder(1, 0) else orderAfterEdit(before) { PlayOrder.insert(it, at, 1) }
+			val order = if (before.queue.isEmpty()) newQueueOrder(1, 0) else orderAfterEdit(before) { PlayOrder.playNext(it, at, 1, before.currentIndex) }
 			controller?.addMediaItem(at, item)
 			_uiState.update { state ->
 				val newQueue =
@@ -2570,7 +2572,7 @@ class AndroidMediaPlayerViewModel(
 			// W1: right after the playing row in play order, in the order given.
 			val before = _uiState.value
 			val order = if (before.queue.isEmpty()) newQueueOrder(newCollection.size, 0)
-				else orderAfterEdit(before) { PlayOrder.insert(it, before.currentIndex + 1, newCollection.size) }
+				else orderAfterEdit(before) { PlayOrder.playNext(it, before.currentIndex + 1, newCollection.size, before.currentIndex) }
 			controller?.addMediaItems(_uiState.value.currentIndex + 1, items)
 			_uiState.update { state ->
 				val newQueue =

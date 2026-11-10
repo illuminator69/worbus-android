@@ -2298,12 +2298,17 @@ class HubManager(
 		// lastQueueSig, so pinning it here meant a reopened app could never publish and
 		// therefore never be promoted back to active — it sat connected but mute.
 		lastQueueSig = ""
+		// W1: the session's shuffle and order come with it (the hub kept them in custody), so a
+		// takeover by playing here continues the same play order (HubPlayOrder.kt).
+		val adopt = orphanAdoptPlayOrder(hubOffers(HUB_FEATURE_PLAY_ORDER), session.shuffle, session.order, songs.size)
 		// Carry the hub's record identity into local state so the "Now Playing" highlight
 		// survives the adopt (a null id here read as "this queue isn't in history").
 		mediaPlayer.loadRemoteQueue(
 			songs, session.index, session.positionMs, play = false,
 			savedQueueId = session.savedQueueId,
-			savedQueueKind = savedQueueKindFor(session.savedQueueId)
+			savedQueueKind = savedQueueKindFor(session.savedQueueId),
+			shuffle = adopt.shuffle,
+			order = adopt.order
 		)
 	}
 
@@ -2992,6 +2997,7 @@ class HubManager(
 		// A paused device never claims the session (B-047); the active one keeps the hub's copy
 		// of its queue and order current while paused too (W1).
 		if (state.isPaused && !publishesWhilePaused(offersPlayOrder, active, me)) return
+		if (publishHeldForOrder(offersPlayOrder, state.isShuffleEnabled, state.playOrder, state.queue.size)) return
 
 		val sig = publishSignature(queueSig(state.queue), state.isShuffleEnabled, state.playOrder, offersPlayOrder)
 		// Normally one publish per queue change. But when NOBODY is active and we're

@@ -630,7 +630,10 @@ abstract class MediaPlayerViewModel(
 		play: Boolean,
 		savedQueueId: String? = null,
 		savedQueueKind: String = "manual",
-		savedQueueName: String? = null
+		savedQueueName: String? = null,
+		// W1: the shuffle mode and order to adopt with the queue (null shuffle: keep this player's).
+		shuffle: Boolean? = null,
+		order: List<Int>? = null
 	) {}
 
 	/**

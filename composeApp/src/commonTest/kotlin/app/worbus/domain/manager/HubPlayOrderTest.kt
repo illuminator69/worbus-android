@@ -83,4 +83,27 @@ class HubPlayOrderTest {
 		assertNull(mirrorPlayOrder(true, caps, true, order, 7), "an order of another queue")
 		assertNull(mirrorPlayOrder(true, null, true, order, 6), "no active device")
 	}
+
+	@Test
+	fun anOrphanTakeoverKeepsTheSessionsShuffleAndOrder() {
+		// W1 review finding 2: the orphan adopt loaded the queue in this player's own mode and a fresh
+		// order; the claim that followed then replaced the session's.
+		assertEquals(DirectivePlayOrder(true, listOf(2, 0, 1)), orphanAdoptPlayOrder(true, true, listOf(2, 0, 1), 3))
+		assertEquals(DirectivePlayOrder(false, null), orphanAdoptPlayOrder(true, false, null, 3))
+		// Not an order of these rows: the mode, and the player makes its order (playing row first).
+		assertEquals(DirectivePlayOrder(true, null), orphanAdoptPlayOrder(true, true, listOf(0, 0, 1), 3))
+		// An older hub: as before.
+		assertEquals(DirectivePlayOrder(null, null), orphanAdoptPlayOrder(false, true, listOf(2, 0, 1), 3))
+	}
+
+	@Test
+	fun aShuffledQueueWithoutAnOrderOfItsRowsIsNeverPublished() {
+		// W1 review finding 3: shuffle:true with order:null made the hub build and send its own order,
+		// which crossed this device's next publish; the two then played different orders.
+		assertTrue(publishHeldForOrder(true, true, null, 6))
+		assertTrue(publishHeldForOrder(true, true, listOf(0, 1), 6))
+		assertFalse(publishHeldForOrder(true, true, order, 6))
+		assertFalse(publishHeldForOrder(true, false, null, 6))
+		assertFalse(publishHeldForOrder(false, true, null, 6), "an older hub: as before")
+	}
 }

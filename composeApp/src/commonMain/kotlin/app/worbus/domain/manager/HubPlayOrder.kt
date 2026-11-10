@@ -74,6 +74,16 @@ fun directivePlayOrder(msg: JsonObject, hubOffersPlayOrder: Boolean): DirectiveP
 }
 
 /**
+ * The shuffle mode and order an orphaned session's queue is adopted with (no device playing it,
+ * this one about to take it over by playing locally). Today: none.
+ */
+fun orphanAdoptPlayOrder(hubOffersPlayOrder: Boolean, sessionShuffle: Boolean, sessionOrder: List<Int>?, queueSize: Int): DirectivePlayOrder =
+	DirectivePlayOrder(null, null)
+
+/** Whether a publish waits because the state is shuffled with no order of its queue. Today: never. */
+fun publishHeldForOrder(hubOffersPlayOrder: Boolean, shuffle: Boolean, order: List<Int>?, queueSize: Int): Boolean = false
+
+/**
  * The play order a controller shows for the session another device plays (`session.order`): only
  * when the hub offers `playOrder` and the playing device's row has the cap (then it is what that
  * device plays), the session is shuffled, and the order is of exactly the mirrored rows. Otherwise

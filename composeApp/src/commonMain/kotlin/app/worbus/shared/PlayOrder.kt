@@ -65,6 +65,12 @@ object PlayOrder {
 		return shifted.subList(0, position) + inserted + shifted.subList(position, shifted.size)
 	}
 
+	/**
+	 * Play next: [count] rows inserted at queue row [at], to play right after the playing row
+	 * [current]. Today: the same as [insert].
+	 */
+	fun playNext(order: List<Int>, at: Int, count: Int, current: Int): List<Int> = insert(order, at, count)
+
 	/** Rows [from, toExclusive) removed: dropped from the order, the rest keep their order. */
 	fun remove(order: List<Int>, from: Int, toExclusive: Int): List<Int> {
 		val count = toExclusive - from
@@ -107,7 +113,7 @@ object PlayOrder {
 	 *
 	 * [timeline] is the controller timeline's shuffle order, [shown] what the state shows now.
 	 */
-	fun resolve(shuffle: Boolean, timeline: List<Int>?, pending: List<Int>?, shown: List<Int>?, queueSize: Int): Reading {
+	fun resolve(shuffle: Boolean, timeline: List<Int>?, pending: List<Int>?, shown: List<Int>?, queueSize: Int, landed: Boolean = false): Reading {
 		if (!shuffle) return Reading(null, null)
 		if (pending != null) {
 			if (timeline == pending) return Reading(pending, null)

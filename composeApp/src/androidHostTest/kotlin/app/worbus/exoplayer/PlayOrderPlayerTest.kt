@@ -161,4 +161,32 @@ class PlayOrderPlayerTest {
 		assertEquals(17, order.first())
 		assertEquals((0 until 50).toList(), order.sorted())
 	}
+
+	/**
+	 * W1 review finding 1: Play next when the playing song is the LAST queue row. The engine sees an
+	 * insert at the end (an append, by its index alone), so the app makes Play next explicit: the
+	 * add, then the order it works out with PlayOrder.playNext (COMMAND_SET_PLAY_ORDER), as
+	 * MediaPlayer.android's playNextSingleLocal does.
+	 */
+	@Test
+	fun playNextOnTheLastQueueRowPlaysNext() {
+		val player = newPlayer(installed = true).apply {
+			setMediaItems(rows(6), 5, 0L)
+			shuffleModeEnabled = true
+			setPlayOrder(this, intArrayOf(3, 0, 4, 1, 5, 2))
+		}
+		val before = player.playOrderRows()
+		player.addMediaItem(6, item("n"))
+		setPlayOrder(player, app.worbus.shared.PlayOrder.playNext(before, 6, 1, current = 5).toIntArray())
+		val next = player.currentTimeline.getNextWindowIndex(player.currentMediaItemIndex, Player.REPEAT_MODE_OFF, true)
+		assertEquals("n", player.getMediaItemAt(next).mediaId)
+	}
+
+	/** Controller ruling (W1 review): an insert above the first row goes right before its queue successor. */
+	@Test
+	fun anInsertAboveTheFirstRowGoesRightBeforeItsQueueSuccessor() {
+		val player = shuffledSix(installed = true)
+		player.addMediaItem(0, item("x"))
+		assertEquals(listOf("s3", "x", "s0", "s4", "s1", "s5", "s2"), player.playOrderIds())
+	}
 }
