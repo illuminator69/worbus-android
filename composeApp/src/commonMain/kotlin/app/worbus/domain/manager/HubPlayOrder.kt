@@ -51,7 +51,7 @@ fun playOrderPublishFields(hubOffersPlayOrder: Boolean, shuffle: Boolean, order:
  * copy of the queue and its order stays current through a paused edit (a remote Next then steps
  * what this device will play). Never to claim an empty slot (B-047).
  */
-fun publishesWhilePaused(hubOffersPlayOrder: Boolean, activeId: String?, myId: String?): Boolean =
+fun publishesWhilePaused(hubOffersPlayOrder: Boolean, activeId: String?, myId: String?, holdsSessionQueue: Boolean = true): Boolean =
 	hubOffersPlayOrder && myId != null && activeId == myId
 
 /**

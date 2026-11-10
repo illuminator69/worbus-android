@@ -208,7 +208,7 @@ class PlayOrderPlayerTest {
 		}
 		var answer: Boolean? = null
 		val ids = player.ids() + "n"
-		requestPlayOrder(player, listOf(3, 0, 4, 1, 5, 6, 2), ids) { answer = it }
+		requestPlayOrder(player, listOf(3, 0, 4, 1, 5, 6, 2), ids, null) { answer = it }
 		player.addMediaItem(6, item("n"))
 		assertEquals(listOf("s3", "s0", "s4", "s1", "s5", "n", "s2"), player.playOrderIds())
 		assertEquals(true, answer)
@@ -218,7 +218,7 @@ class PlayOrderPlayerTest {
 	fun aNewQueuesOrderSentBeforeTheQueueIsAppliedWhenTheQueueLands() {
 		val player = shuffledSix(installed = true)
 		var answer: Boolean? = null
-		requestPlayOrder(player, listOf(2, 0, 3, 1), listOf("g0", "g1", "g2", "g3")) { answer = it }
+		requestPlayOrder(player, listOf(2, 0, 3, 1), listOf("g0", "g1", "g2", "g3"), null) { answer = it }
 		player.setMediaItems(rows(4, "g"), 2, 0L)
 		assertEquals(listOf("g2", "g0", "g3", "g1"), player.playOrderIds())
 		assertEquals(true, answer)
@@ -229,7 +229,7 @@ class PlayOrderPlayerTest {
 	fun anOrderSentWithShuffleOnSurvivesTheLateShuffleCommand() {
 		val player = newPlayer(installed = true).apply { setMediaItems(rows(6), 4, 0L) }
 		var answer: Boolean? = null
-		requestPlayOrder(player, listOf(3, 0, 4, 1, 5, 2), player.ids()) { answer = it }
+		requestPlayOrder(player, listOf(3, 0, 4, 1, 5, 2), player.ids(), null) { answer = it }
 		player.shuffleModeEnabled = true // the controller's own shuffle-on, landing after the order
 		assertEquals(listOf("s3", "s0", "s4", "s1", "s5", "s2"), player.playOrderIds())
 		assertEquals(true, answer)
@@ -239,7 +239,7 @@ class PlayOrderPlayerTest {
 	fun anOrderIsNeverAppliedToAnotherQueueOfTheSameLength() {
 		val player = shuffledSix(installed = true)
 		var answer: Boolean? = null
-		requestPlayOrder(player, listOf(5, 4, 3, 2, 1, 0), (0 until 6).map { "x$it" }) { answer = it }
+		requestPlayOrder(player, listOf(5, 4, 3, 2, 1, 0), (0 until 6).map { "x$it" }, null) { answer = it }
 		assertEquals(listOf("s3", "s0", "s4", "s1", "s5", "s2"), player.playOrderIds())
 		assertTrue(answer != true, "not applied: $answer")
 	}
@@ -248,8 +248,35 @@ class PlayOrderPlayerTest {
 	fun shuffleOffDropsAnOrderStillWaitingForItsQueue() {
 		val player = shuffledSix(installed = true)
 		var answer: Boolean? = null
-		requestPlayOrder(player, listOf(6, 0, 1, 2, 3, 4, 5), player.ids() + "n") { answer = it }
+		requestPlayOrder(player, listOf(6, 0, 1, 2, 3, 4, 5), player.ids() + "n", null) { answer = it }
 		player.shuffleModeEnabled = false
 		assertEquals(false, answer)
+	}
+
+	/**
+	 * W1 re-walk: a transfer's load (and the orphan adopt) of a queue the player already held — the
+	 * same songs in the same order — had its order applied to the OLD queue (same ids) before the
+	 * queued setMediaItems landed, whose new-queue order (start row first, the rest random) then
+	 * replaced it. A load's order is for that load: its items carry the load's token.
+	 */
+	@Test
+	fun aLoadsOrderSentBeforeAReloadOfTheSameSongsIsAppliedAfterTheReload() {
+		val player = shuffledSix(installed = true)
+		var answer: Boolean? = null
+		val order = listOf(5, 0, 1, 2, 3, 4)
+		requestPlayOrder(player, order, player.ids(), 7L) { answer = it }
+		player.setMediaItems(withLoadToken(rows(6), 7L), 5, 0L)
+		assertEquals(order.map { "s$it" }, player.playOrderIds())
+		assertEquals(true, answer)
+	}
+
+	@Test
+	fun aLoadsOrderLandingAfterItsLoadIsAppliedAtOnce() {
+		val player = shuffledSix(installed = true)
+		player.setMediaItems(withLoadToken(rows(6), 8L), 5, 0L)
+		var answer: Boolean? = null
+		requestPlayOrder(player, listOf(5, 0, 1, 2, 3, 4), player.ids(), 8L) { answer = it }
+		assertEquals(listOf("s5", "s0", "s1", "s2", "s3", "s4"), player.playOrderIds())
+		assertEquals(true, answer)
 	}
 }

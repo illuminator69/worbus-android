@@ -506,7 +506,8 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 					// may be after this command (the edit it follows can still be in the session's
 					// command queue); answered then, or refused (ERROR_BAD_VALUE) if it never does.
 					val answer = SettableFuture.create<SessionResult>()
-					requestPlayOrder(local, order.toList(), ids) { applied ->
+					val loadToken = if (args.containsKey(EXTRA_PLAY_ORDER_LOAD)) args.getLong(EXTRA_PLAY_ORDER_LOAD) else null
+					requestPlayOrder(local, order.toList(), ids, loadToken) { applied ->
 						answer.set(SessionResult(if (applied) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
 					}
 					return answer
@@ -897,6 +898,8 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 		const val EXTRA_PLAY_ORDER = "playOrder"
 		/** The media ids of the queue the order was built for, in queue order. */
 		const val EXTRA_PLAY_ORDER_IDS = "playOrderIds"
+		/** The token of the whole-queue load the order was built for (its items carry it). */
+		const val EXTRA_PLAY_ORDER_LOAD = "playOrderLoad"
 
 		const val MEDIA_ROOT_ID = "navic_root"
 		const val MEDIA_SHUFFLE_ID = "navic_shuffle"

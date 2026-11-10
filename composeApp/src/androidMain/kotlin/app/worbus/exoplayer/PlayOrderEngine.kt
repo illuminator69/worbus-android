@@ -1,6 +1,8 @@
 package app.worbus.exoplayer
 
+import android.os.Bundle
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -108,9 +110,23 @@ internal fun setPlayOrder(player: ExoPlayer, order: IntArray): Boolean {
  * as many rows is never applied.
  */
 @UnstableApi
-internal fun requestPlayOrder(player: ExoPlayer, order: List<Int>, ids: List<String>, done: (Boolean) -> Unit) {
+internal fun requestPlayOrder(player: ExoPlayer, order: List<Int>, ids: List<String>, loadToken: Long?, done: (Boolean) -> Unit) {
 	val engine = synchronized(engines) { engines[player] }
 	if (engine == null) done(false) else engine.request(order, ids, done)
+}
+
+/** The extra under which a whole-queue load stamps its media items with its token. */
+internal const val LOAD_TOKEN_EXTRA = "worbusLoadToken"
+
+/** [items] stamped as the load [token] (their request metadata's extras), for [requestPlayOrder]. */
+internal fun withLoadToken(items: List<MediaItem>, token: Long): List<MediaItem> = items.map { item ->
+	item.buildUpon()
+		.setRequestMetadata(
+			item.requestMetadata.buildUpon()
+				.setExtras(Bundle(item.requestMetadata.extras ?: Bundle.EMPTY).apply { putLong(LOAD_TOKEN_EXTRA, token) })
+				.build()
+		)
+		.build()
 }
 
 /** How long an order waits for the queue it was built for. */

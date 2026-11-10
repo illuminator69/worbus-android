@@ -114,4 +114,14 @@ class HubPlayOrderTest {
 		assertEquals(5_000L, publishRecheckAt(nowMs = 3_500L, hubDrivenUntilMs = 5_000L))
 		assertNull(publishRecheckAt(nowMs = 5_000L, hubDrivenUntilMs = 5_000L), "not held: nothing to look at again")
 	}
+
+	@Test
+	fun aDeviceJustMadeActiveDoesNotPublishItsStaleQueueWhilePaused() {
+		// W1 re-walk: a transfer commits this device as active before its do:load is applied; the
+		// player swap in that moment emitted a state, and the paused publish sent the device's
+		// PREVIOUS queue and order, which the hub adopted. Until it holds the session's queue (its
+		// load applied, or its own publish while playing) a paused device publishes nothing.
+		assertFalse(publishesWhilePaused(true, activeId = "me", myId = "me", holdsSessionQueue = false))
+		assertTrue(publishesWhilePaused(true, activeId = "me", myId = "me", holdsSessionQueue = true))
+	}
 }
