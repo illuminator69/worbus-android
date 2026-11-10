@@ -741,12 +741,36 @@ data class AlbumListingEntry(
 	val duration: Duration? = null
 )
 
-internal fun ApiAlbum.toListingEntry() = AlbumListingEntry(
-	id = id, songCount = songCount, coverArtId = coverArtId, name = name, artistName = artistName,
-	artistId = artistId, year = year, genre = genre, duration = duration
-)
+/**
+ * Through the same mapper the pulls write with, so a field the mapper fills in (an album with no
+ * artist id is filed under "unknown artist") compares equal to what Room holds instead of reading as
+ * a change on every sweep.
+ */
+internal fun ApiAlbum.toListingEntry(): AlbumListingEntry = toEntity().let {
+	AlbumListingEntry(
+		id = it.albumId, songCount = it.songCount, coverArtId = it.coverArtId, name = it.name,
+		artistName = it.artistName, artistId = it.artistId, year = it.year, genre = it.genre, duration = it.duration
+	)
+}
 
-/** Whether the sweep re-reads an album: it is new, or its track count or cover changed. */
+/**
+ * Whether the sweep re-reads an album (Q-165): it is new, or any field the album list carries and
+ * Room holds differs. Navidrome's cover id suffix hashes the picture, not the album, so the count
+ * and cover alone missed every tag edit that kept both (a title, year, genre or credit) and a file
+ * replaced by one of the same count (the duration moves). Compared in whole seconds: the list and
+ * the album detail round the duration alike, and Room stores what the detail said.
+ *
+ * Still invisible here, by what the list carries: an edit inside one track that changes no album
+ * field (a track title). The hourly full pull catches that.
+ */
 internal fun albumChanged(known: AlbumFingerprint?, remote: AlbumListingEntry): Boolean =
-	known == null || known.songCount != remote.songCount || known.coverArtId != remote.coverArtId
+	known == null ||
+		known.songCount != remote.songCount ||
+		known.coverArtId != remote.coverArtId ||
+		known.name != remote.name ||
+		known.artistName != remote.artistName ||
+		known.artistId != remote.artistId ||
+		known.year != remote.year ||
+		known.genre != remote.genre ||
+		known.duration?.inWholeSeconds != remote.duration?.inWholeSeconds
 
