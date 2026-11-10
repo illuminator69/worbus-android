@@ -101,3 +101,13 @@ internal fun setPlayOrder(player: ExoPlayer, order: IntArray): Boolean {
 	player.setShuffleOrder(PlayOrderShuffleOrder(rows))
 	return true
 }
+
+/**
+ * A play order the app sends for the queue it was built for ([ids], the media ids in queue order),
+ * answered through [done] (W1 walk). Today: applied at once if the lengths agree, as
+ * COMMAND_SET_PLAY_ORDER does.
+ */
+@UnstableApi
+internal fun requestPlayOrder(player: ExoPlayer, order: List<Int>, ids: List<String>, done: (Boolean) -> Unit) {
+	done(setPlayOrder(player, order.toIntArray()))
+}

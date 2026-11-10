@@ -106,4 +106,12 @@ class HubPlayOrderTest {
 		assertFalse(publishHeldForOrder(true, false, null, 6))
 		assertFalse(publishHeldForOrder(false, true, null, 6), "an older hub: as before")
 	}
+
+	@Test
+	fun aPublishHeldByTheQuietWindowIsLookedAtAgainWhenItEnds() {
+		// W1 walk: a paused active device whose order changed during the 2 s after a directive
+		// published nothing for 60 s: a paused player emits no state to publish on.
+		assertEquals(5_000L, publishRecheckAt(nowMs = 3_500L, hubDrivenUntilMs = 5_000L))
+		assertNull(publishRecheckAt(nowMs = 5_000L, hubDrivenUntilMs = 5_000L), "not held: nothing to look at again")
+	}
 }

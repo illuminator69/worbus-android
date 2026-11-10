@@ -103,3 +103,9 @@ fun mirrorPlayOrder(hubOffersPlayOrder: Boolean, activeDeviceCaps: Set<String>?,
 	if (!hubOffersPlayOrder || activeDeviceCaps == null || HUB_FEATURE_PLAY_ORDER !in activeDeviceCaps || !shuffle) return null
 	return order?.takeIf { PlayOrder.isPermutation(it, queueSize) }
 }
+
+/**
+ * When a publish held back by the hub-driven quiet window (2 s after a directive) is looked at
+ * again. Today: never; the next state emission does it, and a paused player emits none.
+ */
+fun publishRecheckAt(nowMs: Long, hubDrivenUntilMs: Long): Long? = null

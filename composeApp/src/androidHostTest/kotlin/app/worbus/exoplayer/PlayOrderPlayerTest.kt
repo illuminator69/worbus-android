@@ -17,6 +17,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /*
  * W1 (navi-connect DESIGN-w1-play-order-2026-11-10 §2, §5, §6): the play order of a shuffled queue
@@ -188,5 +189,67 @@ class PlayOrderPlayerTest {
 		val player = shuffledSix(installed = true)
 		player.addMediaItem(0, item("x"))
 		assertEquals(listOf("s3", "x", "s0", "s4", "s1", "s5", "s2"), player.playOrderIds())
+	}
+
+	// ---- W1 walk (2026-11-10): the order arrives before the queue edit it was built for ----
+	// media3 1.11's session runs a controller's queue edits through a per-controller command queue
+	// and its custom commands straight away, so COMMAND_SET_PLAY_ORDER can reach the service's
+	// player BEFORE the setMediaItems / addMediaItems / setShuffleModeEnabled it follows. On the AVD
+	// it was refused ("refused a play order of N rows", 5 times) and the player kept its own order.
+
+	private fun ExoPlayer.ids() = (0 until mediaItemCount).map { getMediaItemAt(it).mediaId }
+
+	@Test
+	fun aPlayNextOrderSentBeforeItsAddIsAppliedWhenTheAddLands() {
+		val player = newPlayer(installed = true).apply {
+			setMediaItems(rows(6), 5, 0L)
+			shuffleModeEnabled = true
+			setPlayOrder(this, intArrayOf(3, 0, 4, 1, 5, 2))
+		}
+		var answer: Boolean? = null
+		val ids = player.ids() + "n"
+		requestPlayOrder(player, listOf(3, 0, 4, 1, 5, 6, 2), ids) { answer = it }
+		player.addMediaItem(6, item("n"))
+		assertEquals(listOf("s3", "s0", "s4", "s1", "s5", "n", "s2"), player.playOrderIds())
+		assertEquals(true, answer)
+	}
+
+	@Test
+	fun aNewQueuesOrderSentBeforeTheQueueIsAppliedWhenTheQueueLands() {
+		val player = shuffledSix(installed = true)
+		var answer: Boolean? = null
+		requestPlayOrder(player, listOf(2, 0, 3, 1), listOf("g0", "g1", "g2", "g3")) { answer = it }
+		player.setMediaItems(rows(4, "g"), 2, 0L)
+		assertEquals(listOf("g2", "g0", "g3", "g1"), player.playOrderIds())
+		assertEquals(true, answer)
+	}
+
+	/** Ruling 2 on the AVD: the hub's proposed order lost to the service's own shuffle-on order. */
+	@Test
+	fun anOrderSentWithShuffleOnSurvivesTheLateShuffleCommand() {
+		val player = newPlayer(installed = true).apply { setMediaItems(rows(6), 4, 0L) }
+		var answer: Boolean? = null
+		requestPlayOrder(player, listOf(3, 0, 4, 1, 5, 2), player.ids()) { answer = it }
+		player.shuffleModeEnabled = true // the controller's own shuffle-on, landing after the order
+		assertEquals(listOf("s3", "s0", "s4", "s1", "s5", "s2"), player.playOrderIds())
+		assertEquals(true, answer)
+	}
+
+	@Test
+	fun anOrderIsNeverAppliedToAnotherQueueOfTheSameLength() {
+		val player = shuffledSix(installed = true)
+		var answer: Boolean? = null
+		requestPlayOrder(player, listOf(5, 4, 3, 2, 1, 0), (0 until 6).map { "x$it" }) { answer = it }
+		assertEquals(listOf("s3", "s0", "s4", "s1", "s5", "s2"), player.playOrderIds())
+		assertTrue(answer != true, "not applied: $answer")
+	}
+
+	@Test
+	fun shuffleOffDropsAnOrderStillWaitingForItsQueue() {
+		val player = shuffledSix(installed = true)
+		var answer: Boolean? = null
+		requestPlayOrder(player, listOf(6, 0, 1, 2, 3, 4, 5), player.ids() + "n") { answer = it }
+		player.shuffleModeEnabled = false
+		assertEquals(false, answer)
 	}
 }
