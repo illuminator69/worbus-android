@@ -62,6 +62,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import io.ktor.client.HttpClient
@@ -127,7 +128,7 @@ import app.worbus.exoplayer.AudioGainProcessor
 import app.worbus.exoplayer.ExoPlayerCoilBitmapLoader
 import app.worbus.exoplayer.ResumingDataSource
 import app.worbus.exoplayer.installPlayOrder
-import app.worbus.exoplayer.setPlayOrder
+import app.worbus.exoplayer.requestPlayOrder
 import app.worbus.ui.core.PlayerUiState
 import app.worbus.util.Logger
 import java.io.File
@@ -496,10 +497,19 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 						return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
 					}
 					val order = args.getIntArray(EXTRA_PLAY_ORDER)
+					val ids = args.getStringArrayList(EXTRA_PLAY_ORDER_IDS)
 					val local = exoPlayer
-					if (order == null || local == null || !setPlayOrder(local, order)) {
+					if (order == null || ids == null || local == null) {
 						return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
 					}
+					// W1 walk: applied when the player holds exactly the queue it was built for, which
+					// may be after this command (the edit it follows can still be in the session's
+					// command queue); answered then, or refused (ERROR_BAD_VALUE) if it never does.
+					val answer = SettableFuture.create<SessionResult>()
+					requestPlayOrder(local, order.toList(), ids) { applied ->
+						answer.set(SessionResult(if (applied) SessionResult.RESULT_SUCCESS else SessionError.ERROR_BAD_VALUE))
+					}
+					return answer
 				}
 			}
 
@@ -885,6 +895,8 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 		/** W1: sets the local player's play order; the order as an int array under [EXTRA_PLAY_ORDER]. */
 		const val COMMAND_SET_PLAY_ORDER = "COMMAND_SET_PLAY_ORDER"
 		const val EXTRA_PLAY_ORDER = "playOrder"
+		/** The media ids of the queue the order was built for, in queue order. */
+		const val EXTRA_PLAY_ORDER_IDS = "playOrderIds"
 
 		const val MEDIA_ROOT_ID = "navic_root"
 		const val MEDIA_SHUFFLE_ID = "navic_shuffle"
@@ -1634,12 +1646,12 @@ class AndroidMediaPlayerViewModel(
 	private var timelineSinceLanding = false
 
 	/**
-	 * Sends [order] to the service's player (PlaybackService.COMMAND_SET_PLAY_ORDER), and waits
-	 * for its timeline to show it. It lands after the edit it follows only because the session runs
-	 * that edit at once: media3 1.11 queues player commands per controller but dispatches custom
-	 * commands straight to the application thread (`MediaSessionStub`), and the service keeps
-	 * media3's default `onAddMediaItems` / `onSetMediaItems`, which finish immediately. A service
-	 * callback that resolved items asynchronously would let this overtake its edit (then refused).
+	 * Sends [order] to the service's player (PlaybackService.COMMAND_SET_PLAY_ORDER) with the media
+	 * ids of the queue it was built for (the state's, written before this call), and waits for its
+	 * timeline to show it. media3 1.11 queues a controller's player commands but dispatches custom
+	 * commands at once (`MediaSessionStub`), so this can reach the service before the edit it
+	 * follows; the service applies it when its player holds exactly that queue
+	 * (`requestPlayOrder`), and answers then (W1 walk: it used to refuse it, 5 times on the AVD).
 	 *
 	 * The wait ends when the timeline shows the order, on a refusal (an order of another queue: the
 	 * timeline is read again), or once the service has accepted it and a session timeline has come
@@ -1649,10 +1661,19 @@ class AndroidMediaPlayerViewModel(
 	 */
 	private fun sendPlayOrder(order: List<Int>) {
 		val c = controller ?: return
+		// The queue it was built for: every caller has written that queue to the state first.
+		val ids = _uiState.value.queue.map { it.id }
+		if (!PlayOrder.isPermutation(order, ids.size)) {
+			Logger.w("MediaPlayer", "W1: a play order of ${order.size} rows for a queue of ${ids.size}, not sent")
+			return
+		}
 		pendingPlayOrder = order
 		val result = c.sendCustomCommand(
 			SessionCommand(PlaybackService.COMMAND_SET_PLAY_ORDER, Bundle.EMPTY),
-			Bundle().apply { putIntArray(PlaybackService.EXTRA_PLAY_ORDER, order.toIntArray()) }
+			Bundle().apply {
+				putIntArray(PlaybackService.EXTRA_PLAY_ORDER, order.toIntArray())
+				putStringArrayList(PlaybackService.EXTRA_PLAY_ORDER_IDS, ArrayList(ids))
+			}
 		)
 		result.addListener({
 			val ok = runCatching { result.get().resultCode == SessionResult.RESULT_SUCCESS }.getOrDefault(false)
@@ -2491,7 +2512,6 @@ class AndroidMediaPlayerViewModel(
 				val order = newQueueOrder(songs.size, start)
 				controller?.let { player ->
 					player.setMediaItems(items, start, 0L)
-					order?.let { sendPlayOrder(it) }
 					player.prepare()
 					player.play()
 				}
@@ -2508,6 +2528,8 @@ class AndroidMediaPlayerViewModel(
 						savedQueueName = null
 					)
 				}
+				// Sent with the queue it is for, now in the state (W1 walk).
+				order?.let { sendPlayOrder(it) }
 			}
 			if (songs.isNotEmpty()) updatePlaybackState()
 		}
@@ -2532,7 +2554,6 @@ class AndroidMediaPlayerViewModel(
 			val order = newQueueOrder(newCollection.size, startIndex)
 			controller?.let { player ->
 				player.setMediaItems(items, startIndex, 0L)
-				order?.let { sendPlayOrder(it) }
 				player.prepare()
 				player.play()
 			}
@@ -2556,6 +2577,8 @@ class AndroidMediaPlayerViewModel(
 					savedQueueName = collection.displayName
 				)
 			}
+			// Sent with the queue it is for, now in the state (W1 walk).
+			order?.let { sendPlayOrder(it) }
 			}
 			if (newCollection.isNotEmpty()) updatePlaybackState()
 		}
@@ -2696,7 +2719,6 @@ class AndroidMediaPlayerViewModel(
 					player.stop()
 					player.clearMediaItems()
 					player.setMediaItem(mediaItem)
-					if (player.shuffleModeEnabled) sendPlayOrder(listOf(0))
 					player.prepare()
 					player.play()
 				}

@@ -74,25 +74,17 @@ class PlayOrderShuffleOrder(
 /**
  * Gives [player] the play-order rule: a [PlayOrderShuffleOrder], and on every turn of shuffle to
  * on (the app's button, the notification's, a hub directive alike) the playing row first and the
- * rest random. An explicit order sent after that ([setPlayOrder], the session's
- * COMMAND_SET_PLAY_ORDER) replaces it: commands run in the order they were sent.
+ * rest random, unless an order the app sent for that turn is waiting to be applied
+ * ([requestPlayOrder]).
  */
 @UnstableApi
 internal fun installPlayOrder(player: ExoPlayer) {
-	player.setShuffleOrder(PlayOrderShuffleOrder(PlayOrder.identity(player.mediaItemCount)))
-	player.addListener(object : Player.Listener {
-		override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
-			if (!shuffleModeEnabled) return
-			player.setShuffleOrder(
-				PlayOrderShuffleOrder(PlayOrder.currentFirst(player.mediaItemCount, player.currentMediaItemIndex))
-			)
-		}
-	})
+	synchronized(engines) { engines[player] = PlayOrderEngine(player) }
 }
 
 /**
- * Sets an explicit play order. False (and nothing changed) when [order] is not an order of
- * exactly the player's rows: an order sent for another queue never lands on this one.
+ * Sets an explicit play order at once. False (and nothing changed) when [order] is not an order of
+ * exactly the player's rows.
  */
 @UnstableApi
 internal fun setPlayOrder(player: ExoPlayer, order: IntArray): Boolean {
@@ -103,11 +95,94 @@ internal fun setPlayOrder(player: ExoPlayer, order: IntArray): Boolean {
 }
 
 /**
- * A play order the app sends for the queue it was built for ([ids], the media ids in queue order),
- * answered through [done] (W1 walk). Today: applied at once if the lengths agree, as
- * COMMAND_SET_PLAY_ORDER does.
+ * A play order the app sent (COMMAND_SET_PLAY_ORDER) for the queue it was built for: [ids], the
+ * media ids in queue order. The order is applied the moment the player holds exactly that queue
+ * (now, or when the queue edit it follows lands), with shuffle turned on, and [done] answers true
+ * then; false when it is not an order of [ids], when a newer one replaces it, when shuffle is
+ * turned off first, or after [ORDER_WAIT_MS] without its queue.
+ *
+ * Why it waits (W1 walk, 2026-11-10): media3 1.11's session runs a controller's queue edits
+ * (setMediaItems, addMediaItems, setShuffleModeEnabled) through a per-controller command queue and
+ * its custom commands at once (`MediaSessionStub`), so the order can arrive before the edit it
+ * follows. Checked against the queue's identity, never its length: an order of another queue with
+ * as many rows is never applied.
  */
 @UnstableApi
 internal fun requestPlayOrder(player: ExoPlayer, order: List<Int>, ids: List<String>, done: (Boolean) -> Unit) {
-	done(setPlayOrder(player, order.toIntArray()))
+	val engine = synchronized(engines) { engines[player] }
+	if (engine == null) done(false) else engine.request(order, ids, done)
+}
+
+/** How long an order waits for the queue it was built for. */
+internal const val ORDER_WAIT_MS = 5_000L
+
+private val engines = java.util.WeakHashMap<ExoPlayer, PlayOrderEngine>()
+
+@UnstableApi
+private class PlayOrderEngine(private val player: ExoPlayer) {
+	private class Waiting(val order: List<Int>, val ids: List<String>, val done: (Boolean) -> Unit)
+
+	private var waiting: Waiting? = null
+
+	/** An order applied by turning shuffle on: the turn-on applies it instead of its own. */
+	private var orderForTurnOn: List<Int>? = null
+
+	private val handler = android.os.Handler(player.applicationLooper)
+
+	init {
+		player.setShuffleOrder(PlayOrderShuffleOrder(PlayOrder.identity(player.mediaItemCount)))
+		player.addListener(object : Player.Listener {
+			override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+				if (!shuffleModeEnabled) {
+					orderForTurnOn = null
+					waiting?.let { waiting = null; it.done(false) }
+					return
+				}
+				// This event may be delivered after a later call in the same turn (media3 defers a
+				// listener event raised inside another listener), so an order applied by turning
+				// shuffle on is applied here, never overwritten here.
+				val explicit = orderForTurnOn?.takeIf { PlayOrder.isPermutation(it, player.mediaItemCount) }
+				orderForTurnOn = null
+				player.setShuffleOrder(
+					PlayOrderShuffleOrder(explicit ?: PlayOrder.currentFirst(player.mediaItemCount, player.currentMediaItemIndex))
+				)
+			}
+
+			override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+				val w = waiting ?: return
+				if (holds(w.ids)) {
+					waiting = null
+					apply(w)
+				}
+			}
+		})
+	}
+
+	fun request(order: List<Int>, ids: List<String>, done: (Boolean) -> Unit) {
+		waiting?.let { waiting = null; it.done(false) }
+		if (!PlayOrder.isPermutation(order, ids.size)) {
+			done(false)
+			return
+		}
+		val w = Waiting(order, ids, done)
+		if (holds(ids)) {
+			apply(w)
+			return
+		}
+		waiting = w
+		handler.postDelayed({ if (waiting === w) { waiting = null; w.done(false) } }, ORDER_WAIT_MS)
+	}
+
+	private fun holds(ids: List<String>): Boolean =
+		player.mediaItemCount == ids.size && ids.indices.all { player.getMediaItemAt(it).mediaId == ids[it] }
+
+	private fun apply(w: Waiting) {
+		if (player.shuffleModeEnabled) {
+			player.setShuffleOrder(PlayOrderShuffleOrder(w.order))
+		} else {
+			orderForTurnOn = w.order
+			player.shuffleModeEnabled = true
+		}
+		w.done(true)
+	}
 }
