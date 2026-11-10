@@ -839,10 +839,6 @@ internal fun QueueContent(layout: QueueLayout) {
 			onViewArtistId = { id -> leaveQueueFor(Screen.ArtistDetail(id)) },
 			onAddToPlaylist = { queuePlaylistSong = selected },
 			onSetRating = { viewModel.rateSelectedSong(it) },
-			downloadStatus = download?.status ?: DownloadStatus.NOT_DOWNLOADED,
-			onDownload = { viewModel.downloadSong(selected) },
-			onCancelDownload = { viewModel.cancelDownload(selected.id) },
-			onDeleteDownload = { viewModel.deleteDownload(selected.id) }
 		)
 	}
 

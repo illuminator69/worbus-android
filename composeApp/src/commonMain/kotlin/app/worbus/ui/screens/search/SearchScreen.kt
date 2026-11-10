@@ -488,7 +488,6 @@ fun SearchScreen(
 					player.addToQueueSingle(song)
 				}
 			},
-			downloadStatus = if (downloadedSongs.containsKey(song.id)) DownloadStatus.DOWNLOADED else null,
 			onTrackInfo = dropUnlessResumed {
 				backStack.add(Screen.SongDetailScreen(song.id, song.coverArtId))
 			},

@@ -377,10 +377,6 @@ fun MixDetailScreen(mixId: String) {
 				dropUnlessResumed { backStack.add(Screen.CollectionDetail(albumId, "mix")) }
 			},
 			onAddToPlaylist = { addingToPlaylist = song },
-			downloadStatus = downloadsBySong[song.id]?.status ?: DownloadStatus.NOT_DOWNLOADED,
-			onDownload = { viewModel.download(song) },
-			onCancelDownload = { viewModel.cancelDownload(song) },
-			onDeleteDownload = { viewModel.deleteDownload(song) }
 		)
 	}
 

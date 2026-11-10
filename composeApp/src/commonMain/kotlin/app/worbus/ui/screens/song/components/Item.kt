@@ -223,10 +223,6 @@ fun SongListScreenItem(
 						playlistDialogShown = true
 					},
 					onSetRating = onSetRating,
-					downloadStatus = download?.status ?: DownloadStatus.NOT_DOWNLOADED,
-					onDownload = onDownload,
-					onCancelDownload = onCancelDownload,
-					onDeleteDownload = onDeleteDownload
 				)
 			}
 		}

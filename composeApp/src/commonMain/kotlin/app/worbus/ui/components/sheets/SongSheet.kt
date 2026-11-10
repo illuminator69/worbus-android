@@ -102,6 +102,9 @@ import app.worbus.ui.util.rememberColorSchemeFromCoverArt
 import app.worbus.ui.util.rememberCoverAmbient
 import app.worbus.util.linkableArtists
 import app.worbus.domain.models.DomainSongArtist
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.flow.map
+import app.worbus.domain.manager.DownloadManager
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -129,10 +132,6 @@ fun SongSheet(
 	onViewArtistId: ((String) -> Unit)? = null,
 	onAddToPlaylist: (() -> Unit)? = null,
 	onRemoveFromPlaylist: (() -> Unit)? = null,
-	downloadStatus: DownloadStatus? = null,
-	onDownload: (() -> Unit)? = null,
-	onCancelDownload: (() -> Unit)? = null,
-	onDeleteDownload: (() -> Unit)? = null,
 	rating: Int? = null,
 	onSetRating: ((Int) -> Unit)? = null,
 	showSleepTimer: Boolean = false,
@@ -140,6 +139,21 @@ fun SongSheet(
 ) {
 	val preferenceManager = koinInject<PreferenceManager>()
 	val sessionManager = koinInject<SessionManager>()
+
+	// B-171: the Download row is the sheet's own, from the download table, wherever it opens. Each
+	// call site used to wire it, and Search, the player's More button and Listening stats never did.
+	val downloadManager = koinInject<DownloadManager>()
+	val offersDownload = songSheetOffersDownload(song.id)
+	val downloadStatus: DownloadStatus? by remember(song.id) {
+		downloadManager.allDownloads.map { rows -> rows.firstOrNull { it.songId == song.id }?.status ?: DownloadStatus.NOT_DOWNLOADED }
+	}.collectAsState(
+		// Until the table answers: what the downloaded-files map already knows, so a downloaded
+		// song's row does not open as "Download" and flip.
+		if (song.id in downloadManager.downloadedSongs.value) DownloadStatus.DOWNLOADED else DownloadStatus.NOT_DOWNLOADED
+	)
+	val onDownload: (() -> Unit)? = { downloadManager.downloadSong(song) }
+	val onCancelDownload: (() -> Unit)? = { downloadManager.cancelDownload(song.id) }
+	val onDeleteDownload: (() -> Unit)? = { downloadManager.deleteDownload(song.id) }
 
 	val platformContext = LocalPlatformContext.current
 	val backStack = LocalNavStack.current
@@ -260,7 +274,7 @@ fun SongSheet(
 				)
 			}
 
-			if (downloadStatus != null) {
+			if (offersDownload && downloadStatus != null) {
 				when (downloadStatus) {
 					DownloadStatus.DOWNLOADING -> {
 						ListItem(
@@ -336,18 +350,6 @@ fun SongSheet(
 						)
 					}
 				}
-			} else if (onDownload != null) {
-				ListItem(
-					content = { Text(stringResource(Res.string.action_download)) },
-					leadingContent = { Icon(Icons.Outlined.Download, null) },
-					onClick = {
-						platformContext.clickSound()
-						onDownload()
-						onDismissRequest()
-					},
-					colors = colors,
-					contentPadding = contentPadding
-				)
 			}
 
 			if (onStartRadio != null) {
@@ -628,3 +630,11 @@ fun SongSheet(
 		}
 	}
 }
+
+/**
+ * Whether a song sheet offers a Download row (B-171): a song of the library. A preview (`ext:`) and
+ * an internet radio station (`radio_`) have no file on the server to download.
+ */
+internal fun songSheetOffersDownload(songId: String): Boolean =
+	songId.isNotBlank() && !songId.startsWith("ext:") && !songId.startsWith("radio_")
+

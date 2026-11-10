@@ -98,10 +98,6 @@ fun CollectionDetailScreenSongRowDropdown(
 				playlistDialogShown = true
 			},
 			onRemoveFromPlaylist = onRemoveFromPlaylist,
-			downloadStatus = downloadStatus,
-			onDownload = onDownload,
-			onCancelDownload = onCancelDownload,
-			onDeleteDownload = onDeleteDownload,
 			rating = rating,
 			onSetRating = onSetRating
 		)

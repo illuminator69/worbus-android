@@ -216,10 +216,6 @@ fun SongRow(
 			}?.let { nowPlaying ->
 				{ radioManager.startJourney(nowPlaying.id, song.id) }
 			},
-			downloadStatus = download?.status,
-			onDownload = onDownload,
-			onCancelDownload = onCancelDownload,
-			onDeleteDownload = onDeleteDownload,
 			onSetRating = onSetRating
 		)
 	}
