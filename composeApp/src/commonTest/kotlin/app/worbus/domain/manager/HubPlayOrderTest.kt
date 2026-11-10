@@ -52,10 +52,10 @@ class HubPlayOrderTest {
 
 	@Test
 	fun theActiveDevicePublishesWhilePausedButAPausedDeviceNeverClaims() {
-		assertTrue(publishesWhilePaused(true, activeId = "me", myId = "me"))
-		assertFalse(publishesWhilePaused(true, activeId = null, myId = "me"), "B-047: no claim by a paused device")
-		assertFalse(publishesWhilePaused(true, activeId = "other", myId = "me"))
-		assertFalse(publishesWhilePaused(false, activeId = "me", myId = "me"), "an older hub: as before")
+		assertTrue(publishesWhilePaused(true, activeId = "me", myId = "me", holdsSessionQueue = true))
+		assertFalse(publishesWhilePaused(true, activeId = null, myId = "me", holdsSessionQueue = true), "B-047: no claim by a paused device")
+		assertFalse(publishesWhilePaused(true, activeId = "other", myId = "me", holdsSessionQueue = true))
+		assertFalse(publishesWhilePaused(false, activeId = "me", myId = "me", holdsSessionQueue = true), "an older hub: as before")
 	}
 
 	@Test
