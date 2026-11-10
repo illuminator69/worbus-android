@@ -34,9 +34,8 @@ fun publishSignature(idsSig: String, shuffle: Boolean, order: List<Int>?, hubOff
 
 /**
  * The fields the playing device's `act:setQueue` adds: `shuffle`, and `order`, the queue's rows in
- * play order while shuffled, else null. A shuffled queue whose order is not of exactly its rows
- * sends `order: null`; the hub then makes one (playing row first) and sends it back as
- * `do:setShuffle`, which this device adopts.
+ * play order while shuffled, else null. A shuffled state with no order of its rows is not published
+ * at all ([publishHeldForOrder]); `order: null` with shuffle on is left for an outside caller.
  */
 fun playOrderPublishFields(hubOffersPlayOrder: Boolean, shuffle: Boolean, order: List<Int>?, queueSize: Int): Map<String, JsonElement> {
 	if (!hubOffersPlayOrder) return emptyMap()
@@ -75,13 +74,24 @@ fun directivePlayOrder(msg: JsonObject, hubOffersPlayOrder: Boolean): DirectiveP
 
 /**
  * The shuffle mode and order an orphaned session's queue is adopted with (no device playing it,
- * this one about to take it over by playing locally). Today: none.
+ * the hub in custody; this device may take it over by playing here, and its claim publishes what
+ * it adopted). The session's mode, and its order when it is one of exactly these rows; else the
+ * player makes its own (playing row first). An older hub: this player's own mode, as before
+ * (W1 review finding 2; design §3 "the device that takes over adopts it").
  */
-fun orphanAdoptPlayOrder(hubOffersPlayOrder: Boolean, sessionShuffle: Boolean, sessionOrder: List<Int>?, queueSize: Int): DirectivePlayOrder =
-	DirectivePlayOrder(null, null)
+fun orphanAdoptPlayOrder(hubOffersPlayOrder: Boolean, sessionShuffle: Boolean, sessionOrder: List<Int>?, queueSize: Int): DirectivePlayOrder {
+	if (!hubOffersPlayOrder) return DirectivePlayOrder(null, null)
+	return DirectivePlayOrder(sessionShuffle, sessionOrder?.takeIf { sessionShuffle && PlayOrder.isPermutation(it, queueSize) })
+}
 
-/** Whether a publish waits because the state is shuffled with no order of its queue. Today: never. */
-fun publishHeldForOrder(hubOffersPlayOrder: Boolean, shuffle: Boolean, order: List<Int>?, queueSize: Int): Boolean = false
+/**
+ * A publish waits while the state is shuffled with no order of exactly its rows (W1 review
+ * finding 3): `shuffle:true, order:null` made the hub send back an order of its own, which could
+ * cross this device's next publish and leave the two on different orders. The state gets its order
+ * in the same update as the mode; until it has one there is nothing true to publish.
+ */
+fun publishHeldForOrder(hubOffersPlayOrder: Boolean, shuffle: Boolean, order: List<Int>?, queueSize: Int): Boolean =
+	hubOffersPlayOrder && shuffle && !PlayOrder.isPermutation(order, queueSize)
 
 /**
  * The play order a controller shows for the session another device plays (`session.order`): only
