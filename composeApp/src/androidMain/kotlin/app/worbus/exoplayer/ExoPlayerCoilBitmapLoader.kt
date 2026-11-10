@@ -7,6 +7,8 @@ import androidx.core.net.toUri
 import androidx.media3.common.util.BitmapLoader
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSourceBitmapLoader
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.ktor.KtorDataSource
 import coil3.ImageLoader
 import coil3.disk.DiskCache
 import com.google.common.util.concurrent.ListenableFuture
@@ -16,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.guava.future
 import app.worbus.di.parseCoverArtUrl
+import app.worbus.di.sharedImageHttpClient
 import app.worbus.di.sizedCoverKey
 import app.worbus.di.withCoverSize
 import app.worbus.util.Logger
@@ -31,7 +34,12 @@ class ExoPlayerCoilBitmapLoader(
 ): BitmapLoader {
 	// Row 9: the notification's artwork is decoded to at most this, whatever the file on disk
 	// or the URL hold (it decoded the user's cover-art quality, 4096 px by default, uncapped).
+	// B-336 / B-363: fetched through the app's one image client, so the artwork request carries the
+	// Worbus user agent and, toward Navidrome, the custom headers (a bare DataSourceBitmapLoader sent
+	// `Dalvik/2.1.0` and none, and a header-gated proxy answered it with nothing).
 	private val bitmapLoader = DataSourceBitmapLoader.Builder(context)
+		// DefaultDataSource keeps file:// and content:// artwork working; only http(s) goes to the client.
+		.setDataSourceFactory(DefaultDataSource.Factory(context, KtorDataSource.Factory(sharedImageHttpClient)))
 		.setMaximumOutputDimension(NOTIFICATION_ARTWORK_MAX_PX)
 		.build()
 

@@ -37,8 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
-import coil3.network.NetworkHeaders
-import coil3.network.httpHeaders
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -114,10 +112,9 @@ fun CoverArt(
 
 	// Coil times its cross-fade on the wall clock: under reduced motion the cover is just there (L1-03).
 	val fadeMs = crossfadeMsFor(rememberReducedMotion(), crossfadeMs)
-	val model = remember(coverArtId, preferenceManager.customHeaders, fadeMs) {
-		val networkHeaders = NetworkHeaders.Builder().apply {
-			preferenceManager.customHeadersMap().forEach { (key, value) -> add(key, value) }
-		}.build()
+	// No headers here (B-363): the loader's one client adds the user's custom headers to every request
+	// toward Navidrome (`imageHttpClient`), this one and MiniPlayer's, the washes' and the notification's.
+	val model = remember(coverArtId, fadeMs) {
 		ImageRequest.Builder(coilPlatformContext)
 			.data(coverArtId?.let { sessionManager.getCoverArtUrl(it) })
 			.memoryCacheKey(coverArtId)
@@ -125,7 +122,6 @@ fun CoverArt(
 			.diskCachePolicy(CachePolicy.ENABLED)
 			.memoryCachePolicy(CachePolicy.ENABLED)
 			.crossfade(fadeMs)
-			.httpHeaders(networkHeaders)
 			.build()
 	}
 

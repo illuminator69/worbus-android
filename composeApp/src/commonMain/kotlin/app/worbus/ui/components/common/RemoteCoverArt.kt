@@ -29,12 +29,10 @@ import app.worbus.ui.util.placeholderBrush
 /**
  * Cover art from a third-party host, for a release the library does not have.
  *
- * Separate from [CoverArt] on purpose, and it must stay separate. [CoverArt]
- * attaches `preferenceManager.customHeadersMap()` to every request, because every
- * image it loads comes from the user's own Navidrome. Those headers are where a
- * reverse-proxy auth header or a Cloudflare Access token lives, so pointing that
- * composable at coverartarchive.org would hand the user's credentials to someone
- * else's server. This one sends no headers at all.
+ * Separate from [CoverArt], which signs a Navidrome cover id into a URL. The user's custom
+ * headers (a reverse proxy's auth, a Cloudflare Access token) are added by the image loader's one
+ * client, and only toward the Navidrome they were set for (`navidromeHeadersFor`, B-363): a cover
+ * on coverartarchive.org gets none, whichever composable asks.
  *
  * A miss is the normal case — plenty of obscure release-groups have no art in the
  * Archive — so both the empty and the failed states render the same plain

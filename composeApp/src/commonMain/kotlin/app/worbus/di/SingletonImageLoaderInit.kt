@@ -27,7 +27,8 @@ fun initializeSingletonImageLoader(context: CoilPlatformContext): ImageLoader {
 	val memoryCache = MemoryCache.Builder().maxSizePercent(context).build()
 	return ImageLoader.Builder(context)
 		.components {
-			add(KtorNetworkFetcherFactory())
+			// B-336 / B-363: the app's one image client (user agent and Navidrome headers set there).
+			add(KtorNetworkFetcherFactory(httpClient = { sharedImageHttpClient }))
 			// Row 9: Subsonic covers at the bucket their target needs (B-038's bare id kept).
 			add(CoverSizeInterceptor({ getDiskCache() }, { memoryCache }))
 		}
@@ -54,7 +55,7 @@ fun getStaticImageLoader(context: CoilPlatformContext): ImageLoader {
 		ImageLoader.Builder(context)
 			.serviceLoaderEnabled(false)
 			.components {
-				add(KtorNetworkFetcherFactory())
+				add(KtorNetworkFetcherFactory(httpClient = { sharedImageHttpClient }))
 				// Row 9: Subsonic covers at the bucket their target needs (B-038's bare id kept).
 				add(CoverSizeInterceptor({ getDiskCache() }, { memoryCache }))
 			}
