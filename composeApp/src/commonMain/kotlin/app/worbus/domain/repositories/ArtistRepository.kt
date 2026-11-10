@@ -122,7 +122,7 @@ class ArtistRepository(
 		if (artistDao.setArtistStarredAt(artist.id, now.toEpochMilliseconds()) == 0) {
 			artistDao.insertArtist(artist.toEntity().copy(starredAt = now))
 		}
-		syncManager.enqueueAction(SyncActionType.STAR, artist.id)
+		syncManager.enqueueAction(SyncActionType.STAR, artist.id, now)
 	}
 
 	suspend fun unstarArtist(artist: DomainArtist) {

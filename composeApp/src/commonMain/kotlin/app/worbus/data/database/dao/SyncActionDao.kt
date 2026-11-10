@@ -7,6 +7,11 @@ import androidx.room3.Transaction
 import kotlinx.coroutines.flow.Flow
 import app.worbus.data.database.entities.SyncActionEntity
 
+/**
+ * The offline write queue's OLD home, the cache database (B-373). Nothing is queued here any more:
+ * `RoomWriteQueueStore.moveLegacy` moves what an upgraded install still holds into `downloads.db`
+ * (`PendingWriteDao`) on the queue's first use. Kept so that move can read it.
+ */
 @Dao
 interface SyncActionDao {
 	@Insert

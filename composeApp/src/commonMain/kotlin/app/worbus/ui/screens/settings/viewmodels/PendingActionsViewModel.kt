@@ -20,12 +20,12 @@ import app.worbus.data.database.dao.AlbumDao
 import app.worbus.data.database.dao.ArtistDao
 import app.worbus.data.database.dao.PlaylistDao
 import app.worbus.data.database.dao.SongDao
-import app.worbus.data.database.dao.SyncActionDao
-import app.worbus.data.database.entities.SyncActionEntity
 import app.worbus.data.database.entities.SyncActionType
 import app.worbus.domain.manager.ConnectivityManager
 import app.worbus.domain.manager.PendingActionKind
+import app.worbus.domain.manager.QueuedWrite
 import app.worbus.domain.manager.SyncManager
+import app.worbus.domain.manager.WriteQueue
 import app.worbus.domain.manager.formatListenedAt
 import app.worbus.domain.manager.pendingActionKind
 import app.worbus.domain.manager.pendingActionTitle
@@ -35,7 +35,7 @@ import app.worbus.util.Logger
 /** One queued action as the browser shows it. [id] is the queue row's own key. */
 @Immutable
 data class PendingActionRow(
-	val id: Int,
+	val id: Long,
 	val kind: PendingActionKind,
 	/** The item's title out of Room, else its id. */
 	val title: String,
@@ -52,7 +52,7 @@ data class PendingActionRow(
  * something Room no longer holds still has to say which thing it was.
  *
  * **Removing a row and a sync draining the queue do not disturb each other.**
- * `SyncManager.processQueue` reads the queue once and then walks its own copy, deleting each row
+ * `WriteQueue.drain` reads the queue once and then walks its own copy, deleting each row
  * by id after it is sent. A delete from here is the same statement on one id: it cannot fail the
  * drain's delete of that row (deleting an absent id is a no-op), reorder what the drain holds, or
  * skip a row. The one consequence worth knowing: an action the drain has already read may still
@@ -60,7 +60,7 @@ data class PendingActionRow(
  * vanishing reads as "cancelled".
  */
 class PendingActionsViewModel(
-	private val syncDao: SyncActionDao,
+	private val writeQueue: WriteQueue,
 	private val songDao: SongDao,
 	private val albumDao: AlbumDao,
 	private val artistDao: ArtistDao,
@@ -71,7 +71,7 @@ class PendingActionsViewModel(
 	val isOnline = connectivityManager.isOnline
 
 	/** Null until Room has answered once: "nothing waiting" is only said of a queue that was read. */
-	val rows: StateFlow<List<PendingActionRow>?> = syncDao.observePendingActions()
+	val rows: StateFlow<List<PendingActionRow>?> = writeQueue.observe()
 		.map { actions -> rowsFor(actions) }
 		.flowOn(Dispatchers.IO)
 		.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -90,13 +90,13 @@ class PendingActionsViewModel(
 	private val _removeFailed = MutableStateFlow(false)
 	val removeFailed = _removeFailed.asStateFlow()
 
-	private suspend fun rowsFor(actions: List<SyncActionEntity>): List<PendingActionRow> {
+	private suspend fun rowsFor(actions: List<QueuedWrite>): List<PendingActionRow> {
 		val resolved = titlesFor(actions)
 		val zone = TimeZone.currentSystemDefault()
 		return actions.map { action ->
 			PendingActionRow(
 				id = action.id,
-				kind = pendingActionKind(action.actionType),
+				kind = pendingActionKind(action.type),
 				title = pendingActionTitle(action.itemId, resolved),
 				queuedAt = formatListenedAt(action.time.epochSeconds.toDouble(), zone)
 			)
@@ -112,11 +112,11 @@ class PendingActionsViewModel(
 	 * what earlier emissions resolved. An id is marked as asked only once its lookups ran, so a
 	 * failed read is tried again on the next emission.
 	 */
-	private suspend fun titlesFor(actions: List<SyncActionEntity>): Map<String, String> = titlesLock.withLock {
+	private suspend fun titlesFor(actions: List<QueuedWrite>): Map<String, String> = titlesLock.withLock {
 		val wanted = pendingTitlesToLookUp(actions.map { it.itemId }, titleIdsSeen)
 		if (wanted.isEmpty()) return@withLock titles.toMap()
 		val playlistIds = actions
-			.filter { it.actionType == SyncActionType.DELETE_PLAYLIST }
+			.filter { it.type == SyncActionType.DELETE_PLAYLIST }
 			.mapTo(mutableSetOf()) { it.itemId }
 			.intersect(wanted)
 		var unresolved = wanted - playlistIds
@@ -154,10 +154,10 @@ class PendingActionsViewModel(
 	 * A delete that fails leaves the action queued, and [removeFailed] makes the screen say so
 	 * rather than leave a tap with no visible result.
 	 */
-	fun remove(id: Int) {
+	fun remove(id: Long) {
 		viewModelScope.launch(Dispatchers.IO) {
 			_removeFailed.value = try {
-				syncDao.removeAction(id)
+				writeQueue.remove(id)
 				false
 			} catch (e: kotlin.coroutines.cancellation.CancellationException) {
 				throw e

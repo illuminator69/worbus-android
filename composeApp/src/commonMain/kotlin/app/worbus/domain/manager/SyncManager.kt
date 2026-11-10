@@ -18,7 +18,6 @@ import worbus.composeapp.generated.resources.Res
 import worbus.composeapp.generated.resources.info_status_idle
 import org.jetbrains.compose.resources.StringResource
 import app.worbus.data.database.dao.AlbumDao
-import app.worbus.data.database.dao.SyncActionDao
 import app.worbus.data.database.entities.SyncActionType
 import app.worbus.domain.repositories.DbRepository
 import app.worbus.util.Logger
@@ -42,7 +41,8 @@ data class SyncState(
 
 class SyncManager(
 	private val repository: DbRepository,
-	private val syncDao: SyncActionDao,
+	/** B-373: the offline write queue, in `downloads.db` (see WriteQueue.kt for its rules). */
+	private val writeQueue: WriteQueue,
 	private val albumDao: AlbumDao,
 	private val connectivityManager: ConnectivityManager,
 	private val sessionManager: SessionManager,
@@ -54,9 +54,6 @@ class SyncManager(
 	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 	private var syncJob: Job? = null
 	private val syncMutex = Mutex()
-
-	// Before `init`, which starts the coroutines that drain it.
-	private val writeQueue = WriteQueue(CacheWriteQueueStore(syncDao))
 
 	private val fullSyncThreshold = 1.hours
 
@@ -280,18 +277,25 @@ class SyncManager(
 		}
 	}
 
+	/** Logout (B-373): writes not yet sent belong to the account that made them, not the next one. */
+	suspend fun dropPendingWrites() = writeQueue.clear()
+
 	fun stopPeriodicSync() {
 		syncJob?.cancel()
 		scanWatchJob?.cancel()
 		_syncState.value = SyncState(isSyncing = false)
 	}
 
+	/**
+	 * Queue a write and send what the queue holds. [time] is when the user did it: a scrobble goes
+	 * out with it (rule 4), so a scrobble's caller passes the moment of the listen, not "now" after
+	 * a failed attempt; a star's is the star's own time, which a pull's overlay writes back. The pass waits for the lock instead of giving up while a pull holds it: a write made
+	 * during a full pull used to wait for the next 15-minute cycle.
+	 */
 	fun enqueueAction(actionType: SyncActionType, itemId: String, time: Instant = Clock.System.now()) {
 		scope.launch {
 			writeQueue.enqueue(actionType, itemId, time)
-			if (!syncMutex.isLocked) {
-				syncMutex.withLock { processQueue() }
-			}
+			syncMutex.withLock { processQueue() }
 		}
 	}
 
@@ -353,6 +357,8 @@ class SyncManager(
 	}
 
 	private suspend fun processQueue() {
+		// Offline (or "Offline mode" forced): nothing is sent; the queue is drained when it flips back.
+		if (!connectivityManager.isOnline.value) return
 		writeQueue.drain { write -> sendWrite(write) }
 	}
 

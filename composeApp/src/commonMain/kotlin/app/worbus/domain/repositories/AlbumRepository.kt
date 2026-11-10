@@ -131,7 +131,7 @@ class AlbumRepository(
 		if (albumDao.setAlbumStarredAt(album.id, now.toEpochMilliseconds()) == 0) {
 			albumDao.insertAlbum(album.toEntity().copy(starredAt = now))
 		}
-		syncManager.enqueueAction(SyncActionType.STAR, album.id)
+		syncManager.enqueueAction(SyncActionType.STAR, album.id, now)
 	}
 
 	suspend fun unstarAlbum(album: DomainAlbum) {

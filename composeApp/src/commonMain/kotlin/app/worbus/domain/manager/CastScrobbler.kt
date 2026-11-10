@@ -146,13 +146,16 @@ class CastScrobbler(
 
 	private fun submit(songId: String) {
 		if (!preferenceManager.enableScrobbling) return
+		// The listen's time, taken now: a queued scrobble goes out with it (B-373 rule 4), not with the
+		// moment a failed attempt gave up (up to a connect timeout later) or the queue was drained.
+		val listenedAt = Clock.System.now()
 		scope.launch(Dispatchers.IO) {
 			// Same offline behaviour as the local scrobbler: queue it rather than lose it.
 			if (connectivityManager.isOnline.value) {
-				runCatching { sessionManager.api.scrobble(songId, submission = true) }
-					.onFailure { syncManager.enqueueAction(SyncActionType.SCROBBLE, songId) }
+				runCatching { sessionManager.api.scrobble(songId, submission = true, time = listenedAt) }
+					.onFailure { syncManager.enqueueAction(SyncActionType.SCROBBLE, songId, listenedAt) }
 			} else {
-				syncManager.enqueueAction(SyncActionType.SCROBBLE, songId)
+				syncManager.enqueueAction(SyncActionType.SCROBBLE, songId, listenedAt)
 			}
 		}
 	}

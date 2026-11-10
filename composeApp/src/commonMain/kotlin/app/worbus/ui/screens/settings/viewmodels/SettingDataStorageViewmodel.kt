@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import app.worbus.domain.manager.SyncManager
-import app.worbus.data.database.dao.SyncActionDao
+import app.worbus.domain.manager.WriteQueue
 import app.worbus.domain.manager.ConnectivityManager
 import app.worbus.domain.manager.DownloadManager
 import app.worbus.domain.manager.rebuildLibrary
@@ -19,7 +19,7 @@ import app.worbus.domain.repositories.DbRepository
 class SettingsDataStorageViewModel(
 	private val syncManager: SyncManager,
 	private val dbRepository: DbRepository,
-	private val syncDao: SyncActionDao,
+	private val writeQueue: WriteQueue,
 	private val downloadManager: DownloadManager,
 	connectivityManager: ConnectivityManager
 ) : ViewModel() {
@@ -53,7 +53,7 @@ class SettingsDataStorageViewModel(
 	 */
 	private fun loadPendingActions() {
 		viewModelScope.launch(Dispatchers.IO) {
-			syncDao.observePendingActions().collect { pendingActionCount.value = it.size }
+			writeQueue.observe().collect { pendingActionCount.value = it.size }
 		}
 	}
 
@@ -66,10 +66,9 @@ class SettingsDataStorageViewModel(
 			// The pull starts after the wipe (rebuildLibrary), not beside it.
 			rebuildLibrary(
 				stopSync = syncManager::stopPeriodicSync,
-				wipe = {
-					dbRepository.removeEverything()
-					pendingActionCount.value = 0
-				},
+				// B-373: the cached library only. Writes the server has not had survive it, and the
+				// pull that follows applies them over what it reads.
+				wipe = { dbRepository.removeEverything() },
 				sync = syncManager::triggerManualSync
 			)
 		}
@@ -77,7 +76,7 @@ class SettingsDataStorageViewModel(
 
 	fun removeAllActions() {
 		viewModelScope.launch(Dispatchers.IO) {
-			syncDao.clearAllActions()
+			writeQueue.clear()
 			pendingActionCount.value = 0
 		}
 	}

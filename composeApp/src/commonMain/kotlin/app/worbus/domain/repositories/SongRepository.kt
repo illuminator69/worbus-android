@@ -133,7 +133,7 @@ class SongRepository(
 		if (songDao.setSongStarredAt(song.id, now.toEpochMilliseconds()) == 0) {
 			songDao.insertSong(song.toEntity().copy(starredAt = now))
 		}
-		syncManager.enqueueAction(SyncActionType.STAR, song.id)
+		syncManager.enqueueAction(SyncActionType.STAR, song.id, now)
 		_starChanges.tryEmit(StarChange(song.id, starred = true))
 	}
 

@@ -288,9 +288,38 @@ val MIGRATION_DOWNLOAD_4_5 = object : Migration(4, 5) {
 }
 
 /**
+ * The offline write queue's table (B-373). Must equal Room's generated `6.json`
+ * (`DownloadMigration56Test` runs it and compares).
+ */
+internal val PENDING_WRITE_TABLE_SQL = listOf(
+	"CREATE TABLE IF NOT EXISTS `PendingWriteEntity` (" +
+		"`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+		"`actionType` TEXT NOT NULL, " +
+		"`itemId` TEXT NOT NULL, " +
+		"`timeMs` INTEGER NOT NULL, " +
+		"`refusals` INTEGER NOT NULL, " +
+		"`lastError` TEXT, " +
+		"`legacyId` INTEGER)",
+	"CREATE INDEX IF NOT EXISTS `index_PendingWriteEntity_itemId` ON `PendingWriteEntity` (`itemId`)",
+	"CREATE UNIQUE INDEX IF NOT EXISTS `index_PendingWriteEntity_legacyId` ON `PendingWriteEntity` (`legacyId`)"
+)
+
+/**
+ * v5 → v6: the offline write queue moves out of the cache database (B-373) into this one, which is
+ * never dropped. A new, empty table; the rows still in the cache's `SyncActionEntity` are moved by
+ * `WriteQueue` on its first use (one transaction, idempotent through `legacyId`), not here: a
+ * migration of one database cannot read the other.
+ */
+val MIGRATION_DOWNLOAD_5_6 = object : Migration(5, 6) {
+	override suspend fun migrate(connection: SQLiteConnection) {
+		PENDING_WRITE_TABLE_SQL.forEach { connection.execSQL(it) }
+	}
+}
+
+/**
  * Every `downloads.db` migration, oldest first: a chain from 3 to [DownloadDatabase]'s version
  * with no gap (B-365). The database has no destructive fallback, so a version with no path here
  * stops the app at open instead of erasing every download record; `DownloadMigrationChainTest`
  * fails first, when the version moves without a migration.
  */
-val DOWNLOAD_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_DOWNLOAD_3_4, MIGRATION_DOWNLOAD_4_5)
+val DOWNLOAD_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_DOWNLOAD_3_4, MIGRATION_DOWNLOAD_4_5, MIGRATION_DOWNLOAD_5_6)

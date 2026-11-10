@@ -13,6 +13,7 @@ import app.worbus.data.database.dao.SongDao
 import app.worbus.data.database.mappers.toDomainModel
 import app.worbus.data.database.mappers.toEntity
 import app.worbus.domain.manager.SessionManager
+import app.worbus.domain.manager.WriteQueue
 import app.worbus.domain.models.DomainAlbum
 import app.worbus.domain.models.DomainPlaylist
 import app.worbus.domain.models.DomainSongCollection
@@ -23,7 +24,9 @@ class CollectionRepository(
 	private val playlistDao: PlaylistDao,
 	private val songDao: SongDao,
 	private val dbRepository: DbRepository,
-	private val sessionManager: SessionManager
+	private val sessionManager: SessionManager,
+	/** B-373: a refresh is a pull, and must not write over a change the server has not had. */
+	private val writeQueue: WriteQueue
 ) {
 	suspend fun getLocalData(collectionId: String): DomainSongCollection {
 		return albumDao.getAlbumById(collectionId)?.toDomainModel()
@@ -35,8 +38,9 @@ class CollectionRepository(
 		when (val collection = getLocalData(collectionId)) {
 			is DomainAlbum -> {
 				val album = sessionManager.api.getAlbum(collection.id)
-				songDao.updateSongsByAlbumId(album.id, album.songs.map { it.toEntity() })
-				albumDao.insertAlbum(album.toEntity())
+				val overlay = writeQueue.overlay()
+				songDao.updateSongsByAlbumId(album.id, album.songs.map { overlay.song(it.toEntity()) })
+				albumDao.insertAlbum(overlay.album(album.toEntity()))
 				albumDao.getAlbumById(album.id)!!.toDomainModel()
 			}
 

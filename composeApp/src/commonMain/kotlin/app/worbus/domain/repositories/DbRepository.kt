@@ -38,7 +38,6 @@ import app.worbus.data.database.dao.LyricDao
 import app.worbus.data.database.dao.PlaylistDao
 import app.worbus.data.database.dao.RadioDao
 import app.worbus.data.database.dao.SongDao
-import app.worbus.data.database.dao.SyncActionDao
 import app.worbus.data.database.entities.AlbumEntity
 import app.worbus.data.database.entities.ArtistEntity
 import app.worbus.data.database.entities.PlaylistEntity
@@ -49,6 +48,7 @@ import app.worbus.data.database.mappers.toEntity
 import app.worbus.domain.manager.NotificationIds
 import app.worbus.domain.manager.NotificationManager
 import app.worbus.domain.manager.SessionManager
+import app.worbus.domain.manager.WriteQueue
 import app.worbus.domain.models.DomainArtist
 import app.worbus.util.Logger
 import kotlin.coroutines.cancellation.CancellationException
@@ -65,7 +65,8 @@ class DbRepository(
 	private val artistDao: ArtistDao,
 	private val radioDao: RadioDao,
 	private val lyricDao: LyricDao,
-	private val syncDao: SyncActionDao,
+	/** B-373: not wiped here; read so a pull never writes over a change the server has not had. */
+	private val writeQueue: WriteQueue,
 	private val sessionManager: SessionManager,
 	private val notificationManager: NotificationManager,
 	private val lbIndexDao: LbIndexDao
@@ -100,7 +101,8 @@ class DbRepository(
 		artistDao.clearAllArtists()
 		radioDao.clearAllRadios()
 		lyricDao.clearAllLyrics()
-		syncDao.clearAllActions()
+		// Not the offline write queue (B-373): it is not cache, the server does not have it yet, and it
+		// lives in downloads.db. A logout clears it (LoginManager.logout).
 		// The lb-bot index mirror and response cache: lb-bot data about THIS user's library, so
 		// it goes with it. The next sync starts a fresh mirror from seq 0 under whatever epoch
 		// lb-bot answers.
@@ -319,8 +321,9 @@ class DbRepository(
 					}
 
 					if (albumBatch.size >= dbChunkSize || songBatch.size >= 1500) {
-						albumDao.insertAlbums(albumBatch)
-						songDao.insertSongs(songBatch)
+						val overlay = writeQueue.overlay()
+						albumDao.insertAlbums(albumBatch.map(overlay::album))
+						songDao.insertSongs(songBatch.map(overlay::song))
 
 						finalSongsSynced += songBatch.size
 						albumBatch.clear()
@@ -329,8 +332,9 @@ class DbRepository(
 				}
 
 				if (albumBatch.isNotEmpty() || songBatch.isNotEmpty()) {
-					if (albumBatch.isNotEmpty()) albumDao.insertAlbums(albumBatch)
-					if (songBatch.isNotEmpty()) songDao.insertSongs(songBatch)
+					val overlay = writeQueue.overlay()
+					if (albumBatch.isNotEmpty()) albumDao.insertAlbums(albumBatch.map(overlay::album))
+					if (songBatch.isNotEmpty()) songDao.insertSongs(songBatch.map(overlay::song))
 					finalSongsSynced += songBatch.size
 				}
 			}
@@ -418,8 +422,9 @@ class DbRepository(
 		}
 		if (albums.isEmpty()) error("none of ${wanted.size} album(s) could be fetched")
 		val entities = albums.map { it.toEntities(it) }
-		albumDao.insertAlbums(entities.map { it.first })
-		entities.flatMap { it.second }.chunked(1500).forEach { songDao.insertSongs(it) }
+		val overlay = writeQueue.overlay()
+		albumDao.insertAlbums(entities.map { overlay.album(it.first) })
+		entities.flatMap { it.second }.map(overlay::song).chunked(1500).forEach { songDao.insertSongs(it) }
 		Logger.i("DbRepository", "- Targeted sync: ${albums.size} album(s)")
 		albums.size
 	}
@@ -616,8 +621,9 @@ class DbRepository(
 		val songIds = songEntities.map { it.songId }.toSet()
 
 		if (songEntities.isNotEmpty()) {
+			val overlay = writeQueue.overlay()
 			songEntities.chunked(dbChunkSize).forEach { chunk ->
-				songDao.insertSongs(chunk)
+				songDao.insertSongs(chunk.map(overlay::song))
 			}
 
 			val crossRefs = songEntities.mapIndexed { index, it ->
@@ -672,7 +678,8 @@ class DbRepository(
 		if (!artistListMayReplace(listed.size, held)) {
 			error("the server listed no artists; keeping the $held in the library")
 		}
-		listed.chunked(dbChunkSize).forEach { chunk -> artistDao.insertArtists(chunk) }
+		val overlay = writeQueue.overlay()
+		listed.map(overlay::artist).chunked(dbChunkSize).forEach { chunk -> artistDao.insertArtists(chunk) }
 		artistDao.deleteObsoleteArtists(listed.map { it.artistId }.toSet())
 	}
 

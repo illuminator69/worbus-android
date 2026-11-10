@@ -35,6 +35,10 @@ import app.worbus.domain.manager.SnackBarManager
 import app.worbus.domain.manager.StationManager
 import app.worbus.domain.manager.MoodManager
 import app.worbus.domain.manager.SyncManager
+import app.worbus.domain.manager.WriteQueue
+import app.worbus.domain.manager.RoomWriteQueueStore
+import app.worbus.data.database.dao.PendingWriteDao
+import app.worbus.data.database.dao.SyncActionDao
 import app.worbus.ui.util.AmbientColorHolder
 import app.worbus.ui.util.CoverSeedPrefetcher
 import app.worbus.ui.util.CoverSeedStore
@@ -55,6 +59,9 @@ val managerModule = module {
 	// I-043: fills the store ahead of need (tiles on screen, the next songs).
 	single { CoverSeedPrefetcher(get(), get(), get()) }
 	singleOf(::SleepTimerManager)
+	// B-373: the offline write queue, in downloads.db; the cache's old SyncActionEntity rows are moved
+	// over on its first use. Read by SyncManager, DbRepository, CollectionRepository and two settings pages.
+	single { WriteQueue(RoomWriteQueueStore(get<PendingWriteDao>(), get<SyncActionDao>())) }
 	// startPeriodicSync() does nothing without a session (B-098); a login starts it after its pull.
 	single(createdAtStart = true) {
 		SyncManager(get(), get(), get(), get(), get(), get(), get(), get(), get()).apply {

@@ -247,6 +247,7 @@ class LoginManager(
 		nativeApi.forget()
 		scope.launch {
 			repository.removeEverything()
+			syncManager.dropPendingWrites()
 		}
 	}
 }

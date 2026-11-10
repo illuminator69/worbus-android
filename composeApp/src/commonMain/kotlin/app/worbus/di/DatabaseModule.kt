@@ -18,4 +18,6 @@ val databaseModule = module {
 	single { get<CacheDatabase>().savedQueueDao() }
 	single { get<CacheDatabase>().lbIndexDao() }
 	single { get<DownloadDatabase>().downloadDao() }
+	// B-373: the offline write queue lives in downloads.db, which is never dropped.
+	single { get<DownloadDatabase>().pendingWriteDao() }
 }
