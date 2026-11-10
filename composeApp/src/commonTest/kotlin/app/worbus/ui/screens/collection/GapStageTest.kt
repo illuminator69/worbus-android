@@ -121,6 +121,30 @@ class GapStageTest {
 		assertIs<GapStage.Attention>(gapStage(input(gap = awaiting)))
 	}
 
+	/*
+	 * B-231, the controller's ruling (2026-11-10, option a): PROTOCOL §15.2 is right. A pending match
+	 * (`picking` with a `downloaded` track) makes Open in lb-bot prominent but, unlike a stalled
+	 * placement, still offers search, fetch and Auto for the tracks that are not `downloaded`.
+	 */
+	@Test
+	fun aPendingMatchStillOffersSearchFetchAndAutoForTheTracksNotDownloaded() {
+		val tracks = listOf(track(1, "present"), track(2, "downloaded"), track(3, "missing"))
+		val awaiting = gap(status = "picking", tracks = tracks)
+		assertEquals(GapStage.Folded(1), gapStage(input(gap = awaiting)), "the line counts what can still be fetched")
+		assertEquals(GapStage.Tracks(listOf(track(3, "missing")), 3), gapStage(input(gap = awaiting, view = GapView.TRACKS)))
+		assertEquals(GapStage.Searching, gapStage(input(gap = awaiting, view = GapView.SOURCES)))
+		assertEquals(
+			GapStage.Choosing(listOf(good), 0),
+			gapStage(input(gap = gap(status = "picking", tracks = tracks, sources = listOf(good)), view = GapView.SOURCES))
+		)
+	}
+
+	@Test
+	fun aPendingMatchWithNothingLeftToFetchIsLbBotsToSortOut() {
+		val allHere = gap(status = "picking", tracks = listOf(track(1, "present"), track(2, "downloaded")))
+		assertIs<GapStage.Attention>(gapStage(input(gap = allHere, view = GapView.SOURCES)))
+	}
+
 	@Test
 	fun theSourcesViewSearchesThenChoosesPreselectingOnlyASafeSource() {
 		assertEquals(GapStage.Searching, gapStage(input(view = GapView.SOURCES)))
