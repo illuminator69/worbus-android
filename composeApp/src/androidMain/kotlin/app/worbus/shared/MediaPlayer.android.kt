@@ -1716,13 +1716,14 @@ class AndroidMediaPlayerViewModel(
 					?: PlayOrder.currentFirst(mediaItems.size, index)
 			_uiState.update { it.copy(playOrder = order?.takeIf { o -> PlayOrder.isPermutation(o, it.queue.size) }) }
 			pendingPlayOrder = order
+			// The mode before the items: the items' listeners run inline and read it, and in queue
+			// order they would take the controller's masked timeline for the order.
+			player.shuffleModeEnabled = state.isShuffleEnabled
 
 			// B-155 (cold start): the items, the index and the position in ONE call. A bare
 			// setMediaItems(items) put the player on the FIRST song until the seekTo below it, and
 			// the restored state passed through that song for as long as the restore took.
 			player.setMediaItems(mediaItems, index, position)
-
-			player.shuffleModeEnabled = state.isShuffleEnabled
 			order?.let { sendPlayOrder(it) }
 			player.repeatMode = state.repeatMode
 			player.playbackParameters = PlaybackParameters(state.playbackSpeed)
