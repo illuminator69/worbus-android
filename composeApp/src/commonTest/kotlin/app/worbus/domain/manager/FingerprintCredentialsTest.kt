@@ -13,13 +13,20 @@ import kotlin.test.assertTrue
 class FingerprintCredentialsTest {
 	@Test
 	fun theDirectRouteKeepsTheAccountOutOfTheQuery() {
-		val query = fingerprintQuery(viaHub = false, count = 50, user = "alice", password = "hunter2")
+		val query = fingerprintQuery(viaHub = false, count = 50)
 		assertTrue(query.none { (_, value) -> value == "hunter2" }, "no password in the query: $query")
 		assertTrue(query.none { (name, _) -> name.startsWith("navidrome_") }, "no account in the query: $query")
 	}
 
 	@Test
 	fun theHubRouteSendsOnlyTheCount() {
-		assertEquals(listOf("n" to "50"), fingerprintQuery(viaHub = true, count = 50, user = "alice", password = "hunter2"))
+		assertEquals(listOf("n" to "50"), fingerprintQuery(viaHub = true, count = 50))
+	}
+
+	@Test
+	fun theDirectRouteCarriesTheAccountInTheBody() {
+		val body = fingerprintBody(count = 50, user = "alice", password = "hunter2")
+		assertEquals(FingerprintRequest(50, "alice", "hunter2"), body)
+		assertTrue("hunter2" !in body.toString(), "the body prints without the password: $body")
 	}
 }

@@ -151,12 +151,22 @@ class AudioMuseManager(
 		if (!fingerprintRouteAllowed(ep.viaHub, hubAuth.boundToWorbusServer)) return emptyList()
 
 		return try {
-			val results: List<FingerprintItem> =
-				client.get(ep.url("/sonic/fingerprint", "/api/sonic_fingerprint/generate")) {
+			val url = ep.url("/sonic/fingerprint", "/api/sonic_fingerprint/generate")
+			val query = fingerprintQuery(ep.viaHub, count)
+			// B-359: direct, the account goes in a JSON body (AudioMuse reads the same fields from a
+			// POST), never in the URL, where AudioMuse's and any proxy's access log keep it.
+			val results: List<FingerprintItem> = if (ep.viaHub) {
+				client.get(url) {
 					header("Authorization", "Bearer ${ep.token}")
-					fingerprintQuery(ep.viaHub, count, settings.getString("username", ""), secrets.navidromePassword)
-						.forEach { (name, value) -> parameter(name, value) }
+					query.forEach { (name, value) -> parameter(name, value) }
 				}.body()
+			} else {
+				client.post(url) {
+					header("Authorization", "Bearer ${ep.token}")
+					contentType(ContentType.Application.Json)
+					setBody(fingerprintBody(count, settings.getString("username", ""), secrets.navidromePassword))
+				}.body()
+			}
 			results.map { it.itemId }
 		} catch (e: Exception) {
 			Logger.e("AudioMuseManager", "sonic fingerprint failed", e)
@@ -361,15 +371,28 @@ data class ClapStats(
 )
 
 /**
- * The fingerprint call's query. Through the hub only `n`: the hub adds the Navidrome account
- * server-side. Direct, the core reads the listening history of the account it is given, so the
- * name and password go with it.
+ * The fingerprint call's query: only `n`, on either route. Through the hub, the hub adds the
+ * Navidrome account server-side; direct, it travels in [fingerprintBody] (B-359). Nothing secret
+ * goes in a URL.
  */
-internal fun fingerprintQuery(viaHub: Boolean, count: Int, user: String, password: String): List<Pair<String, String>> =
-	buildList {
-		add("n" to count.toString())
-		if (!viaHub) {
-			add("navidrome_user" to user)
-			add("navidrome_password" to password)
-		}
-	}
+internal fun fingerprintQuery(viaHub: Boolean, count: Int): List<Pair<String, String>> =
+	if (viaHub) listOf("n" to count.toString()) else emptyList()
+
+/**
+ * The direct route's POST body. AudioMuse's core reads the listening history of the account it is
+ * given (`navidrome_user` / `navidrome_password`, the same names as its GET query) and falls back
+ * to its own configured account when they are absent; measured in AudioMuse 3.7.1's
+ * `app_sonic_fingerprint.py`, 2026-11-10.
+ */
+internal fun fingerprintBody(count: Int, user: String, password: String): FingerprintRequest =
+	FingerprintRequest(n = count, navidromeUser = user, navidromePassword = password)
+
+@Serializable
+data class FingerprintRequest(
+	val n: Int,
+	@SerialName("navidrome_user") val navidromeUser: String,
+	@SerialName("navidrome_password") val navidromePassword: String
+) {
+	// Never print the password, whoever logs this.
+	override fun toString(): String = "FingerprintRequest(n=$n, navidromeUser=$navidromeUser, navidromePassword=***)"
+}
