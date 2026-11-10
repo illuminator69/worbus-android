@@ -124,4 +124,18 @@ class HubPlayOrderTest {
 		assertFalse(publishesWhilePaused(true, activeId = "me", myId = "me", holdsSessionQueue = false))
 		assertTrue(publishesWhilePaused(true, activeId = "me", myId = "me", holdsSessionQueue = true))
 	}
+
+	@Test
+	fun aLoadArrivingAtTheActiveDeviceStopsItsOldQueuePublishing() {
+		// Review 4: a do:load reaching a device that is ALREADY active (a controller's new queue,
+		// ruling 2) left it "holding the session's queue" from the old one; a load slower than the
+		// 2 s quiet window could let a paused emission publish the old queue, which the hub took.
+		assertFalse(holdsSessionQueueAfter(true, SessionQueueEvent.LoadArrived))
+		assertTrue(holdsSessionQueueAfter(false, SessionQueueEvent.LoadApplied))
+		assertFalse(holdsSessionQueueAfter(true, SessionQueueEvent.LoadFailed))
+		assertTrue(holdsSessionQueueAfter(false, SessionQueueEvent.QueueChangedApplied))
+		assertTrue(holdsSessionQueueAfter(false, SessionQueueEvent.PublishedPlaying))
+		assertFalse(holdsSessionQueueAfter(true, SessionQueueEvent.AnotherActive))
+		assertFalse(holdsSessionQueueAfter(true, SessionQueueEvent.Released))
+	}
 }

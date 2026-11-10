@@ -2210,7 +2210,9 @@ class HubManager(
 	private fun applySession(obj: JsonObject, keepPins: Boolean = true) {
 		_activeDeviceId.value =
 			obj["activeDeviceId"]?.jsonPrimitive?.contentOrNullSafe()
-		if (_activeDeviceId.value == null || _activeDeviceId.value != _myDeviceId.value) holdsSessionQueue = false
+		if (_activeDeviceId.value == null || _activeDeviceId.value != _myDeviceId.value) {
+			holdsSessionQueue = holdsSessionQueueAfter(holdsSessionQueue, SessionQueueEvent.AnotherActive)
+		}
 		val now = nowMs()
 		val snapshot = RemoteSessionState(
 			tracks = obj["queue"]?.asObjectList()?.mapNotNull { t ->
@@ -2414,6 +2416,8 @@ class HubManager(
 						return
 					}
 					val play = msg["play"]?.jsonPrimitive?.booleanOrNull ?: true
+					// The player holds its previous queue until this load is applied (review 4).
+					holdsSessionQueue = holdsSessionQueueAfter(holdsSessionQueue, SessionQueueEvent.LoadArrived)
 					// W1: the session's shuffle and order, adopted verbatim; pre-set as published so
 					// adopting them is not echoed back.
 					val adopt = directivePlayOrder(msg, hubOffers(HUB_FEATURE_PLAY_ORDER))
@@ -2428,7 +2432,9 @@ class HubManager(
 					// A superseded load has no standing to answer for a queue it no longer owns.
 					if (outcome.error == "superseded by a newer load") return
 					sendLoaded(outcome.ok, outcome.error, transferId)
-					holdsSessionQueue = outcome.ok
+					holdsSessionQueue = holdsSessionQueueAfter(
+						holdsSessionQueue, if (outcome.ok) SessionQueueEvent.LoadApplied else SessionQueueEvent.LoadFailed
+					)
 					if (!outcome.ok) {
 						Logger.w("HubManager", "do:load failed: ${outcome.error}")
 						echo = afterFailedLoad(transferId, index, positionMs, songs)
@@ -2466,7 +2472,7 @@ class HubManager(
 					// Edits the queue around the current track without restarting
 					// it (falls back to a reload when the current track changed).
 					mediaPlayer.awaitRemoteQueueReconcile(songs, index, adopt.shuffle, adopt.order)
-					holdsSessionQueue = true
+					holdsSessionQueue = holdsSessionQueueAfter(holdsSessionQueue, SessionQueueEvent.QueueChangedApplied)
 					expectIndex = index
 				}
 
@@ -2502,7 +2508,7 @@ class HubManager(
 					// at the spot these two name, so they are read once the pause has run. They
 					// used to leave before it, with the player still moving.
 					mediaPlayer.awaitRemotePause()
-					holdsSessionQueue = false
+					holdsSessionQueue = holdsSessionQueueAfter(holdsSessionQueue, SessionQueueEvent.Released)
 					// We're no longer the active device; the next time we claim it, the
 					// guards must not still describe this handed-off session.
 					resetReporterGuards()
@@ -3050,7 +3056,7 @@ class HubManager(
 			lastQueueSig = sig
 			publishedNonEmptyQueue = true
 			// Its own queue is the session's from this publish on (a paused one needs it already).
-			if (!state.isPaused) holdsSessionQueue = true
+			if (!state.isPaused) holdsSessionQueue = holdsSessionQueueAfter(holdsSessionQueue, SessionQueueEvent.PublishedPlaying)
 
 			// Remembered on the player, or the claim re-publish loop above would re-derive it every
 			// pass and — before the hub's broadcast round-trips back into the local index — could mint

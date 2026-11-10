@@ -115,3 +115,13 @@ fun mirrorPlayOrder(hubOffersPlayOrder: Boolean, activeDeviceCaps: Set<String>?,
  * has a paused active device publish.
  */
 fun publishRecheckAt(nowMs: Long, hubDrivenUntilMs: Long): Long? = hubDrivenUntilMs.takeIf { nowMs < it }
+
+/** What moves [holdsSessionQueue][publishesWhilePaused]: HubManager's events, in one rule. */
+enum class SessionQueueEvent { LoadArrived, LoadApplied, LoadFailed, QueueChangedApplied, PublishedPlaying, AnotherActive, Released }
+
+/** Whether this device's player holds the session's queue after [event]. */
+fun holdsSessionQueueAfter(holds: Boolean, event: SessionQueueEvent): Boolean = when (event) {
+	SessionQueueEvent.LoadArrived -> holds
+	SessionQueueEvent.LoadApplied, SessionQueueEvent.QueueChangedApplied, SessionQueueEvent.PublishedPlaying -> true
+	SessionQueueEvent.LoadFailed, SessionQueueEvent.AnotherActive, SessionQueueEvent.Released -> false
+}
