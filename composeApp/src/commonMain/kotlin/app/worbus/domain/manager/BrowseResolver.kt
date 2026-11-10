@@ -100,7 +100,7 @@ class BrowseResolver(
 			albumDao.searchAlbumsList(title.substringBefore(" (").substringBefore(" [").trim())
 				.firstOrNull { row ->
 					normalizeTitle(row.album.name.orEmpty()) == wantTitle &&
-						(wantArtist.isBlank() || artistsAgree(normalizeName(row.album.artistName.orEmpty()), wantArtist))
+						(wantArtist.isBlank() || sameArtist(row.album.artistName.orEmpty(), artist))
 				}
 				?.album?.albumId
 		}.getOrNull()
@@ -125,22 +125,11 @@ class BrowseResolver(
 		if (wantTitle.isBlank()) return null
 		return candidates
 			.filter { normalizeTitle(it.title) == wantTitle }
-			.filter { wantArtist.isBlank() || artistsAgree(normalizeName(it.artist), wantArtist) }
+			.filter { wantArtist.isBlank() || sameArtist(it.artist, artist) }
 			// Ownership first: it is a fact about the library rather than a text
 			// score, so it outranks anything MusicBrainz has to say.
 			.maxByOrNull { (if (it.releaseOwned) 1_000_000 else 0) + it.score }
 	}
-
-	/**
-	 * Two credits naming the same act.
-	 *
-	 * Equality is too strict in one direction only: MusicBrainz writes the full
-	 * credit ("Daft Punk feat. Julian Casablancas") where Deezer writes the act.
-	 * So a prefix on a **token** boundary counts, and an unrelated artist that
-	 * merely starts with the same letters does not.
-	 */
-	private fun artistsAgree(a: String, b: String): Boolean =
-		a == b || a.startsWith("$b ") || b.startsWith("$a ")
 
 	/** Lower-cased, punctuation-free, single-spaced. */
 	private fun normalizeName(value: String): String = value
@@ -165,3 +154,27 @@ class BrowseResolver(
 	private fun lucene(value: String): String =
 		value.replace("\\", "").replace("\"", "").trim()
 }
+
+/**
+ * Two credits naming the same act.
+ *
+ * Equality is too strict in one direction only: MusicBrainz writes the full
+ * credit ("Daft Punk feat. Julian Casablancas") where Deezer writes the act.
+ * So a prefix on a **token** boundary counts, and an unrelated artist that
+ * merely starts with the same letters does not.
+ */
+internal fun sameArtist(a: String, b: String): Boolean {
+	val x = creditKey(a)
+	val y = creditKey(b)
+	return x == y || x.startsWith("$y ") || y.startsWith("$x ")
+}
+
+/** Lower-cased, punctuation-free, single-spaced. */
+internal fun creditKey(value: String): String = value
+	.lowercase()
+	.map { if (it.isLetterOrDigit() || it.isWhitespace()) it else ' ' }
+	.joinToString("")
+	.split(" ")
+	.filter { it.isNotBlank() }
+	.joinToString(" ")
+
