@@ -19,7 +19,6 @@ import worbus.composeapp.generated.resources.info_status_idle
 import org.jetbrains.compose.resources.StringResource
 import app.worbus.data.database.dao.AlbumDao
 import app.worbus.data.database.dao.SyncActionDao
-import app.worbus.data.database.entities.SyncActionEntity
 import app.worbus.data.database.entities.SyncActionType
 import app.worbus.domain.repositories.DbRepository
 import app.worbus.util.Logger
@@ -55,6 +54,9 @@ class SyncManager(
 	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 	private var syncJob: Job? = null
 	private val syncMutex = Mutex()
+
+	// Before `init`, which starts the coroutines that drain it.
+	private val writeQueue = WriteQueue(CacheWriteQueueStore(syncDao))
 
 	private val fullSyncThreshold = 1.hours
 
@@ -286,7 +288,7 @@ class SyncManager(
 
 	fun enqueueAction(actionType: SyncActionType, itemId: String, time: Instant = Clock.System.now()) {
 		scope.launch {
-			syncDao.enqueue(SyncActionEntity(actionType = actionType, itemId = itemId, time = time))
+			writeQueue.enqueue(actionType, itemId, time)
 			if (!syncMutex.isLocked) {
 				syncMutex.withLock { processQueue() }
 			}
@@ -351,39 +353,26 @@ class SyncManager(
 	}
 
 	private suspend fun processQueue() {
-		val actions = syncDao.getPendingActions()
-		if (actions.isEmpty()) return
+		writeQueue.drain { write -> sendWrite(write) }
+	}
 
-		for (action in actions) {
-			try {
-				when (action.actionType) {
-					SyncActionType.STAR -> sessionManager.api.star(action.itemId)
-					SyncActionType.UNSTAR -> sessionManager.api.unstar(action.itemId)
-					SyncActionType.DELETE_PLAYLIST -> sessionManager.api.deletePlaylist(action.itemId)
-					SyncActionType.SCROBBLE -> sessionManager.api.scrobble(
-						action.itemId,
-						submission = true,
-						time = action.time // i'm sorry for you if this defaults to "now"
-					)
+	private suspend fun sendWrite(write: QueuedWrite) {
+		when (write.type) {
+			SyncActionType.STAR -> sessionManager.api.star(write.itemId)
+			SyncActionType.UNSTAR -> sessionManager.api.unstar(write.itemId)
+			SyncActionType.DELETE_PLAYLIST -> sessionManager.api.deletePlaylist(write.itemId)
+			SyncActionType.SCROBBLE -> sessionManager.api.scrobble(
+				write.itemId,
+				submission = true,
+				time = write.time // i'm sorry for you if this defaults to "now"
+			)
 
-					SyncActionType.STAR_0 -> sessionManager.api.setRating(action.itemId, 0)
-					SyncActionType.STAR_1 -> sessionManager.api.setRating(action.itemId, 1)
-					SyncActionType.STAR_2 -> sessionManager.api.setRating(action.itemId, 2)
-					SyncActionType.STAR_3 -> sessionManager.api.setRating(action.itemId, 3)
-					SyncActionType.STAR_4 -> sessionManager.api.setRating(action.itemId, 4)
-					SyncActionType.STAR_5 -> sessionManager.api.setRating(action.itemId, 5)
-				}
-
-				syncDao.removeAction(action.id)
-				Logger.i(
-					"SyncManager",
-					"Successfully synced ${action.actionType} for ${action.itemId}"
-				)
-
-			} catch (e: Exception) {
-				Logger.e("SyncManager", "Network failed. Action left in queue.", e)
-				break
-			}
+			SyncActionType.STAR_0 -> sessionManager.api.setRating(write.itemId, 0)
+			SyncActionType.STAR_1 -> sessionManager.api.setRating(write.itemId, 1)
+			SyncActionType.STAR_2 -> sessionManager.api.setRating(write.itemId, 2)
+			SyncActionType.STAR_3 -> sessionManager.api.setRating(write.itemId, 3)
+			SyncActionType.STAR_4 -> sessionManager.api.setRating(write.itemId, 4)
+			SyncActionType.STAR_5 -> sessionManager.api.setRating(write.itemId, 5)
 		}
 	}
 }
