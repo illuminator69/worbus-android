@@ -10,6 +10,7 @@ import worbus.composeapp.generated.resources.request_step_queued
 import worbus.composeapp.generated.resources.request_step_source_chosen
 import app.worbus.domain.manager.LbBotManager
 import app.worbus.domain.manager.LbFillEntry
+import app.worbus.domain.manager.LbFillStatus
 import app.worbus.domain.manager.LbGapSource
 import app.worbus.domain.manager.LbRelease
 import app.worbus.ui.components.common.FillButton
@@ -56,7 +57,13 @@ data class RequestInput(
 	val wishlistAvailable: Boolean,
 	val now: Long,
 	/** NB2: the hub calls lb-bot too old for this user (R26). */
-	val tooOld: Boolean = false
+	val tooOld: Boolean = false,
+	/**
+	 * B-396: lb-bot's own status for a fill of this release-group that this device did not start
+	 * (another device, or lb-bot's web page), read without a watch ([fillElsewhere]). Null when none
+	 * is running.
+	 */
+	val elsewhere: LbFillStatus? = null
 )
 
 enum class StepStatus { DONE, NOW, PENDING }
@@ -81,7 +88,15 @@ sealed interface RequestStage {
 	/** [preselected] only when [preselectedSource] found one safe to offer as the default. */
 	data class Choosing(val sources: List<LbGapSource>, val preselected: Int?) : RequestStage
 	data object Starting : RequestStage
-	data class Active(val view: FillPresentation, val steps: List<RequestStep>) : RequestStage
+	/**
+	 * A fill is running. [startedElsewhere] (B-396): it is not this device's (no ledger row here), so
+	 * the box shows its progress and offers nothing to press.
+	 */
+	data class Active(
+		val view: FillPresentation,
+		val steps: List<RequestStep>,
+		val startedElsewhere: Boolean = false
+	) : RequestStage
 	/** Settled, waiting on the user: a source to pick, or a match to sort out in lb-bot. */
 	data class Attention(val view: FillPresentation) : RequestStage
 	data class Failed(val view: FillPresentation) : RequestStage
@@ -201,3 +216,9 @@ fun requestActions(view: FillPresentation): List<FillButton> = ACTION_ORDER.filt
  */
 fun chooseEditionLineShown(arrivalWanted: Boolean, detailLoaded: Boolean, editionMbid: String): Boolean =
 	arrivalWanted && detailLoaded && editionMbid.isBlank()
+
+/**
+ * B-396 (the owner's ruling, 2026-11-12): the fill of [rgid] another device started, as lb-bot reports
+ * it. Seam: not read yet.
+ */
+fun fillElsewhere(rgid: String, views: Collection<LbFillStatus>): LbFillStatus? = null

@@ -22,6 +22,7 @@ import app.worbus.domain.manager.ConnectivityManager
 import app.worbus.domain.manager.FillActions
 import app.worbus.domain.manager.LbBotManager
 import app.worbus.domain.manager.LbCachePolicy
+import app.worbus.domain.manager.LbFillStatus
 import app.worbus.domain.manager.LbGapSource
 import app.worbus.domain.manager.LbMeta
 import app.worbus.domain.manager.LbOk
@@ -93,7 +94,9 @@ data class RequestUi(
 	/** Whether this release-group is on lb-bot's wishlist; null when unknown or unsupported. */
 	val wishlisted: Boolean? = null,
 	/** Statistics' Find sources asked for a search on arrival that has not started yet. */
-	val arrivalWanted: Boolean = false
+	val arrivalWanted: Boolean = false,
+	/** B-396: a fill of this release-group another device started, as lb-bot reports it ([fillElsewhere]). */
+	val elsewhere: LbFillStatus? = null
 )
 
 data class ExternalAlbumUi(
