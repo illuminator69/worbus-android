@@ -226,8 +226,20 @@ fun heldForMatch(previous: Set<String>, gap: LbGap?, fetching: Boolean = false):
 	else -> gap.tracks.filter { it.state == "downloaded" }.map(::gapTrackKey).toSet()
 }
 
-/** [GapStage.PickFailed] when lb-bot's source task ended in error and nothing newer is asked. */
-internal fun gapPickFailure(gap: LbGap, input: GapInput, searching: Boolean): GapStage.PickFailed? = null
+/**
+ * [GapStage.PickFailed] (fix round 5, "auto-pick ended in error"): lb-bot's latest source task for the
+ * group ended `error` with a sentence while the gap is still `picking`, nothing is searching or
+ * asked since, and the user has not dismissed that task. Read off the record's fields, never off its
+ * English label: a search and an auto-pick are both `source-search` tasks, so an errored search says
+ * its error the same way. In every view: the auto-pick leaves the box on the tracks, where "N tracks
+ * missing" alone read as if nothing had been tried.
+ */
+internal fun gapPickFailure(gap: LbGap, input: GapInput, searching: Boolean): GapStage.PickFailed? {
+	val task = gap.sourceTask ?: return null
+	if (searching || gap.status != "picking" || task.status != "error" || task.error.isBlank()) return null
+	if (task.id.isNotBlank() && task.id == input.dismissedPickTask) return null
+	return GapStage.PickFailed(task.error, task.id, gap.mp3WouldHelp)
+}
 
 /** The tracks the album still lacks, in tracklist order. */
 fun missingTracks(gap: LbGap): List<LbGapTrack> = gap.tracks.filter { it.state !in HELD_TRACK_STATES }
