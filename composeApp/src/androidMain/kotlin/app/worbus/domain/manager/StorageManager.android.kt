@@ -92,3 +92,6 @@ internal fun replaceAtomically(temp: File, target: File): Boolean {
  * mid-transfer leaves one, and nothing else removes it). Seam: removes nothing yet.
  */
 internal fun sweepScratchFiles(dir: File, before: Long): Int = 0
+
+/** Major 1: rename [from] to [to] only when [to] does not exist. Seam: moves nothing yet. */
+internal fun moveIfAbsent(from: File, to: File): Boolean = false
