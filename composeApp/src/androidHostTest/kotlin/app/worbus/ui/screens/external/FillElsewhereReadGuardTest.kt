@@ -39,4 +39,14 @@ class FillElsewhereReadGuardTest {
 		val request = vm.substringAfter("fun request(source: LbGapSource?").substringBefore("updateRequest { it.copy(starting = true")
 		assertTrue("elsewhere" in request, "request() starts nothing while another device's fill runs:\n$request")
 	}
+
+	@Test
+	fun itIsReadOnlyWhileThePageIsStarted() {
+		// Review nit: a page left in the back stack (its artist opened from it) kept reading every 10 s.
+		assertTrue("started.first { it }" in follow, "each read waits for the page to be started:\n$follow")
+		assertTrue("fun setStarted(started: Boolean)" in vm)
+		val screen = sourceFile("src/commonMain/kotlin/app/worbus/ui/screens/external/ExternalAlbumScreen.kt").readText()
+		assertTrue("repeatOnLifecycle(Lifecycle.State.STARTED)" in screen && "viewModel.setStarted(true)" in screen &&
+			"viewModel.setStarted(false)" in screen, "the screen says when it is started")
+	}
 }

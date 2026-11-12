@@ -144,6 +144,14 @@ class ArtistNameVectorsTest {
 		assertEquals(emptyList(), wrong)
 	}
 
+	@Test
+	fun aByteOrderMarkIsASpaceAsInJavaScript() {
+		// Review nit: JavaScript's `\s` matches U+FEFF and the JVM's `[\s\p{Z}]` does not. No shared row depends
+		// on it; this pins the spaced hyphen and the trailing bracket to the desktop's reading.
+		assertEquals(true, sameArtist("Lana Del Rey\uFEFF-\uFEFFNikki Lane", "Nikki Lane"))
+		assertEquals(true, sameArtist("BTS (방탄소년단)\uFEFF", "BTS"))
+	}
+
 	private fun esc(s: String): String = buildString {
 		append('"')
 		var i = 0

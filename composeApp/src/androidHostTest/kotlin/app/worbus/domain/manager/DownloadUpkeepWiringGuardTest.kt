@@ -54,4 +54,28 @@ class DownloadUpkeepWiringGuardTest {
 		assertTrue("insertDownload(DownloadEntity(" !in refetch && "DownloadStatus.QUEUED" !in refetch,
 			"the row stays DOWNLOADED on the old copy while the new one comes:\n$refetch")
 	}
+
+	// ---- the follow-up ---- //
+
+	@Test
+	fun theUpkeepKnowsWhoseItIsAndWhatPlays() {
+		val upkeep = module.substringAfter("DownloadUpkeep(").substringBefore("\n\t}\n")
+		assertTrue("owner = { get<SessionManager>().downloadOwner() }" in upkeep, upkeep)
+		assertTrue("memory = " in upkeep && "inUse = " in upkeep && "songsAt = " in upkeep, upkeep)
+		assertTrue("localUiState" in upkeep, "the LOCAL player's queue is what reads the files:\n$upkeep")
+		val session = sourceFile("src/commonMain/kotlin/app/worbus/domain/manager/SessionManager.kt").readText()
+		assertTrue("fun downloadOwner(): DownloadOwner?" in session)
+		val upkeepFile = sourceFile("src/commonMain/kotlin/app/worbus/domain/manager/DownloadUpkeep.kt").readText()
+		val record = upkeepFile.substringAfter("suspend fun recordFetched(").substringBefore("\n\t}\n")
+		assertTrue("owner()" in record && "server = " in record && "account = " in record, "a fetched file is recorded with its owner:\n$record")
+	}
+
+	@Test
+	fun aMoveIsTheRenameAndStartSweepsScratchFirst() {
+		val move = manager.substringAfter("override suspend fun move(").substringBefore("\n\t}\n")
+		assertTrue("moveDownload(" in move, move)
+		val init = manager.substringAfter("init {").substringBefore("private suspend fun backfillMissingFileSizes")
+		assertTrue(init.indexOf("sweepScratch") in 0 until init.indexOf("reconcileInterruptedDownloads()"),
+			"the sweep runs before anything is started again:\n$init")
+	}
 }
