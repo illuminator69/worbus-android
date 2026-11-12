@@ -84,8 +84,38 @@ class WorbusIdentityTest {
 		val agents = mainSources().flatMap { f ->
 			Regex("""agent\s*=\s*([^\n}]+)""").findAll(f.readText()).map { "${f.name}: ${it.groupValues[1].trim()}" }.toList()
 		}
-		assertEquals(10, agents.size, "the UserAgent sites: $agents")
+		assertTrue(agents.isNotEmpty(), "found the UserAgent sites")
 		assertTrue(agents.all { it.endsWith(": userAgent()") }, "every client says userAgent(): $agents")
+	}
+
+	/**
+	 * What [userAgentNamesWorbus]'s old count of ten stood for: every client the app builds names
+	 * Worbus. A count only noticed a site added or lost (the B-336 image client made it eleven);
+	 * a client built with no UserAgent at all sent Ktor's `ktor-client` and was never counted.
+	 * So every `HttpClient { … }` / `HttpClient(Engine) { … }` builder in the main sources must
+	 * install it.
+	 */
+	@Test
+	fun everyHttpClientTheAppBuildsNamesWorbus() {
+		val builders = mainSources().flatMap { f ->
+			val text = f.readText()
+			Regex("""\bHttpClient\s*(\(\w*\))?\s*\{""").findAll(text).map { m ->
+				val open = m.range.last
+				var depth = 0
+				var end = open
+				for (i in open until text.length) {
+					when (text[i]) {
+						'{' -> depth++
+						'}' -> if (--depth == 0) { end = i; break }
+					}
+				}
+				val line = text.substring(0, m.range.first).count { it == '\n' } + 1
+				"${f.name}:$line" to text.substring(open, end + 1)
+			}.toList()
+		}
+		assertTrue(builders.size >= 10, "found the client builders: ${builders.map { it.first }}")
+		val bare = builders.filterNot { (_, body) -> Regex("""install\(UserAgent\)\s*\{\s*agent\s*=\s*userAgent\(\)""").containsMatchIn(body) }
+		assertEquals(emptyList(), bare.map { it.first }, "a client built without the Worbus user agent")
 	}
 
 	@Test
