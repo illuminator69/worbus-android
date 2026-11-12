@@ -114,6 +114,96 @@ class ServerReachabilityTest {
 		assertEquals(listOf(true), seen.distinct(), "a read stall is a slow server, not a down one: $seen")
 	}
 
+	/**
+	 * Review (fix round) minor 3: a read stall is not a connect timeout because the word "connect" is
+	 * in the URL. Ktor writes the request URL into its read-timeout message, so a search for
+	 * "Disconnect" (and every request to a host named `*connect*`, the probe's included) read as
+	 * Navidrome gone. Classified by type, never by the message.
+	 */
+	@Test
+	fun aReadStallWhoseUrlSaysConnectLeavesItReachable() {
+		val impatient = HttpClient {
+			install(io.ktor.client.plugins.HttpTimeout) { socketTimeoutMillis = 300 }
+			reach.observe(this)
+		}
+		// The probe stalls the same way: only its type may say "down", and it does not.
+		reach.probe = { impatient.get("$base/rest/slow.view?c=connect") }
+		val seen = valuesDuring(settle = 2_500) {
+			val failure = runCatching { impatient.get("$base/rest/slow-search3.view?query=Disconnect") }.exceptionOrNull()
+			assertTrue(failure != null, "the stall timed out the request")
+			assertFalse(isServerDown(failure!!), "a read timeout naming 'Disconnect' in its URL: $failure")
+		}
+		assertEquals(listOf(true), seen.distinct(), "a read stall is a slow server, whatever its URL says: $seen")
+	}
+
+	@Test
+	fun aHostNamedConnectIsNotDownWhenItIsSlow() {
+		val connectHost = HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+			engine {
+				config {
+					dns(object : okhttp3.Dns {
+						override fun lookup(hostname: String) = listOf(java.net.InetAddress.getLoopbackAddress())
+					})
+				}
+			}
+			install(io.ktor.client.plugins.HttpTimeout) { socketTimeoutMillis = 300 }
+			reach.observe(this)
+		}
+		val url = "http://music.connect.lan:${server.address.port}/rest/slow.view"
+		reach.probe = { connectHost.get(url) }
+		val seen = valuesDuring(settle = 2_500) {
+			val failure = runCatching { connectHost.get(url) }.exceptionOrNull()
+			assertTrue(failure != null, "the stall timed out the request")
+		}
+		assertEquals(listOf(true), seen.distinct(), "a slow server on music.connect.lan is not a down one: $seen")
+	}
+
+	@Test
+	fun connectFailuresAreKnownByTheirType() {
+		assertTrue(isServerDown(io.ktor.client.network.sockets.ConnectTimeoutException("Connect timeout has expired [url=http://h/rest/ping.view]")))
+		assertTrue(isServerDown(java.net.ConnectException("Connection refused")))
+		assertTrue(isServerDown(java.net.UnknownHostException("music.example.lan")))
+		assertFalse(isServerDown(java.net.SocketTimeoutException("Socket timeout has expired [url=http://music.connect.lan/rest/search3.view?query=Disconnect, socket_timeout=300] ms")))
+		assertFalse(isServerDown(java.net.SocketTimeoutException("Read timed out")))
+	}
+
+	/**
+	 * Review (fix round) minor 4: the confirm's verdict was whichever report came last, so a failure
+	 * from a request that STARTED before the probe (a slow name lookup that began while Navidrome was
+	 * away) landing after the probe's answer took the app offline although Navidrome had answered.
+	 * Reports are ordered by when their request started.
+	 */
+	@Test
+	fun aLateFailureFromAnOlderRequestDoesNotUndoTheProbesAnswer() {
+		val slowLookup = HttpClient(io.ktor.client.engine.okhttp.OkHttp) {
+			engine {
+				config {
+					dns(object : okhttp3.Dns {
+						override fun lookup(hostname: String): List<java.net.InetAddress> {
+							Thread.sleep(700)
+							throw java.net.UnknownHostException(hostname)
+						}
+					})
+				}
+			}
+			reach.observe(this)
+		}
+		// The probe answers at once, then takes a while to finish (its body, here a delay): the old
+		// request's failure lands in between.
+		reach.probe = {
+			client.get("$base/rest/ping.view")
+			kotlinx.coroutines.delay(1_200)
+		}
+		val closed = java.net.ServerSocket(0).use { it.localPort }
+		val seen = valuesDuring(settle = 1_800) {
+			val old = CoroutineScope(Dispatchers.IO).launch { runCatching { slowLookup.get("http://navidrome.lan/rest/getAlbumList2.view") } }
+			kotlinx.coroutines.delay(150)
+			call("http://127.0.0.1:$closed/rest/ping.view")
+			old.join()
+		}
+		assertEquals(listOf(true), seen.distinct(), "the probe answered after the old request started: $seen")
+	}
+
 	/** A connection the server reset after it had answered: it was there, so it is not down. */
 	@Test
 	fun aResetMidAnswerLeavesItReachable() {
