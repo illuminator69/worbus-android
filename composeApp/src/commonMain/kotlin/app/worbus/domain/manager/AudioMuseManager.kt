@@ -161,11 +161,7 @@ class AudioMuseManager(
 					query.forEach { (name, value) -> parameter(name, value) }
 				}.body()
 			} else {
-				client.post(url) {
-					header("Authorization", "Bearer ${ep.token}")
-					contentType(ContentType.Application.Json)
-					setBody(fingerprintBody(count, settings.getString("username", ""), secrets.navidromePassword))
-				}.body()
+				directFingerprint(client, url, ep.token, count, settings.getString("username", ""), secrets.navidromePassword)
 			}
 			results.map { it.itemId }
 		} catch (e: Exception) {
@@ -396,3 +392,17 @@ data class FingerprintRequest(
 	// Never print the password, whoever logs this.
 	override fun toString(): String = "FingerprintRequest(n=$n, navidromeUser=$navidromeUser, navidromePassword=***)"
 }
+
+/** The direct fingerprint route (B-359): the account in a POST body, never the URL. */
+internal suspend fun directFingerprint(
+	client: HttpClient,
+	url: String,
+	token: String,
+	count: Int,
+	user: String,
+	password: String
+): List<FingerprintItem> = client.post(url) {
+	header("Authorization", "Bearer $token")
+	contentType(ContentType.Application.Json)
+	setBody(fingerprintBody(count, user, password))
+}.body()
