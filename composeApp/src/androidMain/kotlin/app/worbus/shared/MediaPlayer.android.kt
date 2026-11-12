@@ -143,6 +143,8 @@ import app.worbus.util.resolveGainMode
 import app.worbus.domain.models.displayName
 import app.worbus.di.isNavidromeUrl
 import app.worbus.domain.manager.ServerReachability
+import app.worbus.di.navidromeHeadersSource
+import app.worbus.di.navidromeHeaders
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService(), KoinComponent {
@@ -244,12 +246,9 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 			// false "offline" waited for the 30 s probe while songs streamed. Navidrome's requests
 			// only: a preview host refusing is not Navidrome down.
 			reachability.observe(this, onlyFor = { isNavidromeUrl(it, sessionManager.instanceUrl()) })
-			val customHeaders = preferenceManager.customHeadersMap()
-			if (customHeaders.isNotEmpty()) {
-				defaultRequest {
-					customHeaders.forEach { (key, value) -> header(key, value) }
-				}
-			}
+			// The custom headers toward Navidrome only, on every hop (review minor 4): they went to
+			// every host, an `ext:` preview's included, and followed any redirect.
+			navidromeHeaders(navidromeHeadersSource(sessionManager::instanceUrl, preferenceManager::customHeadersMap))
 		}
 		val httpDataSourceFactory =
 			ResumingDataSource.Factory(KtorDataSource.Factory(checkNotNull(streamingClient)))

@@ -35,6 +35,8 @@ import app.worbus.util.Logger
 import app.worbus.util.installSubsonicResponseRepair
 import okio.ByteString.Companion.encodeUtf8
 import kotlin.random.Random
+import app.worbus.di.navidromeHeadersSource
+import app.worbus.di.navidromeHeaders
 
 class SessionManager(
 	private val settings: Settings,
@@ -167,12 +169,10 @@ class SessionManager(
 				socketTimeoutMillis = 60_000
 			}
 
+			// The custom headers toward this client's Navidrome only, decided on every hop: a
+			// redirect off it does not carry them (review minor 4).
 			val customHeaders = preferenceManager.customHeadersMap()
-			if (customHeaders.isNotEmpty()) {
-				defaultRequest {
-					customHeaders.forEach { (key, value) -> header(key, value) }
-				}
-			}
+			if (customHeaders.isNotEmpty()) navidromeHeaders(navidromeHeadersSource({ instanceUrl }, { customHeaders }))
 		}
 	)
 
