@@ -479,9 +479,9 @@ internal suspend fun directFingerprint(
  * `503 {"code":"audiomuse_too_old","need":…}` is [FingerprintAnswer.AudioMuseTooOld]; any other
  * refusal (`400 bad_request`, `403 primary_only`, `503 busy`) is [FingerprintAnswer.Refused].
  */
-internal suspend fun hubFingerprint(client: HttpClient, url: String, bearer: String, count: Int): FingerprintAnswer {
+internal suspend fun hubFingerprint(client: HttpClient, url: String, token: String, count: Int): FingerprintAnswer {
 	val answer = client.get(url) {
-		header("Authorization", "Bearer $bearer")
+		header("Authorization", "Bearer $token")
 		fingerprintQuery(viaHub = true, count).forEach { (name, value) -> parameter(name, value) }
 	}
 	val status = answer.status.value
