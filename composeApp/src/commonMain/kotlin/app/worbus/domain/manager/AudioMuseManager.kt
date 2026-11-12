@@ -393,7 +393,12 @@ data class FingerprintRequest(
 	override fun toString(): String = "FingerprintRequest(n=$n, navidromeUser=$navidromeUser, navidromePassword=***)"
 }
 
-/** The direct fingerprint route (B-359): the account in a POST body, never the URL. */
+/**
+ * The direct fingerprint route (B-359): the account in a POST body, never the URL. An AudioMuse that
+ * answers the POST with 405 (no POST on that route: only 3.7.1 was read to take one, and no minimum
+ * version is documented) is asked again by GET with the count alone, so AudioMuse answers for its own
+ * configured account: the session's listening is lost for that server, its password never goes in a URL.
+ */
 internal suspend fun directFingerprint(
 	client: HttpClient,
 	url: String,
@@ -401,8 +406,15 @@ internal suspend fun directFingerprint(
 	count: Int,
 	user: String,
 	password: String
-): List<FingerprintItem> = client.post(url) {
-	header("Authorization", "Bearer $token")
-	contentType(ContentType.Application.Json)
-	setBody(fingerprintBody(count, user, password))
-}.body()
+): List<FingerprintItem> {
+	val posted = client.post(url) {
+		header("Authorization", "Bearer $token")
+		contentType(ContentType.Application.Json)
+		setBody(fingerprintBody(count, user, password))
+	}
+	if (posted.status.value != 405) return posted.body()
+	return client.get(url) {
+		header("Authorization", "Bearer $token")
+		parameter("n", count.toString())
+	}.body()
+}
