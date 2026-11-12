@@ -165,11 +165,15 @@ class ServerScreenStateTest {
 			.findAll(strings).associate { it.groupValues[1] to it.groupValues[2] }
 		val used = Regex("Res\\.string\\.([A-Za-z0-9_]+)").findAll(screen).map { it.groupValues[1] }.toSet()
 		assertTrue(used.size > 10, "found only ${used.size} strings used by the page")
-		val banned = listOf("navi-connect", "navi_connect", "tier 2", "hub_token", "websocket", "lb-bot")
+		val banned = listOf("navi-connect", "navi_connect", "tier 2", "hub_token", "websocket", "lbbot", "lb_bot")
+		// B-327, the owner's ruling (2026-11-12): "lb-bot" everywhere, the Server page included. It is
+		// the one internal name the page may say, and only spelled that way (`lbbot`, `lb_bot` stay out).
+		val allowed = listOf("lb-bot")
 		for (name in used) {
 			val text = (values[name] ?: error("$name is not in strings.xml")).lowercase()
+			val checked = allowed.fold(text) { t, word -> t.replace(word, "") }
 			for (word in banned) {
-				assertTrue(word !in text, "string $name says \"$word\": $text")
+				assertTrue(word !in checked, "string $name says \"$word\": $text")
 			}
 		}
 	}
