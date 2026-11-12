@@ -24,7 +24,12 @@ class CurrentUserFetchTest {
 				getUsers.incrementAndGet()
 				Thread.sleep(400)
 			}
-			val body = """{"subsonic-response":{"status":"ok","version":"1.16.1","type":"navidrome","serverVersion":"0.64.2","openSubsonic":true}}""".toByteArray()
+			// A real getUser answer, so the first fetch lands: a failed one ends the session's scope in
+			// a host test (Logger.e has no android.util.Log here) and would hide the repeats.
+			val body = ("""{"subsonic-response":{"status":"ok","version":"1.16.1","type":"navidrome","serverVersion":"0.64.2","openSubsonic":true,""" +
+				""""user":{"username":"alice","email":"","scrobblingEnabled":true,"adminRole":false,"settingsRole":true,"downloadRole":true,""" +
+				""""uploadRole":false,"playlistRole":true,"coverArtRole":true,"commentRole":false,"podcastRole":false,"streamRole":true,""" +
+				""""jukeboxRole":false,"shareRole":true,"videoConversionRole":false,"folder":[1]}}}""").toByteArray()
 			exchange.responseHeaders.add("Content-Type", "application/json")
 			exchange.sendResponseHeaders(200, body.size.toLong())
 			exchange.responseBody.use { it.write(body) }
@@ -59,5 +64,6 @@ class CurrentUserFetchTest {
 		repeat(5) { session.getCachedUser(); Thread.sleep(20) }
 		Thread.sleep(3_000)
 		assertEquals(1, getUsers.get(), "one getUser for one session, however often the sheets ask")
+		kotlin.test.assertNotNull(session.getCachedUser(), "the user landed (the stand-in's answer is a real one)")
 	}
 }
