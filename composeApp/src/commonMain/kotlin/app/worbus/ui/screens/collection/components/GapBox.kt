@@ -258,16 +258,6 @@ fun GapBox(
 							),
 							working = ui.working
 						)
-						is GapStage.PickFailed -> RecoveryContent(
-							pill = Pill(FillText.Res(Res.string.lbbot_fill_failed), PillTone.BAD),
-							reason = shown.reason,
-							actions = listOfNotNull(
-								Res.string.action_search_again to onSearchAgain,
-								(Res.string.gap_allow_mp3_request to onAllowMp3).takeIf { shown.mp3WouldHelp },
-								Res.string.action_dismiss to onDismiss
-							),
-							working = ui.working
-						)
 						is GapStage.Attention -> RecoveryContent(
 							pill = Pill(FillText.Res(Res.string.lbbot_fill_needs_match), PillTone.WARN),
 							reason = shown.reason,

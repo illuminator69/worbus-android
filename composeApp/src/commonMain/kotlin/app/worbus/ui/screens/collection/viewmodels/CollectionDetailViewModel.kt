@@ -299,8 +299,6 @@ class CollectionDetailViewModel(
 	fun autoGap() {
 		val groupId = gapGroupId ?: return
 		_gapBox.update { it.copy(working = true, error = null) }
-		// The task this tap replaces: a new one that ends in error releases the box at once.
-		val taskBefore = lbBotManager.gaps.value[groupId]?.sourceTask?.id.orEmpty()
 		viewModelScope.launch {
 			val result = lbBotManager.gapAuto(groupId)
 			_gapBox.update {
@@ -308,12 +306,13 @@ class CollectionDetailViewModel(
 				else it.copy(working = false, committed = true, view = GapView.TRACKS)
 			}
 			if (result is LbBotManager.LbResult.Ok) {
-				// Fix round 5: an auto-pick lb-bot refused queues nothing and ends its task in error;
-				// the box then says why (GapStage.PickFailed) rather than "Getting…" for 30 s.
+				// Fix round 5: an auto-pick lb-bot refused queues nothing and ends its task (the one this
+				// tap started) in error; the box then says why (gapAutoPickFailed), and the hold ends.
+				val task = result.value.taskId
 				withTimeoutOrNull(GAP_COMMIT_RELEASE_MS) {
 					lbBotManager.gaps.first { gaps ->
 						val gap = gaps[groupId]
-						gap?.status == "downloading" || gap?.sourceTask?.let { it.status == "error" && it.id != taskBefore } == true
+						gap?.status == "downloading" || (task.isNotBlank() && gap?.sourceTask?.let { it.id == task && it.status == "error" } == true)
 					}
 				}
 				_gapBox.update { it.copy(committed = false) }
@@ -343,9 +342,7 @@ class CollectionDetailViewModel(
 	fun dismissGapFill() {
 		val groupId = gapGroupId ?: return
 		lbBotManager.dismiss(groupId)
-		// A source task's error (Pick the best source for me) is put away by its id: the record keeps it.
-		val task = lbBotManager.gaps.value[groupId]?.sourceTask?.id.orEmpty()
-		_gapBox.update { it.copy(view = GapView.FOLDED, error = null, dismissedPickTask = task.ifBlank { it.dismissedPickTask }) }
+		_gapBox.update { it.copy(view = GapView.FOLDED, error = null) }
 	}
 
 	private fun gapAct(
@@ -866,8 +863,6 @@ data class GapBoxUi(
 	val pickAgain: Boolean = false,
 	val working: Boolean = false,
 	val error: LbBotManager.LbError? = null,
-	/** The source task whose error was dismissed here ([GapInput.dismissedPickTask]). */
-	val dismissedPickTask: String = "",
 	/** The source this device requested from, for the steps' "FLAC · from …" line. */
 	val fetched: LbGapSource? = null,
 	/** Folder listings fetched for cards, by source id. */

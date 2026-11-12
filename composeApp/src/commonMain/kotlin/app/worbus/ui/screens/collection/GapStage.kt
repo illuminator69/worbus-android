@@ -53,9 +53,7 @@ data class GapInput(
 	 * last saw it, carried across the fetch that follows ([heldForMatch]). Not fetched by it, so not
 	 * counted by it.
 	 */
-	val heldForMatch: Set<String> = emptySet(),
-	/** The source task whose error the user dismissed ([GapStage.PickFailed]): it is not said again. */
-	val dismissedPickTask: String = ""
+	val heldForMatch: Set<String> = emptySet()
 )
 
 /** Worbus P1: whether the gaps box's line offers Fill gaps (lb-bot can download; an older peer can). */
@@ -78,12 +76,6 @@ sealed interface GapStage {
 	/** Files that arrived and need filing in lb-bot: no search or fetch from here can help. */
 	data class Attention(val reason: String) : GapStage
 	data class Failed(val reason: String, val mp3WouldHelp: Boolean) : GapStage
-	/**
-	 * Fix round 5 (the final VM check): lb-bot's source task (Pick the best source for me) ended in
-	 * error while the gap still waits for a pick: nothing was fetched, and [reason] is lb-bot's
-	 * `sourceTask.error` verbatim.
-	 */
-	data class PickFailed(val reason: String, val taskId: String, val mp3WouldHelp: Boolean) : GapStage
 	data class Done(val added: Int, val present: Int, val total: Int) : GapStage
 }
 
@@ -102,6 +94,10 @@ fun gapStage(input: GapInput): GapStage {
 			input.view == GapView.FOLDED -> GapStage.Folded(input.mirroredMissing)
 			else -> GapStage.Loading
 		}
+	}
+	// Fix round 5, the shared rule "an auto-pick that ended in error": over the commit hold too.
+	if (input.downloadsOn && !input.searchAsked && gapAutoPickFailed(gap, fill?.taskId.orEmpty())) {
+		return GapStage.Failed(gap.sourceTask?.error.orEmpty(), gap.mp3WouldHelp || fill?.mp3WouldHelp == true)
 	}
 	val transferring = input.committed || gapTransferring(gap)
 	// Worbus P1: with downloading off nothing is transferring, whatever a record from before says.
@@ -149,7 +145,6 @@ fun gapStage(input: GapInput): GapStage {
 	if (fill != null && fill.settled && fill.outcome == LbBotManager.OUTCOME_FAILED && !input.searchAsked && !matchPendingSettle) {
 		return GapStage.Failed(gapReason(gap).ifBlank { fill.reason }, gap.mp3WouldHelp || fill.mp3WouldHelp)
 	}
-	gapPickFailure(gap, input, searching)?.let { return it }
 	if (input.view == GapView.SOURCES) {
 		return when {
 			searching -> GapStage.Searching
@@ -227,18 +222,18 @@ fun heldForMatch(previous: Set<String>, gap: LbGap?, fetching: Boolean = false):
 }
 
 /**
- * [GapStage.PickFailed] (fix round 5, "auto-pick ended in error"): lb-bot's latest source task for the
- * group ended `error` with a sentence while the gap is still `picking`, nothing is searching or
- * asked since, and the user has not dismissed that task. Read off the record's fields, never off its
- * English label: a search and an auto-pick are both `source-search` tasks, so an errored search says
- * its error the same way. In every view: the auto-pick leaves the box on the tracks, where "N tracks
- * missing" alone read as if nothing had been tried.
+ * The shared rule (both clients; desktop results, fix round 7: "The rule: an auto-pick that ended in
+ * error"): the gap's source task is the one THIS device's Pick the best source for me started (its
+ * answer's `task_id`, kept on the ledger row, [fillTaskId]), it ended `error` with a sentence, and
+ * nothing is transferring (no track `queued` / `downloading`, the gap not `downloading`). The box is
+ * then Failed with `sourceTask.error` verbatim, over the commit hold. A task this device did not start
+ * is never judged: the id is the only proof. Dismiss (the ledger row goes) or Search again (a new
+ * task) leaves it. The desktop's `gapAutoPickFailed`.
  */
-internal fun gapPickFailure(gap: LbGap, input: GapInput, searching: Boolean): GapStage.PickFailed? {
-	val task = gap.sourceTask ?: return null
-	if (searching || gap.status != "picking" || task.status != "error" || task.error.isBlank()) return null
-	if (task.id.isNotBlank() && task.id == input.dismissedPickTask) return null
-	return GapStage.PickFailed(task.error, task.id, gap.mp3WouldHelp)
+fun gapAutoPickFailed(gap: LbGap, fillTaskId: String): Boolean {
+	val task = gap.sourceTask ?: return false
+	return fillTaskId.isNotBlank() && task.id == fillTaskId && task.status == "error" &&
+		task.error.isNotBlank() && !gapTransferring(gap)
 }
 
 /** The tracks the album still lacks, in tracklist order. */
