@@ -93,4 +93,24 @@ class LegacyQueueMoveTest {
 		q.enqueue(SyncActionType.STAR, "al-1", t2)
 		assertEquals(listOf(SyncActionType.SCROBBLE, SyncActionType.STAR), q.pending().map { it.type }, "the new star replaces both moved star-family writes, after the scrobble")
 	}
+
+	/**
+	 * Review minor 5: the cache database refuses the deletes, so the move is not finished; a drain
+	 * sends the moved scrobble and removes it here, and the next move must not queue it again.
+	 * Uniqueness that lasts only while the row is pending cannot tell "moved and sent" from "never
+	 * moved".
+	 */
+	@Test
+	fun aWriteMovedAndSentIsNeverMovedAgain() = runBlocking {
+		val legacy = LegacyDao(listOf(SyncActionEntity(7, SyncActionType.SCROBBLE, "s-1", t1))).apply { failRemoves = true }
+		val writes = WriteDao()
+		val sent = mutableListOf<String>()
+		WriteQueue(RoomWriteQueueStore(writes, legacy), log = { _, _ -> }).drain { sent += "${it.type}:${it.itemId}" }
+		assertEquals(1, legacy.rows.size, "the cache database still holds the row")
+
+		legacy.failRemoves = false
+		WriteQueue(RoomWriteQueueStore(writes, legacy), log = { _, _ -> }).drain { sent += "${it.type}:${it.itemId}" } // the next launch
+		assertEquals(listOf("SCROBBLE:s-1"), sent, "one listen, sent once")
+		assertEquals(emptyList(), legacy.rows, "and the move is finished")
+	}
 }
