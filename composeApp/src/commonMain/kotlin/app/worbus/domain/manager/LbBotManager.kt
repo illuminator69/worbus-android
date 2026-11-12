@@ -3411,12 +3411,10 @@ class LbBotManager(
 						val watches = loadWatches()
 						watches[key]?.also { saveWatches(watches + (key to it.copy(nextPollAt = 0L))) }
 					}
-					when (gapFrameAction(watched = gapFramePolls(watch), held = key in _gaps.value)) {
-						GapFrameAction.POLL -> kickPoll()
-						// B-376: a box open on this group follows what another device did to it.
-						GapFrameAction.REREAD -> rereadGapOnFrame(key)
-						GapFrameAction.NONE -> Unit
-					}
+					val actions = gapFrameActions(polled = gapFramePolls(watch), held = key in _gaps.value)
+					if (GapFrameAction.POLL in actions) kickPoll()
+					// B-376: a box open on this group follows what happened to it, here or on another device.
+					if (GapFrameAction.REREAD in actions) rereadGapOnFrame(key)
 				}
 				// A wishlist row landed; the wishlist screen re-reads on the revision.
 				"wishlist" -> _libraryRevision.value += 1
@@ -5836,20 +5834,30 @@ data class LbFillEvent(
 
 /** What a hub `fill` frame for a gap group makes this device do. */
 enum class GapFrameAction {
-	/** The group is watched here: the poll's next tick carries it, now. */
+	/** The group's watch is live here: the poll's next tick carries it, now. */
 	POLL,
-	/** Not watched, but a gaps box has read it: read the group's record again. */
+	/** A gaps box has read the group: read its record again. */
 	REREAD,
 	/** Neither: nothing here shows it. */
 	NONE
 }
 
-/** Whether the poll will read [watch]'s group on its next tick. */
-internal fun gapFramePolls(watch: LbWatch?): Boolean = watch != null
+/**
+ * Whether the poll will read [watch]'s group on its next tick: the poll loop reads only a watch
+ * that is not settled, or whose failure lb-bot still retries (`pollLoop`). A settled watch is not
+ * polled, so it cannot stand for "the poll carries the frame" (the Phase B re-walk: a gaps box stayed
+ * on "Downloaded, but needs sorting out" for 70 s+ after lb-bot failed the fill).
+ */
+internal fun gapFramePolls(watch: LbWatch?): Boolean = watch != null && (!watch.settled || watch.retryAt > 0L)
 
-/** [watched]: this device's ledger watches the group; [held]: its record has been read here (a box showed it). */
-fun gapFrameAction(watched: Boolean, held: Boolean): GapFrameAction = when {
-	watched -> GapFrameAction.POLL
-	held -> GapFrameAction.REREAD
-	else -> GapFrameAction.NONE
+/**
+ * [polled]: the poll reads the group ([gapFramePolls]); [held]: its record has been read here (a box
+ * showed it). A group a box has read is always read again, whatever its watch (B-376, and the
+ * re-walk): the box shows lb-bot's record, and only a read of it changes what the box says.
+ */
+fun gapFrameActions(polled: Boolean, held: Boolean): Set<GapFrameAction> = buildSet {
+	if (polled) add(GapFrameAction.POLL)
+	if (held) add(GapFrameAction.REREAD)
+	if (isEmpty()) add(GapFrameAction.NONE)
 }
+

@@ -18,14 +18,20 @@ import kotlin.test.assertEquals
 class GapFrameActionTest {
 	@Test
 	fun aGroupABoxHasReadIsReadAgainOnItsFrame() {
-		assertEquals(GapFrameAction.REREAD, gapFrameAction(watched = false, held = true))
+		assertEquals(setOf(GapFrameAction.REREAD), gapFrameActions(polled = false, held = true))
 	}
 
 	@Test
 	fun aWatchedGroupRidesThePollAndAnUnknownOneIsLeftAlone() {
-		assertEquals(GapFrameAction.POLL, gapFrameAction(watched = true, held = true))
-		assertEquals(GapFrameAction.POLL, gapFrameAction(watched = true, held = false))
-		assertEquals(GapFrameAction.NONE, gapFrameAction(watched = false, held = false))
+		// A group the box shows is read again even when the poll also carries it (the re-walk).
+		assertEquals(setOf(GapFrameAction.POLL, GapFrameAction.REREAD), gapFrameActions(polled = true, held = true))
+		assertEquals(setOf(GapFrameAction.POLL), gapFrameActions(polled = true, held = false))
+		assertEquals(setOf(GapFrameAction.NONE), gapFrameActions(polled = false, held = false))
+		// What the poll reads: a live watch, or a failure lb-bot still retries; never a settled one.
+		assertEquals(true, gapFramePolls(LbWatch(kind = "gap", key = "g", settled = false)))
+		assertEquals(true, gapFramePolls(LbWatch(kind = "gap", key = "g", settled = true, retryAt = 5L)))
+		assertEquals(false, gapFramePolls(LbWatch(kind = "gap", key = "g", settled = true)))
+		assertEquals(false, gapFramePolls(null))
 	}
 
 	/**
@@ -39,7 +45,7 @@ class GapFrameActionTest {
 	@Test
 	fun aSettledWatchDoesNotSwallowTheFrameOfAGroupTheBoxShows() {
 		val settled = LbWatch(kind = "gap", key = "g-1", settled = true, state = "needs_match", outcome = "failed")
-		assertEquals(GapFrameAction.REREAD, gapFrameAction(watched = gapFramePolls(settled), held = true), "the poll skips a settled watch")
+		assertEquals(setOf(GapFrameAction.REREAD), gapFrameActions(polled = gapFramePolls(settled), held = true), "the poll skips a settled watch")
 
 		// What the re-read brings: picking with the downloaded track → lb-bot's failed record.
 		val fill = LbFillEntry(
