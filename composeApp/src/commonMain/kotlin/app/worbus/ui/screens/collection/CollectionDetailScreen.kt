@@ -287,7 +287,7 @@ fun CollectionDetailScreen(
 	}
 	// B-231 round 3: what a pending match held as downloaded, kept across the fetch that follows.
 	val matchHeld = remember(albumGap?.groupId) { mutableStateOf(emptySet<String>()) }
-	val heldNow = heldForMatch(matchHeld.value, gapRecord)
+	val heldNow = heldForMatch(matchHeld.value, gapRecord, fetching = gapBox.committed)
 	SideEffect { if (matchHeld.value != heldNow) matchHeld.value = heldNow }
 	val gapStage = gapStage(
 		GapInput(

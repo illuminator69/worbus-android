@@ -208,7 +208,7 @@ fun gapFetchCount(gap: LbGap?): Int = gap?.let { gapTracksToFetch(it).size } ?: 
  * sees already running (started elsewhere, the page opened mid-fetch) has nothing remembered and
  * counts every track not `present`, as before.
  */
-fun heldForMatch(previous: Set<String>, gap: LbGap?): Set<String> = when {
+fun heldForMatch(previous: Set<String>, gap: LbGap?, fetching: Boolean = false): Set<String> = when {
 	gap == null -> previous
 	gapMatchPending(gap) -> gap.tracks.filter { it.state == "downloaded" }.map(::gapTrackKey).toSet()
 	gapTransferring(gap) -> gap.tracks.filter { it.state == "downloaded" && gapTrackKey(it) in previous }.map(::gapTrackKey).toSet()
