@@ -45,7 +45,7 @@ class FingerprintFallbackTest {
 	@Test
 	fun anAudioMuseThatTakesNoPostIsAskedByGetWithoutTheAccount() = runBlocking {
 		val url = "http://127.0.0.1:${server.address.port}/api/sonic_fingerprint/generate"
-		val ids = runCatching { directFingerprint(client, url, "tok", 50, "alice", "hunter2").map { it.itemId } }.getOrDefault(emptyList())
+		val ids = runCatching { directFingerprint(client, url, "tok", 50, "alice", "hunter2").ids }.getOrDefault(emptyList())
 		assertEquals(listOf("s-1", "s-2"), ids, "the GET's answer is used: ${seen.toList()}")
 		assertFalse(seen.any { "hunter2" in it || "navidrome_password" in it || "alice" in it }, "no account in any URL: ${seen.toList()}")
 	}

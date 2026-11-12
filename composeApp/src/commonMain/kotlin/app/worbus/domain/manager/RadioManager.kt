@@ -933,8 +933,12 @@ class RadioManager(
 			}
 		}
 		if (!yourMix && !stationFallbackAllowed(mix.moodFilter)) return MixBuildResult.NeedsAudioMuse
-		val songs = if (yourMix) {
-			resolveIds(runCatching { audioMuseManager.fetchSonicFingerprintIds(RADIO_FALLBACK_COUNT) }.getOrDefault(emptyList()))
+		// The fingerprint's refusal is the page's to say (B-359): AudioMuse too old, or the hub's own code.
+		val songs = if (yourMix || mixIsFingerprint(mix)) {
+			val count = if (yourMix) RADIO_FALLBACK_COUNT else mix.count.coerceIn(5, 200)
+			val answer = runCatching { audioMuseManager.fetchSonicFingerprint(count) }.getOrDefault(FingerprintAnswer.Unavailable)
+			fingerprintFailure(answer)?.let { return it }
+			resolveIds(answer.ids)
 		} else generate(mix)
 		return if (songs.isEmpty()) MixBuildResult.Empty else MixBuildResult.Built(MixBuild(mix, songs, null))
 	}

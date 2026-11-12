@@ -34,6 +34,19 @@ sealed interface MixPageState {
 	data object UnknownKind : MixPageState
 	/** A mood-filtered radio whose station could not start; it is refused, not played unfiltered (audit L4a-01). */
 	data object NeedsAudioMuse : MixPageState
+	/** Built from the listening fingerprint, which this AudioMuse is too old for: it needs [need] (B-359). */
+	data class AudioMuseTooOld(val need: String) : MixPageState
+	/** The fingerprint was refused (the hub's or AudioMuse's [code]): said, not shown as an empty mix. */
+	data class Refused(val code: String) : MixPageState
+}
+
+/** The page's state for what [RadioManager.buildMix] made. */
+internal fun mixPageState(result: MixBuildResult): MixPageState = when (result) {
+	is MixBuildResult.Built -> MixPageState.Built(result.build)
+	MixBuildResult.Empty -> MixPageState.Empty
+	MixBuildResult.NeedsAudioMuse -> MixPageState.NeedsAudioMuse
+	is MixBuildResult.AudioMuseTooOld -> MixPageState.AudioMuseTooOld(result.need)
+	is MixBuildResult.Refused -> MixPageState.Refused(result.code)
 }
 
 /**
@@ -93,11 +106,7 @@ class MixDetailViewModel(
 			}
 			// The songs already shown stay while new ones are built: a pull does not blank the page.
 			if (_state.value !is MixPageState.Built) _state.value = MixPageState.Building
-			_state.value = when (val result = radioManager.buildMix(target, yourMixName)) {
-				is MixBuildResult.Built -> MixPageState.Built(result.build)
-				MixBuildResult.Empty -> MixPageState.Empty
-				MixBuildResult.NeedsAudioMuse -> MixPageState.NeedsAudioMuse
-			}
+			_state.value = mixPageState(radioManager.buildMix(target, yourMixName))
 		}
 	}
 

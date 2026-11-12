@@ -2,6 +2,7 @@ package app.worbus.domain.manager
 
 import app.worbus.domain.models.DomainSong
 import app.worbus.domain.models.Mix
+import app.worbus.domain.models.MixKind
 import app.worbus.domain.models.settings.StationCharacter
 
 /**
@@ -39,4 +40,21 @@ sealed interface MixBuildResult {
 
 	/** A mood-filtered radio whose station could not start: it has no unfiltered fallback ([stationFallbackAllowed]). */
 	data object NeedsAudioMuse : MixBuildResult
+
+	/** A fingerprint mix whose AudioMuse is too old for the listening fingerprint (B-359; the hub's `audiomuse_too_old`). */
+	data class AudioMuseTooOld(val need: String) : MixBuildResult
+
+	/** A fingerprint mix the hub or AudioMuse refused ([code] as the body named it, "" when none): not an empty mix. */
+	data class Refused(val code: String) : MixBuildResult
+}
+
+/** Whether [mix]'s songs are the listening fingerprint when it does not play as a station. */
+internal fun mixIsFingerprint(mix: Mix): Boolean =
+	mix.kind == MixKind.FINGERPRINT || (mix.kind == MixKind.STATION && mix.seedId.isBlank())
+
+/** What a fingerprint answer that is not a list makes of a mix page: said, never shown as empty (B-359). */
+internal fun fingerprintFailure(answer: FingerprintAnswer): MixBuildResult? = when (answer) {
+	is FingerprintAnswer.AudioMuseTooOld -> MixBuildResult.AudioMuseTooOld(answer.need)
+	is FingerprintAnswer.Refused -> MixBuildResult.Refused(answer.code)
+	is FingerprintAnswer.Ids, FingerprintAnswer.Unavailable -> null
 }

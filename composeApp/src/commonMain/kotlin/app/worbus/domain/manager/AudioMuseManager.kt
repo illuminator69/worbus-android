@@ -12,6 +12,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
@@ -142,31 +143,35 @@ class AudioMuseManager(
 	 * injected server-side from HUB_ND_USER/HUB_ND_PASS and this device sends none;
 	 * on the direct route they still come from local settings. [] on any failure.
 	 */
-	suspend fun fetchSonicFingerprintIds(count: Int = 50): List<String> {
-		val ep = endpoint() ?: return emptyList()
+	suspend fun fetchSonicFingerprintIds(count: Int = 50): List<String> = fetchSonicFingerprint(count).ids
+
+	/**
+	 * The fingerprint as an answer that keeps why there is none: a refusal (AudioMuse too old for
+	 * the POST, the hub's own `400 bad_request`, `403 primary_only`) is never read as an empty
+	 * list. What a mix page shows (B-359, matching the hub, PROTOCOL §14).
+	 */
+	suspend fun fetchSonicFingerprint(count: Int = 50): FingerprintAnswer {
+		val ep = endpoint() ?: return FingerprintAnswer.Unavailable
 		// Worbus P2 (design §6.3): a device signed in to a Worbus Server reads the fingerprint
 		// through the hub only (theirs if they are the primary user, else 403); never straight from
 		// AudioMuse, which would hand it the primary user's listening with this device's credentials.
 		// Nor one the server signed out or refused (review M-12): it still belongs to that server.
-		if (!fingerprintRouteAllowed(ep.viaHub, hubAuth.boundToWorbusServer)) return emptyList()
+		if (!fingerprintRouteAllowed(ep.viaHub, hubAuth.boundToWorbusServer)) return FingerprintAnswer.Unavailable
 
 		return try {
 			val url = ep.url("/sonic/fingerprint", "/api/sonic_fingerprint/generate")
-			val query = fingerprintQuery(ep.viaHub, count)
 			// B-359: direct, the account goes in a JSON body (AudioMuse reads the same fields from a
 			// POST), never in the URL, where AudioMuse's and any proxy's access log keep it.
-			val results: List<FingerprintItem> = if (ep.viaHub) {
-				client.get(url) {
-					header("Authorization", "Bearer ${ep.token}")
-					query.forEach { (name, value) -> parameter(name, value) }
-				}.body()
+			val answer = if (ep.viaHub) {
+				hubFingerprint(client, url, ep.token, count)
 			} else {
 				directFingerprint(client, url, ep.token, count, settings.getString("username", ""), secrets.navidromePassword)
 			}
-			results.map { it.itemId }
+			if (answer !is FingerprintAnswer.Ids) Logger.w("AudioMuseManager", "sonic fingerprint: $answer")
+			answer
 		} catch (e: Exception) {
 			Logger.e("AudioMuseManager", "sonic fingerprint failed", e)
-			emptyList()
+			FingerprintAnswer.Unavailable
 		}
 	}
 
@@ -393,6 +398,34 @@ data class FingerprintRequest(
 	override fun toString(): String = "FingerprintRequest(n=$n, navidromeUser=$navidromeUser, navidromePassword=***)"
 }
 
+/** What the listening fingerprint answered (B-359). A refusal is never "nothing". */
+sealed interface FingerprintAnswer {
+	data class Ids(val ids: List<String>) : FingerprintAnswer
+
+	/**
+	 * AudioMuse will not take the POST that carries the account, so it is too old for the listening
+	 * fingerprint (it needs [need]). The hub's `503 {"code":"audiomuse_too_old"}`, or the same
+	 * refusal met on the direct route.
+	 */
+	data class AudioMuseTooOld(val need: String = FINGERPRINT_MIN_AUDIOMUSE) : FingerprintAnswer
+
+	/** Refused with [status] and the body's `code` ("" when it named none): `400 bad_request`, `403 primary_only`, AudioMuse's own errors. */
+	data class Refused(val status: Int, val code: String) : FingerprintAnswer
+
+	/** No route, a route this device may not use, or no answer at all. */
+	data object Unavailable : FingerprintAnswer
+}
+
+val FingerprintAnswer.ids: List<String> get() = (this as? FingerprintAnswer.Ids)?.ids.orEmpty()
+
+/** The AudioMuse that reads the account from a POST body (PROTOCOL §14; the hub's `AUDIOMUSE_MIN_VERSION`). */
+const val FINGERPRINT_MIN_AUDIOMUSE = "3.7.1"
+
+private val fingerprintJson = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
+
+private fun fingerprintIds(body: String): FingerprintAnswer.Ids =
+	FingerprintAnswer.Ids(fingerprintJson.decodeFromString<List<FingerprintItem>>(body).map { it.itemId })
+
 /**
  * The direct fingerprint route (B-359): the account in a POST body, never the URL. An AudioMuse that
  * answers the POST with 405 (no POST on that route: only 3.7.1 was read to take one, and no minimum
@@ -406,15 +439,24 @@ internal suspend fun directFingerprint(
 	count: Int,
 	user: String,
 	password: String
-): List<FingerprintItem> {
+): FingerprintAnswer {
 	val posted = client.post(url) {
 		header("Authorization", "Bearer $token")
 		contentType(ContentType.Application.Json)
 		setBody(fingerprintBody(count, user, password))
 	}
-	if (posted.status.value != 405) return posted.body()
-	return client.get(url) {
+	if (posted.status.value != 405) return fingerprintIds(posted.bodyAsText())
+	return fingerprintIds(client.get(url) {
 		header("Authorization", "Bearer $token")
 		parameter("n", count.toString())
-	}.body()
+	}.bodyAsText())
+}
+
+/** The hub's `GET /sonic/fingerprint?n=`: the hub adds the account server-side (PROTOCOL §14). */
+internal suspend fun hubFingerprint(client: HttpClient, url: String, bearer: String, count: Int): FingerprintAnswer {
+	val answer = client.get(url) {
+		header("Authorization", "Bearer $bearer")
+		fingerprintQuery(viaHub = true, count).forEach { (name, value) -> parameter(name, value) }
+	}
+	return fingerprintIds(answer.bodyAsText())
 }
