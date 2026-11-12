@@ -3407,11 +3407,15 @@ class LbBotManager(
 				}
 				// The frame is a summary; the poll carries the tracks. Re-read now.
 				KIND_GAP -> {
-					if (key.isNotBlank()) watchLock.withLock {
+					val watched = key.isNotBlank() && watchLock.withLock {
 						val watches = loadWatches()
-						watches[key]?.let { saveWatches(watches + (key to it.copy(nextPollAt = 0L))) }
+						watches[key]?.let { saveWatches(watches + (key to it.copy(nextPollAt = 0L))) } != null
 					}
-					kickPoll()
+					when (gapFrameAction(watched = watched, held = key in _gaps.value)) {
+						GapFrameAction.POLL -> kickPoll()
+						GapFrameAction.REREAD -> Unit
+						GapFrameAction.NONE -> kickPoll()
+					}
 				}
 				// A wishlist row landed; the wishlist screen re-reads on the revision.
 				"wishlist" -> _libraryRevision.value += 1
@@ -5814,3 +5818,16 @@ data class LbFillEvent(
 	 *  Fill-gaps page can open ([fillAnnouncementLinkPath]). */
 	val isGap: Boolean
 )
+
+/** What a hub `fill` frame for a gap group makes this device do. */
+enum class GapFrameAction {
+	/** The group is watched here: the poll's next tick carries it, now. */
+	POLL,
+	/** Not watched, but a gaps box has read it: read the group's record again. */
+	REREAD,
+	/** Neither: nothing here shows it. */
+	NONE
+}
+
+/** [watched]: this device's ledger watches the group; [held]: its record has been read here (a box showed it). */
+fun gapFrameAction(watched: Boolean, held: Boolean): GapFrameAction = if (watched) GapFrameAction.POLL else GapFrameAction.NONE
