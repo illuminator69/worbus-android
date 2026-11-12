@@ -54,6 +54,6 @@ class CurrentUserSessionTest {
 
 		session.login(url, "bob", "pw")
 		Thread.sleep(300)
-		assertEquals("bob", session.currentUserState.value?.username)
+		assertEquals("bob", session.currentUserState.value?.name)
 	}
 }
