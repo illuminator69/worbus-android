@@ -32,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -284,6 +285,10 @@ fun CollectionDetailScreen(
 			gapClock = Clock.System.now().toEpochMilliseconds()
 		}
 	}
+	// B-231 round 3: what a pending match held as downloaded, kept across the fetch that follows.
+	val matchHeld = remember(albumGap?.groupId) { mutableStateOf(emptySet<String>()) }
+	val heldNow = heldForMatch(matchHeld.value, gapRecord)
+	SideEffect { if (matchHeld.value != heldNow) matchHeld.value = heldNow }
 	val gapStage = gapStage(
 		GapInput(
 			gap = gapRecord,
@@ -293,7 +298,8 @@ fun CollectionDetailScreen(
 			committed = gapBox.committed,
 			searchAsked = gapBox.searchAsked,
 			now = gapClock,
-			downloadsOn = downloads.isOn
+			downloadsOn = downloads.isOn,
+			heldForMatch = heldNow
 		)
 	)
 	// A safe source is chosen for the user when the sources land (recommended, the artist found in

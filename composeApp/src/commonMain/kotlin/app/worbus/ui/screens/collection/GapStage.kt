@@ -47,7 +47,13 @@ data class GapInput(
 	 * line and the missing songs) and loses every way to fetch them: no sources view, no failed fill to
 	 * search again from ([gapFillOffered] takes the line's Fill gaps away).
 	 */
-	val downloadsOn: Boolean = true
+	val downloadsOn: Boolean = true,
+	/**
+	 * B-231 round 3: the tracks ([gapTrackKey]) a pending match held as `downloaded` when this device
+	 * last saw it, carried across the fetch that follows ([heldForMatch]). Not fetched by it, so not
+	 * counted by it.
+	 */
+	val heldForMatch: Set<String> = emptySet()
 )
 
 /** Worbus P1: whether the gaps box's line offers Fill gaps (lb-bot can download; an older peer can). */
@@ -93,12 +99,7 @@ fun gapStage(input: GapInput): GapStage {
 		gap.tracks.any { it.state in IN_FLIGHT_TRACK_STATES }
 	// Worbus P1: with downloading off nothing is transferring, whatever a record from before says.
 	if (transferring && input.downloadsOn) {
-		return GapStage.Active(
-			done = gap.tracksDone,
-			wanted = gap.tracksWanted,
-			failed = gap.tracksFailed,
-			steps = requestSteps(gapStepState(gap), gap.tracksDone, gap.tracksWanted)
-		)
+		return gapActive(gap, input.heldForMatch)
 	}
 	val all = missingTracks(gap)
 	if (fill != null && fill.settled && fill.outcome == LbBotManager.OUTCOME_DONE) {
@@ -156,6 +157,24 @@ fun gapStage(input: GapInput): GapStage {
 		else -> GapStage.Folded(missing.size.takeIf { it > 0 } ?: input.mirroredMissing)
 	}
 }
+
+/** A gap track's identity across reads: its disc and position. */
+fun gapTrackKey(track: LbGapTrack): String = "${track.disc}-${track.position}"
+
+/** The in-flight stage's counts: "Getting N tracks", "x of N". */
+internal fun gapActive(gap: LbGap, heldForMatch: Set<String>): GapStage.Active =
+	GapStage.Active(
+		done = gap.tracksDone,
+		wanted = gap.tracksWanted,
+		failed = gap.tracksFailed,
+		steps = requestSteps(gapStepState(gap), gap.tracksDone, gap.tracksWanted)
+	)
+
+/** How many tracks the sources view's header and its Request button count. */
+fun gapFetchCount(gap: LbGap?): Int = gap?.tracks?.count { it.state != "present" && it.state != "done" } ?: 0
+
+/** The tracks a pending match holds as `downloaded`, as this device last saw them ([GapInput.heldForMatch]). */
+fun heldForMatch(previous: Set<String>, gap: LbGap?): Set<String> = emptySet()
 
 /** The tracks the album still lacks, in tracklist order. */
 fun missingTracks(gap: LbGap): List<LbGapTrack> = gap.tracks.filter { it.state !in HELD_TRACK_STATES }

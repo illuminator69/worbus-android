@@ -118,6 +118,7 @@ import app.worbus.ui.screens.external.components.SourceCards
 import app.worbus.ui.util.Fold
 import app.worbus.ui.util.rememberFoldMotion
 import app.worbus.ui.screens.collection.gapAwaitingMatch
+import app.worbus.ui.screens.collection.gapFetchCount
 import worbus.composeapp.generated.resources.gap_awaiting_match_notice
 
 /*
@@ -439,7 +440,7 @@ private fun SourcesContent(
 	onSearchAgain: () -> Unit,
 	onAllowMp3: () -> Unit
 ) {
-	val missing = gap?.let { g -> g.tracks.count { it.state != "present" && it.state != "done" } } ?: 0
+	val missing = gapFetchCount(gap)
 	Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
 		IconButton(onClick = onBack) { Icon(Icons.Outlined.ArrowBack, stringResource(Res.string.gap_back), Modifier.size(20.dp)) }
 		Column(Modifier.weight(1f)) {
