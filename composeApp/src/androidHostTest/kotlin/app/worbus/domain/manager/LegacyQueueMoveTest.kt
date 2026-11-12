@@ -45,9 +45,8 @@ class LegacyQueueMoveTest {
 		}
 		/** `writes.db`'s MovedLegacyWrite table: the move's record, never deleted. */
 		val moved = mutableSetOf<MovedLegacyWrite>()
-		override suspend fun insertMovedRow(row: PendingWriteEntity) {
-			if (row.legacyId == null || rows.none { it.legacyId == row.legacyId }) insert(row)
-		}
+		override suspend fun insertMovedRow(row: PendingWriteEntity): Long =
+			if (row.legacyId == null || rows.none { it.legacyId == row.legacyId }) insert(row) else -1L
 		override suspend fun movedBefore(legacyId: Long, actionType: String, itemId: String, timeMs: Long): Int =
 			if (MovedLegacyWrite(legacyId, actionType, itemId, timeMs) in moved) 1 else 0
 		override suspend fun recordMoved(moved: MovedLegacyWrite) {
