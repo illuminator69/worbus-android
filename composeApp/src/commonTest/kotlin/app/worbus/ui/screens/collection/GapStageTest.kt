@@ -221,8 +221,10 @@ class GapStageTest {
 	 * Fix round 5, the final VM check: "Pick the best source for me" over only live / remix / cover
 	 * folders. lb-bot refuses them all (0 enqueues), the gap stays `picking`, and the reason is in its
 	 * source task (`status error`, `error` its sentence). The box went back to "2 tracks missing" with
-	 * no reason. An auto-pick that ended in error says lb-bot's words, in whatever view, until a new
-	 * search or a Dismiss.
+	 * no reason. The shared rule (desktop results, "The rule: an auto-pick that ended in error (both
+	 * clients)"): only the task THIS device started is judged (the id kept on its ledger row); with it
+	 * in error and nothing transferring the box is Failed with lb-bot's sentence verbatim, over the
+	 * commit hold too; a task this device did not start is never judged.
 	 */
 	@Test
 	fun anAutoPickThatEndedInErrorSaysLbBotsReason() {
@@ -232,14 +234,18 @@ class GapStageTest {
 			tracks = listOf(track(1, "present"), track(2, "present"), track(3, "picked"), track(4, "picked")),
 			sourceTask = LbGapTask(id = "t-9", status = "error", error = reason)
 		)
+		val ours = fill("failed", settled = false).copy(state = "picking", outcome = "running", taskId = "t-9")
 		for (view in GapView.entries) {
-			assertEquals(GapStage.PickFailed(reason, "t-9", false), gapStage(input(gap = refused, view = view)), "$view")
+			assertEquals(GapStage.Failed(reason, false), gapStage(input(gap = refused, fill = ours, view = view)), "$view")
 		}
-		// A new search is the way out; so is Dismiss, by the task's id.
-		assertEquals(GapStage.Searching, gapStage(input(gap = refused, view = GapView.SOURCES, searchAsked = true)))
-		assertEquals(GapStage.Folded(2), gapStage(GapInput(refused, 2, null, GapView.FOLDED, false, false, 100_000L, dismissedPickTask = "t-9")))
-		// A task that ended well, or an error with no words, is no such stage.
-		assertEquals(GapStage.Folded(2), gapStage(input(gap = refused.copy(sourceTask = LbGapTask(id = "t-9", status = "complete")))))
+		assertEquals(GapStage.Failed(reason, false), gapStage(input(gap = refused, fill = ours, committed = true)), "over the commit hold")
+		// Not judged: no ledger row, or another device's (another id) task.
+		assertEquals(GapStage.Folded(2), gapStage(input(gap = refused)))
+		assertEquals(GapStage.Folded(2), gapStage(input(gap = refused, fill = ours.copy(taskId = "t-1"))))
+		// A real transfer is the truth whatever the task says; an Auto that queued ends `complete`.
+		val moving = refused.copy(tracks = listOf(track(1, "present"), track(2, "present"), track(3, "queued"), track(4, "queued")))
+		assertIs<GapStage.Active>(gapStage(input(gap = moving, fill = ours)))
+		assertEquals(GapStage.Folded(2), gapStage(input(gap = refused.copy(sourceTask = LbGapTask(id = "t-9", status = "complete")), fill = ours)))
 	}
 
 	/**
