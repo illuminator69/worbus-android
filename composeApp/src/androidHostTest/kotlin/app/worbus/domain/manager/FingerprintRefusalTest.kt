@@ -4,6 +4,9 @@ import app.worbus.ui.screens.mixes.viewmodels.MixPageState
 import app.worbus.ui.screens.mixes.viewmodels.mixPageState
 import com.sun.net.httpserver.HttpServer
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.runBlocking
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -37,7 +40,8 @@ class FingerprintRefusalTest {
 		}
 		start()
 	}
-	private val client = HttpClient()
+	// As the app's client: the POST's body is JSON through ContentNegotiation.
+	private val client = HttpClient { install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) } }
 	private val base get() = "http://127.0.0.1:${server.address.port}"
 
 	@AfterTest

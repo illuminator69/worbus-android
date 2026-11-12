@@ -129,7 +129,7 @@ class ServerReachabilityTest {
 		// The probe stalls the same way: only its type may say "down", and it does not.
 		reach.probe = { impatient.get("$base/rest/slow.view?c=connect") }
 		val seen = valuesDuring(settle = 2_500) {
-			val failure = runCatching { impatient.get("$base/rest/slow-search3.view?query=Disconnect") }.exceptionOrNull()
+			val failure = runCatching { impatient.get("$base/rest/search3-slow.view?query=Disconnect") }.exceptionOrNull()
 			assertTrue(failure != null, "the stall timed out the request")
 			assertFalse(isServerDown(failure!!), "a read timeout naming 'Disconnect' in its URL: $failure")
 		}
