@@ -133,6 +133,39 @@ class GapStageTest {
 		assertEquals(GapStage.Tracks(listOf(track(3, "missing")), 3), gapStage(input(gap = awaiting, fill = pending, view = GapView.TRACKS)))
 	}
 
+	/**
+	 * B-231 round 2 (a), the desktop's point 1: a pending match does not depend on a search. With
+	 * another device's search running (`sourceTask` running) the box still counts and lists only the
+	 * tracks to fetch, and the ledger's `needs_match` settle is still the match pending. Android used
+	 * to drop the pending match while searching: Folded(2), Tracks([2, 3]), and Failed for the settle.
+	 */
+	@Test
+	fun aPendingMatchHoldsWhileASearchIsInFlight() {
+		val tracks = listOf(track(1, "present"), track(2, "downloaded"), track(3, "missing"))
+		val searchingElsewhere = gap(status = "picking", tracks = tracks, sourceTask = LbGapTask(status = "running"))
+		assertEquals(GapStage.Folded(1), gapStage(input(gap = searchingElsewhere)))
+		assertEquals(GapStage.Tracks(listOf(track(3, "missing")), 3), gapStage(input(gap = searchingElsewhere, view = GapView.TRACKS)))
+		val pending = fill("failed").copy(state = "needs_match")
+		assertEquals(
+			GapStage.Tracks(listOf(track(3, "missing")), 3),
+			gapStage(input(gap = searchingElsewhere, fill = pending, view = GapView.TRACKS))
+		)
+		assertEquals(GapStage.Searching, gapStage(input(gap = searchingElsewhere, view = GapView.SOURCES)))
+		// Attention stays gated on no search in flight (the desktop's point 3).
+		val allHere = gap(status = "picking", tracks = listOf(track(1, "present"), track(2, "downloaded")), sourceTask = LbGapTask(status = "running"))
+		assertEquals(GapStage.Searching, gapStage(input(gap = allHere, view = GapView.SOURCES)))
+	}
+
+	/**
+	 * B-231 round 2 (b), the coordinator's ruling for both clients: a plain failed fill (a real
+	 * failure, not the `needs_match` settle) on a pending match shows Failed.
+	 */
+	@Test
+	fun aPlainFailedFillOnAPendingMatchIsFailed() {
+		val awaiting = gap(status = "picking", tracks = listOf(track(1, "present"), track(2, "downloaded"), track(3, "missing")))
+		assertIs<GapStage.Failed>(gapStage(input(gap = awaiting, fill = fill("failed"), view = GapView.TRACKS)))
+	}
+
 	@Test
 	fun aPendingMatchThatStillOffersTheRestSaysOpenInLbBotAboveIt() {
 		val awaiting = gap(status = "picking", tracks = listOf(track(1, "present"), track(2, "downloaded"), track(3, "missing")))
