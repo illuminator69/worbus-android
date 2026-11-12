@@ -8,6 +8,8 @@ import app.worbus.domain.manager.LbGapTrack
 import app.worbus.ui.screens.external.StepStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.assertIs
 
 /*
@@ -114,11 +116,20 @@ class GapStageTest {
 	}
 
 	@Test
-	fun filesWaitingOnLbBotsWorkspaceAreAttentionWhateverTheView() {
+	fun aStalledPlacementIsAttentionWhateverTheView() {
+		// B-231 cut the pending-match half out of this test: that one still offers the rest (below).
 		val stalled = gap(status = "failed", stalledPlacement = true, failDetail = "Reconcile in lb-bot")
 		assertEquals(GapStage.Attention("Reconcile in lb-bot"), gapStage(input(gap = stalled, view = GapView.SOURCES)))
+	}
+
+	@Test
+	fun aPendingMatchThatStillOffersTheRestSaysOpenInLbBotAboveIt() {
 		val awaiting = gap(status = "picking", tracks = listOf(track(1, "present"), track(2, "downloaded"), track(3, "missing")))
-		assertIs<GapStage.Attention>(gapStage(input(gap = awaiting)))
+		val stage = gapStage(input(gap = awaiting, view = GapView.TRACKS))
+		assertTrue(gapAwaitingMatch(awaiting, stage, downloadsOn = true))
+		assertFalse(gapAwaitingMatch(awaiting, stage, downloadsOn = false), "nothing to open while downloading is off")
+		val allHere = gap(status = "picking", tracks = listOf(track(1, "present"), track(2, "downloaded")))
+		assertFalse(gapAwaitingMatch(allHere, gapStage(input(gap = allHere)), downloadsOn = true), "Attention says it itself")
 	}
 
 	/*

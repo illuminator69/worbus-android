@@ -117,6 +117,8 @@ import app.worbus.ui.screens.external.components.RequestSteps
 import app.worbus.ui.screens.external.components.SourceCards
 import app.worbus.ui.util.Fold
 import app.worbus.ui.util.rememberFoldMotion
+import app.worbus.ui.screens.collection.gapAwaitingMatch
+import worbus.composeapp.generated.resources.gap_awaiting_match_notice
 
 /*
  * navi-connect P4, round 2: the gaps box on the album page, which retired `GapFillSheet` (the owner's
@@ -176,6 +178,24 @@ fun GapBox(
 	if (stage is GapStage.Tracks) lastTracks = stage
 	val shape = RoundedCornerShape(20.dp)
 	Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+		// B-231 (PROTOCOL §15.2): files waiting to be matched in lb-bot are lb-bot's, said above the
+		// box, while the box itself still offers to fetch the tracks that are not downloaded.
+		Fold(visible = onOpenInLbBot != null && gapAwaitingMatch(gap, stage, downloadsOn = fillOffered)) {
+			Row(
+				Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 6.dp),
+				verticalAlignment = Alignment.CenterVertically
+			) {
+				Text(
+					stringResource(Res.string.gap_awaiting_match_notice),
+					style = MaterialTheme.typography.bodyMedium,
+					color = MaterialTheme.colorScheme.onSurface,
+					modifier = Modifier.weight(1f)
+				)
+				onOpenInLbBot?.let { open ->
+					TextButton(onClick = open) { Text(stringResource(Res.string.action_open_in_lbbot)) }
+				}
+			}
+		}
 		Column(
 			Modifier
 				.fillMaxWidth()

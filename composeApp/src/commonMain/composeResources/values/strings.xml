@@ -653,6 +653,7 @@
 	<string name="lbbot_fill_attempts">Tried %1$d times</string>
 	<string name="lbbot_fill_no_retry">Asking again would hit the same problem — this one needs fixing in lb-bot.</string>
 	<string name="lbbot_fill_needs_match">Downloaded, but needs sorting out in lb-bot</string>
+	<string name="gap_awaiting_match_notice">Some downloaded files are waiting to be matched in lb-bot. The rest can still be fetched here.</string>
 	<string name="lbbot_fill_needs_pick">Waiting for you to pick a source</string>
 	<string name="lbbot_fill_cancelled">Cancelled</string>
 	<string name="lbbot_fill_gave_up">Stopped tracking this one</string>

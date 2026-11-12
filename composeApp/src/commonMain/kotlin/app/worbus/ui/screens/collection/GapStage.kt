@@ -100,7 +100,7 @@ fun gapStage(input: GapInput): GapStage {
 			steps = requestSteps(gapStepState(gap), gap.tracksDone, gap.tracksWanted)
 		)
 	}
-	val missing = missingTracks(gap)
+	val all = missingTracks(gap)
 	if (fill != null && fill.settled && fill.outcome == LbBotManager.OUTCOME_DONE) {
 		if (input.now - fill.finishedAt < GAP_RESULT_HOLD_MS) {
 			return GapStage.Done(
@@ -109,10 +109,17 @@ fun gapStage(input: GapInput): GapStage {
 				total = gap.total
 			)
 		}
-		if (missing.isEmpty()) return GapStage.Absent
+		if (all.isEmpty()) return GapStage.Absent
 	}
-	if (gap.status == "complete" || (missing.isEmpty() && gap.total > 0)) return GapStage.Absent
+	if (gap.status == "complete" || (all.isEmpty() && gap.total > 0)) return GapStage.Absent
 	val searching = input.searchAsked || gap.sourceTask?.status.orEmpty() in LbBotManager.SEARCH_IN_FLIGHT
+	// B-231, ruling (a), PROTOCOL §15.2: a pending match (files downloaded and waiting to be matched in
+	// lb-bot's workspace) is lb-bot's to sort out for THOSE files only. The tracks that are not
+	// `downloaded` can still be searched for, fetched and Auto-filled from here, as with any gap; the
+	// box says Open in lb-bot above its stage (`gapAwaitingMatch`). With nothing else to fetch it is
+	// Attention, as a stalled placement always is: no search or fetch from here can help then.
+	val awaiting = gap.awaitingMatch(searching)
+	val missing = if (awaiting) all.filter { it.state != "downloaded" } else all
 	// Worbus P1: with downloading off the box is the user's fold over what is missing, whatever view
 	// or fill is left from before; none of the stages below can be acted on, and their words are a
 	// download's (Attention's "Downloaded, but needs sorting out in lb-bot" included).
@@ -120,7 +127,7 @@ fun gapStage(input: GapInput): GapStage {
 		return if (input.view == GapView.FOLDED) GapStage.Folded(missing.size.takeIf { it > 0 } ?: input.mirroredMissing)
 		else GapStage.Tracks(missing, gap.total)
 	}
-	if (gap.stalledPlacement || gap.awaitingMatch(searching)) return GapStage.Attention(gapReason(gap))
+	if (gap.stalledPlacement || (awaiting && missing.isEmpty())) return GapStage.Attention(gapReason(gap))
 	// A fill that failed keeps the box open, saying why, until it is dismissed or tried again: also
 	// over the sources it was requested from (seen on the AVD: the sources view, with no rows left
 	// and no search running, read as searching for good). A new search tap is the way out.
@@ -209,3 +216,12 @@ fun gapPreselection(sources: List<LbGapSource>, preselected: Int?, selectedId: I
 
 /** lb-bot's 409 when a source id is not in today's list: a newer search replaced it (Phase A W6). */
 const val STALE_SOURCE_CODE = "stale_source"
+
+/**
+ * B-231: the gap has files waiting to be matched in lb-bot's workspace while the box still offers to
+ * fetch the rest; the box then shows Open in lb-bot prominently above its stage. Not while it is
+ * [GapStage.Attention] (which says it itself) or downloading is off.
+ */
+fun gapAwaitingMatch(gap: LbGap?, stage: GapStage, downloadsOn: Boolean): Boolean =
+	gap != null && downloadsOn && stage !is GapStage.Attention && stage !is GapStage.Active && stage !is GapStage.Absent &&
+		gap.awaitingMatch(searching = false)
