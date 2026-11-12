@@ -102,7 +102,7 @@ import worbus.composeapp.generated.resources.action_open_settings
 import worbus.composeapp.generated.resources.info_server_advanced
 import worbus.composeapp.generated.resources.info_server_footer
 import worbus.composeapp.generated.resources.info_library_refused
-import worbus.composeapp.generated.resources.info_library_too_old
+import worbus.composeapp.generated.resources.error_lbbot_too_old
 import worbus.composeapp.generated.resources.info_server_not_set
 import worbus.composeapp.generated.resources.info_server_set
 import worbus.composeapp.generated.resources.info_signed_in_as
@@ -483,7 +483,8 @@ fun ServerScreen() {
 					}
 				}
 
-				// Worbus P2: the settings line for a library service that will not answer this user.
+				// Worbus P2: the settings line for an lb-bot that will not answer this user. B-327 (the owner, 2026-11-12):
+				// "lb-bot" everywhere; the too-old line is R26's own string, as on every lb surface.
 				// R34: each line folds in and out as lb-bot's answer to this user changes.
 				Fold(visible = lbAccess == LbAccess.REFUSED) {
 					Text(
@@ -494,7 +495,7 @@ fun ServerScreen() {
 				}
 				Fold(visible = lbAccess == LbAccess.TOO_OLD) {
 					Text(
-						stringResource(Res.string.info_library_too_old),
+						stringResource(Res.string.error_lbbot_too_old),
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.error
 					)
