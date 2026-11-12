@@ -56,4 +56,20 @@ class CurrentUserSessionTest {
 		Thread.sleep(300)
 		assertEquals("bob", session.currentUserState.value?.name)
 	}
+
+	/**
+	 * Review of fix round 2, nit 2: the generation check and the assignment were two steps, and logout
+	 * moved the generation and cleared the user without the lock, so a logout landing between them
+	 * still left the old user set. The window is a few instructions, which no host test can force, so
+	 * this reads the source: both sides go through one lock.
+	 */
+	@Test
+	fun theCheckAndTheAssignmentShareALockWithLogout() {
+		val src = app.worbus.sourceFile("src/commonMain/kotlin/app/worbus/domain/manager/SessionManager.kt").readText()
+		val fetch = src.substringAfter("private suspend fun fetchCurrentUser(").substringBefore("\n\t}\n")
+		val logout = src.substringAfter("fun logout() {").substringBefore("\n\t}\n")
+		val guarded = Regex("""synchronized\(userLock\)\s*\{[^}]*userGeneration[^}]*currentUser\s*=""")
+		kotlin.test.assertTrue(guarded.containsMatchIn(fetch), "fetchCurrentUser checks and sets under userLock:\n$fetch")
+		kotlin.test.assertTrue(guarded.containsMatchIn(logout), "logout moves the generation and clears the user under userLock:\n$logout")
+	}
 }
