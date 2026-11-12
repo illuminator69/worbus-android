@@ -190,9 +190,16 @@ internal fun isServerDown(t: Throwable): Boolean {
 	val chain = causeChain(t)
 	if (chain.any { it is ServerReachability.GatewayDown || it.isGatewayFailure() }) return true
 	if (loginFailureKind(t) == LoginFailureKind.TLS_TO_PLAIN_HTTP) return true
-	return chain.any { it::class.simpleName in CONNECT_FAILURES || it.isConnectTimeout() }
+	return chain.any { it::class.simpleName in CONNECT_FAILURES }
 }
 
+/**
+ * Known by TYPE only, never by a message (review of the fix round, minor 3): Ktor writes the request
+ * URL into its read-timeout message, so "connect" in a message matched a search for "Disconnect" and
+ * every request to a host named `*connect*`. A connect timeout is `ConnectTimeoutException`, both
+ * Ktor's own (HttpTimeout's connect phase) and OkHttp's, which Ktor's OkHttp engine maps to it
+ * (`mapOkHttpException`) before anything here sees it.
+ */
 private val CONNECT_FAILURES = setOf(
 	"UnknownHostException",
 	"UnresolvedAddressException",
@@ -201,7 +208,3 @@ private val CONNECT_FAILURES = setOf(
 	"PortUnreachableException",
 	"ConnectTimeoutException"
 )
-
-/** OkHttp's own word for a connect timeout, when Ktor has not already mapped it to ConnectTimeoutException. */
-private fun Throwable.isConnectTimeout(): Boolean =
-	this::class.simpleName == "SocketTimeoutException" && (message ?: "").contains("connect", ignoreCase = true)
