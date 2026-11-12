@@ -1689,7 +1689,7 @@
 		<item quantity="one">%1$d waiting to be sent · %2$d refused by the server</item>
 		<item quantity="other">%1$d waiting to be sent · %2$d refused by the server</item>
 	</plurals>
-	<string name="info_danger_rebuild">This deletes this device's copy of your library and the changes still waiting to be sent, then pulls everything again from your server. Downloaded songs stay.</string>
+	<string name="info_danger_rebuild">This deletes this device's copy of your library, then pulls everything again from your server. Changes still waiting to be sent are kept and sent, and downloaded songs stay.</string>
 	<!-- Worbus P2 -->
 	<string name="info_server_add_address">Add the Worbus Server's address to connect</string>
 	<string name="info_server_not_signed_in">Not signed in</string>

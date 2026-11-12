@@ -34,7 +34,11 @@ import kotlin.time.Instant
 /** What Storage's "Pending sync actions" row says of the queue: how many wait, how many the server refused. */
 data class PendingLine(val waiting: Int, val refused: Int)
 
-fun pendingLineOf(writes: List<QueuedWrite>): PendingLine = PendingLine(waiting = writes.size, refused = 0)
+/** A write the server has refused at least once is refused (rule 5 keeps it, and tries it again), not waiting for the network. */
+fun pendingLineOf(writes: List<QueuedWrite>): PendingLine {
+	val refused = writes.count { it.refusals > 0 }
+	return PendingLine(waiting = writes.size - refused, refused = refused)
+}
 
 data class QueuedWrite(
 	val id: Long,
