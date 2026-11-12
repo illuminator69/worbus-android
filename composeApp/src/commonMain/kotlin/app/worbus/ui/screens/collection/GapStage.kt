@@ -202,17 +202,19 @@ internal fun gapActive(gap: LbGap, heldForMatch: Set<String>): GapStage.Active {
 fun gapFetchCount(gap: LbGap?): Int = gap?.let { gapTracksToFetch(it).size } ?: 0
 
 /**
- * The tracks ([gapTrackKey]) a pending match holds as `downloaded`, as this device last saw them,
- * for [GapInput.heldForMatch]: read afresh while the gap is a pending match, kept (those still
- * `downloaded`) while a fetch runs, and nothing once the gap is neither. A fetch this device first
- * sees already running (started elsewhere, the page opened mid-fetch) has nothing remembered and
- * counts every track not `present`, as before.
+ * The tracks ([gapTrackKey]) already `downloaded` before a fetch, which it does not fetch and so
+ * does not count, for [GapInput.heldForMatch]. **Captured at rest, as the fetch starts, and never
+ * grown during it** (fix round 5): at rest it is whatever is `downloaded` now (a pending match's
+ * files, or those a Failed box still holds, so a fetch from Search again counts only its own);
+ * while a fetch runs ([fetching]: the box has one committed, or lb-bot's record moves tracks) it
+ * keeps only those still `downloaded`, so the track the fetch itself brings is never taken in. A
+ * fetch this device first sees already running (started elsewhere, the page opened mid-fetch) holds
+ * nothing and counts every track not `present`, as before.
  */
 fun heldForMatch(previous: Set<String>, gap: LbGap?, fetching: Boolean = false): Set<String> = when {
 	gap == null -> previous
-	gapMatchPending(gap) -> gap.tracks.filter { it.state == "downloaded" }.map(::gapTrackKey).toSet()
-	gapTransferring(gap) -> gap.tracks.filter { it.state == "downloaded" && gapTrackKey(it) in previous }.map(::gapTrackKey).toSet()
-	else -> emptySet()
+	fetching || gapTransferring(gap) -> gap.tracks.filter { it.state == "downloaded" && gapTrackKey(it) in previous }.map(::gapTrackKey).toSet()
+	else -> gap.tracks.filter { it.state == "downloaded" }.map(::gapTrackKey).toSet()
 }
 
 /** The tracks the album still lacks, in tracklist order. */
