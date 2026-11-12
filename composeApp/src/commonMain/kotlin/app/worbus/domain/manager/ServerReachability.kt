@@ -85,10 +85,14 @@ class ServerReachability(
 		}
 	}
 
-	/** Install on a Navidrome client: every exchange reports to this. */
-	fun observe(config: HttpClientConfig<*>) {
+	/**
+	 * Install on a client: every exchange it has with Navidrome reports to this. [onlyFor] picks the
+	 * requests that are Navidrome's, for a client that also talks to other hosts.
+	 */
+	fun observe(config: HttpClientConfig<*>, onlyFor: (String) -> Boolean = { true }) {
 		config.install(createClientPlugin("NavidromeReachability") {
 			on(Send) { request ->
+				if (!onlyFor(request.url.buildString())) return@on proceed(request)
 				val call = try {
 					proceed(request)
 				} catch (e: Throwable) {
