@@ -59,6 +59,13 @@ class SessionManager(
 
 	/** A user fetch is out: the sheets ask on every recomposition, and one request answers them all (B-308). */
 	private val userFetching = MutableStateFlow(false)
+
+	/**
+	 * Review nit 8: which session a user fetch is for. Moved by every logout and login, so a fetch
+	 * that started under an earlier one (in flight at logout, or queued behind the mutex across a
+	 * login) does not set its user over this session's.
+	 */
+	private val userGeneration = MutableStateFlow(0L)
 	private val mutex = Mutex()
 	private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -195,6 +202,7 @@ class SessionManager(
 		password: String
 	) {
 		val client = createClient(instanceUrl, username, password, observed = false)
+		userGeneration.update { it + 1 }
 
 		// B-307: the failure is rethrown as it is. It used to be wrapped in "Failed to connect to the
 		// instance. Please check your credentials", which the login page's details then showed to
@@ -223,6 +231,7 @@ class SessionManager(
 		// direct AudioMuse, not the Worbus Server, and stays.
 		secrets.navidromePassword = ""
 		_isLoggedIn.value = false
+		userGeneration.update { it + 1 }
 		currentUser = null
 		reachability.probe = null
 		reachability.reset()
@@ -582,12 +591,16 @@ class SessionManager(
 
 	private suspend fun fetchCurrentUser(
 		username: String = settings.getString("username", ""),
-		client: SubsonicClient = api
+		client: SubsonicClient = api,
+		generation: Long = userGeneration.value
 	): User? {
 		mutex.withLock {
 			if (username.isNotBlank()) {
-				currentUser = client.getUser(username)
-				return currentUser
+				val user = client.getUser(username)
+				// A logout or another login since this fetch started: not this session's user.
+				if (userGeneration.value != generation) return null
+				currentUser = user
+				return user
 			}
 		}
 
@@ -607,9 +620,10 @@ class SessionManager(
 		var claimed = false
 		userFetching.update { busy -> claimed = !busy; true }
 		if (!claimed) return null
+		val generation = userGeneration.value
 		scope.launch {
 			try {
-				fetchCurrentUser()
+				fetchCurrentUser(generation = generation)
 			} catch (e: Exception) {
 				Logger.w("SessionManager", "Failed to fetch current user info", e)
 			} finally {
