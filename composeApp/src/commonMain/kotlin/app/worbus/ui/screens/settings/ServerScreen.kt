@@ -102,7 +102,7 @@ import worbus.composeapp.generated.resources.action_open_settings
 import worbus.composeapp.generated.resources.info_server_advanced
 import worbus.composeapp.generated.resources.info_server_footer
 import worbus.composeapp.generated.resources.info_library_refused
-import worbus.composeapp.generated.resources.info_library_too_old
+import worbus.composeapp.generated.resources.error_lbbot_too_old
 import worbus.composeapp.generated.resources.info_server_not_set
 import worbus.composeapp.generated.resources.info_server_set
 import worbus.composeapp.generated.resources.info_signed_in_as
@@ -494,7 +494,7 @@ fun ServerScreen() {
 				}
 				Fold(visible = lbAccess == LbAccess.TOO_OLD) {
 					Text(
-						stringResource(Res.string.info_library_too_old),
+						stringResource(Res.string.error_lbbot_too_old),
 						style = MaterialTheme.typography.bodySmall,
 						color = MaterialTheme.colorScheme.error
 					)
