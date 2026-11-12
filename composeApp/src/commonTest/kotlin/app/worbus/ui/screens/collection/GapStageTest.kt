@@ -188,6 +188,36 @@ class GapStageTest {
 	}
 
 	/**
+	 * Fix round 5, the final VM check: (a) as the fetched track landed, the record read `[present,
+	 * present, downloaded, downloaded]` at `picking` with the fetch still committed, `heldForMatch`
+	 * read the pending match afresh, took the new track in, and the box said "Getting 2 tracks · 2 of
+	 * 2"; (b) a fetch started by Search again from a Failed box (status `failed`, no pending match)
+	 * held nothing and counted 2 from the start. What a fetch holds is captured once, as it starts,
+	 * and never grows during it.
+	 */
+	@Test
+	fun whatAFetchHoldsIsCapturedAsItStartsAndNeverGrows() {
+		fun t(vararg states: String) = states.mapIndexed { i, s -> track(i + 1, s) }
+		fun active(g: LbGap, held: Set<String>, committed: Boolean) =
+			gapStage(GapInput(g, 2, null, GapView.TRACKS, committed, false, 100_000L, heldForMatch = held)) as GapStage.Active
+
+		// (a) the walk's landing, the fetch committed throughout.
+		var held = heldForMatch(emptySet(), gap(status = "picking", tracks = t("present", "present", "downloaded", "missing")))
+		val queued = gap(status = "picking", tracks = t("present", "present", "downloaded", "queued"))
+		held = heldForMatch(held, queued, fetching = true)
+		assertEquals(listOf(0, 1), active(queued, held, committed = true).let { listOf(it.done, it.wanted) })
+		val landed = gap(status = "picking", tracks = t("present", "present", "downloaded", "downloaded"))
+		held = heldForMatch(held, landed, fetching = true)
+		assertEquals(listOf(1, 1), active(landed, held, committed = true).let { listOf(it.done, it.wanted) }, "1 of 1, not 2 of 2")
+
+		// (b) Search again from a Failed box, then Request.
+		var fromFailed = heldForMatch(emptySet(), gap(status = "failed", tracks = t("present", "present", "downloaded", "failed")))
+		val fetching = gap(status = "downloading", tracks = t("present", "present", "downloaded", "queued"))
+		fromFailed = heldForMatch(fromFailed, fetching, fetching = true)
+		assertEquals(listOf(0, 1), active(fetching, fromFailed, committed = false).let { listOf(it.done, it.wanted) }, "Getting 1 track")
+	}
+
+	/**
 	 * B-231 round 2 (b), the coordinator's ruling for both clients: a plain failed fill (a real
 	 * failure, not the `needs_match` settle) on a pending match shows Failed.
 	 */
