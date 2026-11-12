@@ -134,4 +134,21 @@ class LegacyQueueMoveTest {
 			.drain { sent += it.itemId }
 		assertEquals(listOf("s-1", "s-2"), sent)
 	}
+
+	/**
+	 * Review (fix round) nit 7: rows moved and left unsent, a rollback to 0.7.0 (its cache.db rebuilt,
+	 * so ids start at 1 again), a new write there, forward again. The new row 1 collides with the
+	 * still-pending moved row 1 on the unique `legacyId`; the IGNORE dropped it, it was recorded as
+	 * moved all the same and then deleted from cache.db: the write was lost.
+	 */
+	@Test
+	fun aLegacyIdStillPendingHereDoesNotSwallowTheNewRowWithThatId() = runBlocking {
+		val writes = WriteDao()
+		WriteQueue(RoomWriteQueueStore(writes, LegacyDao(listOf(SyncActionEntity(1, SyncActionType.SCROBBLE, "s-1", t1)))), log = { _, _ -> })
+			.pending() // moved, not sent
+		val rebuilt = LegacyDao(listOf(SyncActionEntity(1, SyncActionType.STAR, "al-9", t2)))
+		val next = WriteQueue(RoomWriteQueueStore(writes, rebuilt), log = { _, _ -> })
+		assertEquals(listOf("SCROBBLE:s-1", "STAR:al-9"), next.pending().map { "${it.type}:${it.itemId}" }, "both writes are queued")
+		assertEquals(emptyList(), rebuilt.rows)
+	}
 }
