@@ -336,7 +336,9 @@ class CollectionDetailViewModel(
 	fun dismissGapFill() {
 		val groupId = gapGroupId ?: return
 		lbBotManager.dismiss(groupId)
-		_gapBox.update { it.copy(view = GapView.FOLDED, error = null) }
+		// A source task's error (Pick the best source for me) is put away by its id: the record keeps it.
+		val task = lbBotManager.gaps.value[groupId]?.sourceTask?.id.orEmpty()
+		_gapBox.update { it.copy(view = GapView.FOLDED, error = null, dismissedPickTask = task.ifBlank { it.dismissedPickTask }) }
 	}
 
 	private fun gapAct(
@@ -857,6 +859,8 @@ data class GapBoxUi(
 	val pickAgain: Boolean = false,
 	val working: Boolean = false,
 	val error: LbBotManager.LbError? = null,
+	/** The source task whose error was dismissed here ([GapInput.dismissedPickTask]). */
+	val dismissedPickTask: String = "",
 	/** The source this device requested from, for the steps' "FLAC · from …" line. */
 	val fetched: LbGapSource? = null,
 	/** Folder listings fetched for cards, by source id. */

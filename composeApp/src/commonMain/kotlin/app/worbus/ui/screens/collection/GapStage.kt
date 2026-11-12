@@ -53,7 +53,9 @@ data class GapInput(
 	 * last saw it, carried across the fetch that follows ([heldForMatch]). Not fetched by it, so not
 	 * counted by it.
 	 */
-	val heldForMatch: Set<String> = emptySet()
+	val heldForMatch: Set<String> = emptySet(),
+	/** The source task whose error the user dismissed ([GapStage.PickFailed]): it is not said again. */
+	val dismissedPickTask: String = ""
 )
 
 /** Worbus P1: whether the gaps box's line offers Fill gaps (lb-bot can download; an older peer can). */
@@ -76,6 +78,12 @@ sealed interface GapStage {
 	/** Files that arrived and need filing in lb-bot: no search or fetch from here can help. */
 	data class Attention(val reason: String) : GapStage
 	data class Failed(val reason: String, val mp3WouldHelp: Boolean) : GapStage
+	/**
+	 * Fix round 5 (the final VM check): lb-bot's source task (Pick the best source for me) ended in
+	 * error while the gap still waits for a pick: nothing was fetched, and [reason] is lb-bot's
+	 * `sourceTask.error` verbatim.
+	 */
+	data class PickFailed(val reason: String, val taskId: String, val mp3WouldHelp: Boolean) : GapStage
 	data class Done(val added: Int, val present: Int, val total: Int) : GapStage
 }
 
@@ -141,6 +149,7 @@ fun gapStage(input: GapInput): GapStage {
 	if (fill != null && fill.settled && fill.outcome == LbBotManager.OUTCOME_FAILED && !input.searchAsked && !matchPendingSettle) {
 		return GapStage.Failed(gapReason(gap).ifBlank { fill.reason }, gap.mp3WouldHelp || fill.mp3WouldHelp)
 	}
+	gapPickFailure(gap, input, searching)?.let { return it }
 	if (input.view == GapView.SOURCES) {
 		return when {
 			searching -> GapStage.Searching
@@ -216,6 +225,9 @@ fun heldForMatch(previous: Set<String>, gap: LbGap?, fetching: Boolean = false):
 	fetching || gapTransferring(gap) -> gap.tracks.filter { it.state == "downloaded" && gapTrackKey(it) in previous }.map(::gapTrackKey).toSet()
 	else -> gap.tracks.filter { it.state == "downloaded" }.map(::gapTrackKey).toSet()
 }
+
+/** [GapStage.PickFailed] when lb-bot's source task ended in error and nothing newer is asked. */
+internal fun gapPickFailure(gap: LbGap, input: GapInput, searching: Boolean): GapStage.PickFailed? = null
 
 /** The tracks the album still lacks, in tracklist order. */
 fun missingTracks(gap: LbGap): List<LbGapTrack> = gap.tracks.filter { it.state !in HELD_TRACK_STATES }

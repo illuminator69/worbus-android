@@ -299,7 +299,8 @@ fun CollectionDetailScreen(
 			searchAsked = gapBox.searchAsked,
 			now = gapClock,
 			downloadsOn = downloads.isOn,
-			heldForMatch = heldNow
+			heldForMatch = heldNow,
+			dismissedPickTask = gapBox.dismissedPickTask
 		)
 	)
 	// A safe source is chosen for the user when the sources land (recommended, the artist found in
