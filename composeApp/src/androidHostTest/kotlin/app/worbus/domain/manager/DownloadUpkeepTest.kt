@@ -37,7 +37,7 @@ class DownloadUpkeepTest {
 		songId = id, status = DownloadStatus.DOWNLOADED, progress = 1f, filePath = "/d/$id.flac", fileSize = 5_000_000L
 	)
 
-	private inner class World(ids: List<String>) {
+	private inner class World(val ids: List<String>) {
 		var clock = 1_000_000_000L
 		var online = true
 		val rows = ids.associateWith { row(it) }.toMutableMap()
