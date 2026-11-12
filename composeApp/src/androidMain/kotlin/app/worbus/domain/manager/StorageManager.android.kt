@@ -86,3 +86,9 @@ internal fun replaceAtomically(temp: File, target: File): Boolean {
 	temp.delete()
 	return false
 }
+
+/**
+ * Minor 4: scratch files (`*.part`) in [dir] last written before [before] (a process killed
+ * mid-transfer leaves one, and nothing else removes it). Seam: removes nothing yet.
+ */
+internal fun sweepScratchFiles(dir: File, before: Long): Int = 0

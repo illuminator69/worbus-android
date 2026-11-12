@@ -83,6 +83,12 @@ data class UpkeepReport(
 	val refetched: List<String> = emptyList(),
 	val markedGone: List<String> = emptyList(),
 	val removed: List<String> = emptyList(),
+	/** old id to new id: a download carried to the song Navidrome re-keyed it as (major 1). */
+	val moved: Map<String, String> = emptyMap(),
+	/** Changed, but playing or queued here, or over the re-fetch budget: asked again next pass. */
+	val deferred: List<String> = emptyList(),
+	/** Records from before 3 placed under the current session (their song is in this session's library). */
+	val adopted: Int = 0,
 	/** The gone half held back: too many at once, or Navidrome did not answer. */
 	val goneHeld: String = "",
 	/** The pass did nothing at all, and why ("offline"). */
@@ -99,6 +105,41 @@ interface UpkeepDownloads {
 
 	/** Delete the file and the row. */
 	suspend fun remove(songId: String)
+
+	/** Carry the download of [fromId] to [to] (a re-key): its file renamed `<to>.<ext>`, its row re-keyed. */
+	suspend fun move(fromId: String, to: SongEntity): Boolean = false
+}
+
+/** Whose a download is: the Navidrome server, by its address normalised, and the user (major 2). */
+data class DownloadOwner(val server: String, val account: String) {
+	companion object {
+		fun of(instanceUrl: String, username: String) =
+			DownloadOwner(instanceUrl.trim().trimEnd('/').lowercase(), username.trim())
+	}
+}
+
+/**
+ * What the upkeep keeps between passes (persisted; [UpkeepMemoryStore]). [clockMs] is its own clock:
+ * each pass adds the wall time since the last one, never less than 0 and never more than
+ * [DownloadUpkeep.CLOCK_STEP_MAX_MS], so a clock set forward (or back) moves it by at most a step.
+ */
+@kotlinx.serialization.Serializable
+data class UpkeepMemory(
+	val owner: String = "",
+	val clockMs: Long = 0L,
+	val lastWallMs: Long = 0L,
+	/** The song count of the last complete pull that was not a shrink, for this [owner]; 0 = none yet. */
+	val libraryRef: Int = 0,
+	/** [clockMs] when the library first read as shrunk below [libraryRef]; 0 while it does not. */
+	val shrunkSinceMs: Long = 0L,
+	/** The re-fetch budget's day: when it started on [clockMs], and how many were asked since. */
+	val refetchDayStartMs: Long = 0L,
+	val refetchedInDay: Int = 0
+)
+
+interface UpkeepMemoryStore {
+	suspend fun load(): UpkeepMemory
+	suspend fun save(memory: UpkeepMemory)
 }
 
 /** The `DownloadOrigin` table ([DownloadOriginEntity]). */
@@ -134,13 +175,33 @@ fun songOrigin(song: SongEntity): String = ORIGIN_VERSION + JsonArray(
 /** The fields [songOrigin] reads, and their order. A record of another version is re-recorded, never compared. */
 const val ORIGIN_VERSION = "o1:"
 
+/** The fields [songOrigin] recorded, read back (a successor is matched on them, major 1); null for another version. */
+data class OriginFields(
+	val size: Long, val suffix: String, val bitRate: Int, val seconds: Long, val title: String,
+	val artist: String, val artists: String, val album: String, val track: Int, val disc: Int,
+	val year: Int, val mbid: String
+)
+
+/** Seam. */
+fun originFields(origin: String): OriginFields? = null
+
+/** Seam: the one song in [candidates] a gone download was re-keyed as, or null. */
+fun successorOf(old: OriginFields, candidates: List<SongEntity>, listed: Set<String>, held: Set<String>): SongEntity? = null
+
 class DownloadUpkeep(
 	private val store: DownloadOriginStore,
 	private val downloads: UpkeepDownloads,
 	private val songsById: suspend (List<String>) -> List<SongEntity>,
 	private val askSong: suspend (String) -> SongAnswer,
 	private val isOnline: () -> Boolean,
-	private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() }
+	private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+	/** The current session's owner; null with no session. Seam: not read yet. */
+	private val owner: () -> DownloadOwner? = { null },
+	private val memory: UpkeepMemoryStore? = null,
+	/** Song ids the local player is playing or has queued. Seam: not read yet. */
+	private val inUse: () -> Set<String> = { emptySet() },
+	/** Room's songs at this track and disc number, for the successor match. Seam: not read yet. */
+	private val songsAt: suspend (track: Int, disc: Int) -> List<SongEntity> = { _, _ -> emptyList() }
 ) {
 	private val lock = Mutex()
 
@@ -241,10 +302,13 @@ class DownloadUpkeep(
 		val writes = dirty.filter { it !in removed }.mapNotNull { records[it] }
 		if (writes.isNotEmpty()) store.put(writes)
 		if (removed.isNotEmpty()) store.remove(removed)
-		UpkeepReport(baselined, refetched, markedGone, removed, goneHeld)
+		UpkeepReport(baselined = baselined, refetched = refetched, markedGone = markedGone, removed = removed, goneHeld = goneHeld)
 	}
 
 	companion object {
+		/** The most one pass adds to the upkeep's clock. */
+		val CLOCK_STEP_MAX_MS: Long = 12.hours.inWholeMilliseconds
+
 		/** Rule 4: the second "gone" must come at least this long after the first. */
 		val GONE_CONFIRM_MS: Long = 24.hours.inWholeMilliseconds
 
@@ -286,7 +350,25 @@ interface DownloadFiles {
 	/** Put [tempPath] over [path] in one rename; false, and [tempPath] gone, when it cannot. Never a copy. */
 	fun replace(tempPath: String, path: String): Boolean
 	fun delete(path: String)
+
+	/** Rename [from] to [to] when [to] does not exist; false otherwise, and nothing moved. */
+	fun move(from: String, to: String): Boolean = false
 }
+
+/**
+ * Carry a download to the song Navidrome re-keyed it as (major 1): the file renamed to [newPath]
+ * (`<new id>.<ext>`, the name adoption reads the id from), then the row under the new id, then the old
+ * row dropped. Seam.
+ */
+internal suspend fun moveDownload(
+	row: DownloadEntity,
+	toId: String,
+	newPath: String,
+	files: DownloadFiles,
+	insertRow: suspend (DownloadEntity) -> Unit,
+	deleteRow: suspend (String) -> Unit,
+	now: Long
+): Boolean = false
 
 /**
  * Fetch a changed song again over its download ([row]): into [tempPath] by [transfer] (which writes

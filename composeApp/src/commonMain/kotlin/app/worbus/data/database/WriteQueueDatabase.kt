@@ -29,11 +29,13 @@ import app.worbus.data.database.entities.PendingWriteEntity
  * aside whole by the first-open check (`writes.db.newer-<ms>`), kept for that build, never opened
  * and never dropped; a corrupt file is moved aside the same way.
  */
-const val WRITES_DB_VERSION = 2
+const val WRITES_DB_VERSION = 3
 
 /*
  * Version 2 (Q-165, 2026-11-12): `DownloadOrigin` ([DownloadOriginEntity]), what each download was
  * made from. The device's own record like the queue, so it shares the file and its policy.
+ * Version 3 (the Q-165 follow-up): whose each download is (`server`, `account`) and how many complete
+ * pulls have called it gone (`gonePulls`); `goneSeenAt` is the upkeep's clock from 3 on.
  */
 @Database(
 	version = WRITES_DB_VERSION,
@@ -60,5 +62,19 @@ val MIGRATION_WRITES_1_2 = object : Migration(1, 2) {
 	}
 }
 
+/**
+ * 2 → 3 (the Q-165 follow-up): three columns on `DownloadOrigin`, every existing row "nobody's" ('' and '')
+ * so it is never judged gone until the current session proves it; and every gone mark cleared, since 2
+ * kept it on the wall clock and 3 keeps it on the upkeep's own. Its SQL is held to `3.json`.
+ */
+val MIGRATION_WRITES_2_3 = object : Migration(2, 3) {
+	override suspend fun migrate(connection: SQLiteConnection) {
+		connection.execSQL("ALTER TABLE `DownloadOrigin` ADD COLUMN `server` TEXT NOT NULL DEFAULT ''")
+		connection.execSQL("ALTER TABLE `DownloadOrigin` ADD COLUMN `account` TEXT NOT NULL DEFAULT ''")
+		connection.execSQL("ALTER TABLE `DownloadOrigin` ADD COLUMN `gonePulls` INTEGER NOT NULL DEFAULT 0")
+		connection.execSQL("UPDATE `DownloadOrigin` SET `goneSeenAt` = 0")
+	}
+}
+
 /** Every `writes.db` migration, oldest first: a chain from 1 to [WRITES_DB_VERSION] with no gap. */
-val WRITES_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_WRITES_1_2)
+val WRITES_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_WRITES_1_2, MIGRATION_WRITES_2_3)
