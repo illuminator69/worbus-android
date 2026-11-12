@@ -167,12 +167,72 @@ class BrowseResolver(
  *
  * The normaliser is the desktop's too since the owner's ruling (2026-11-12): a letter in any script
  * counts, on both clients. The shared vectors are `ArtistNameVectorsTest`. A credit with no act (all
- * punctuation, emoji, empty) matches nothing, itself included.
+ * punctuation, emoji, empty) matches nothing, itself included; an act `A (B)` is also A and B alone
+ * ([creditedAct]).
  */
 internal fun sameArtist(a: String, b: String): Boolean {
-	val x = creditActs(a)
-	val y = creditActs(b)
-	return x.any { it in y }
+	val x = creditedActs(a)
+	val y = creditedActs(b)
+	return x.any { left -> y.any { right -> sameAct(left, right) } }
+}
+
+/**
+ * B-313 amendment (2026-11-12, the coordinator's ruling for both clients; Worbus for desktop's
+ * `creditedAct` / `sameAct`): an act written `A (B)`, ONE trailing part in round or full-width brackets,
+ * is also A alone and B alone, each as a whole key. K-pop libraries tag "BTS (방탄소년단)" where lb-bot
+ * and MusicBrainz say "BTS". B is never a name on its own when every word of its key is a number or a
+ * [CREDIT_DISAMBIGUATORS] word ("(US)", "(band)", "(2)"); two bracketed acts match only as wholes
+ * (`A (B)` is not `A (C)`, nor `B (A)`). Square brackets, two bracketed parts, an unclosed bracket:
+ * not the shape.
+ */
+internal data class CreditedAct(val key: String, val bracketed: Boolean, val alone: List<String>)
+
+private val TRAILING_BRACKET = Regex("""^([^()（）]*)[(（]([^()（）]*)[)）][\s\p{Z}]*$""")
+
+/** Words that only tell two acts of one name apart (lower-case keys): the desktop's list, verbatim. */
+internal val CREDIT_DISAMBIGUATORS: Set<String> = listOf(
+	// roles
+	"artist band composer dj duo group mc musician producer rapper singer songwriter trio vocalist",
+	// genres
+	"electronic folk hip hop indie jazz metal pop punk rap rock",
+	// countries and regions
+	"au br ca cn de dk es fi fr gb hk ie japan jp korea kr mx nl north nz pl ru se south tw ua uk us usa",
+	// nationalities
+	"american australian brazilian british canadian chinese danish dutch english finnish french german",
+	"irish italian japanese korean mexican norwegian russian scottish spanish swedish",
+	// the same roles in the scripts the shape is common in
+	"가수 그룹 래퍼 밴드 バンド 歌手"
+).joinToString(" ").split(" ").toSet()
+
+private val ALL_DECIMAL_DIGITS = Regex("""\p{Nd}+""")
+
+private fun isDisambiguator(key: String): Boolean =
+	key.split(" ").all { ALL_DECIMAL_DIGITS.matches(it) || it in CREDIT_DISAMBIGUATORS }
+
+/** One act's key, and for the `A (B)` shape the keys it also is alone; null when it has no key. */
+internal fun creditedAct(part: String): CreditedAct? {
+	val key = creditKey(part)
+	if (key.isEmpty()) return null
+	val shape = TRAILING_BRACKET.find(part.trim())
+	val inner = shape?.let { creditKey(it.groupValues[2]) }.orEmpty()
+	if (shape == null || inner.isEmpty()) return CreditedAct(key, bracketed = false, alone = emptyList())
+	val alone = listOf(creditKey(shape.groupValues[1]), if (isDisambiguator(inner)) "" else inner).filter { it.isNotEmpty() }
+	return CreditedAct(key, bracketed = true, alone = alone)
+}
+
+/** A credit's acts ([CREDIT_SEPARATORS]); a credit of separators only is one act, itself; none without a key. */
+internal fun creditedActs(credit: String): List<CreditedAct> {
+	val whole = creditedAct(credit) ?: return emptyList()
+	val parts = credit.split(CREDIT_SEPARATORS).mapNotNull(::creditedAct)
+	return parts.ifEmpty { listOf(whole) }
+}
+
+/** Exact whole keys; else a bracketed act against a plain one, by what the bracketed one is alone. */
+internal fun sameAct(x: CreditedAct, y: CreditedAct): Boolean {
+	if (x.key == y.key) return true
+	if (x.bracketed == y.bracketed) return false
+	val (shaped, plain) = if (x.bracketed) x to y else y to x
+	return plain.key in shaped.alone
 }
 
 /**
@@ -188,12 +248,6 @@ internal val CREDIT_SEPARATORS = Regex(
 	"""[\s\p{Z}]+-[\s\p{Z}]+|[\s\p{Z}]*(?:&|\+|,|;|•|(?<![\p{L}\p{M}\p{Nd}\p{Pc}])(?:feat\.?|featuring|with|vs\.?|x)(?![\p{L}\p{M}\p{Nd}\p{Pc}]))[\s\p{Z}]*""",
 	RegexOption.IGNORE_CASE
 )
-
-/** The acts a credit names, each normalised; empty when it names none (B-313: an empty key is no act). */
-internal fun creditActs(credit: String): Set<String> {
-	val acts = credit.split(CREDIT_SEPARATORS).map(::creditKey).filter { it.isNotEmpty() }.toSet()
-	return acts.ifEmpty { setOfNotNull(creditKey(credit).ifEmpty { null }) }
-}
 
 /**
  * B-313's shared key: lower-cased (language-neutral), every run of code points that are not a letter
