@@ -3413,13 +3413,28 @@ class LbBotManager(
 					}
 					when (gapFrameAction(watched = watched, held = key in _gaps.value)) {
 						GapFrameAction.POLL -> kickPoll()
-						GapFrameAction.REREAD -> Unit
-						GapFrameAction.NONE -> kickPoll()
+						// B-376: a box open on this group follows what another device did to it.
+						GapFrameAction.REREAD -> rereadGapOnFrame(key)
+						GapFrameAction.NONE -> Unit
 					}
 				}
 				// A wishlist row landed; the wishlist screen re-reads on the revision.
 				"wishlist" -> _libraryRevision.value += 1
 			}
+		}
+	}
+
+	/** Gap groups whose record a frame is re-reading now: one read per group in flight (a transfer pushes often). */
+	private val gapFrameReads = MutableStateFlow<Set<String>>(emptySet())
+
+	private suspend fun rereadGapOnFrame(key: String) {
+		var claimed = false
+		gapFrameReads.update { reads -> claimed = key !in reads; reads + key }
+		if (!claimed) return
+		try {
+			refreshGap(key)
+		} finally {
+			gapFrameReads.update { it - key }
 		}
 	}
 
@@ -5830,4 +5845,8 @@ enum class GapFrameAction {
 }
 
 /** [watched]: this device's ledger watches the group; [held]: its record has been read here (a box showed it). */
-fun gapFrameAction(watched: Boolean, held: Boolean): GapFrameAction = if (watched) GapFrameAction.POLL else GapFrameAction.NONE
+fun gapFrameAction(watched: Boolean, held: Boolean): GapFrameAction = when {
+	watched -> GapFrameAction.POLL
+	held -> GapFrameAction.REREAD
+	else -> GapFrameAction.NONE
+}
