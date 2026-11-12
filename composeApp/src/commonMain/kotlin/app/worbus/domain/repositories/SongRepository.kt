@@ -26,6 +26,7 @@ import app.worbus.util.rowsInOrder
 import app.worbus.util.idsAsJson
 import app.worbus.util.songListSql
 import kotlin.time.Clock
+import app.worbus.domain.manager.ratingWrite
 
 /** A song was starred ([starred]) or unstarred on this device. */
 data class StarChange(val songId: String, val starred: Boolean)
@@ -130,32 +131,26 @@ class SongRepository(
 	suspend fun getSongRating(song: DomainSong) = songDao.getSongRating(song.id) ?: 0
 	suspend fun starSong(song: DomainSong) {
 		val now = Clock.System.now()
+		// Queued before Room is written (review minor 6): a pull's batch in between then sees it.
+		syncManager.enqueue(SyncActionType.STAR, song.id, now)
 		if (songDao.setSongStarredAt(song.id, now.toEpochMilliseconds()) == 0) {
 			songDao.insertSong(song.toEntity().copy(starredAt = now))
 		}
-		syncManager.enqueueAction(SyncActionType.STAR, song.id, now)
 		_starChanges.tryEmit(StarChange(song.id, starred = true))
 	}
 
 	suspend fun unstarSong(song: DomainSong) {
+		syncManager.enqueue(SyncActionType.UNSTAR, song.id)
 		if (songDao.setSongStarredAt(song.id, null) == 0) {
 			songDao.insertSong(song.toEntity().copy(starredAt = null))
 		}
-		syncManager.enqueueAction(SyncActionType.UNSTAR, song.id)
 		_starChanges.tryEmit(StarChange(song.id, starred = false))
 	}
 
 	suspend fun rateSong(song: DomainSong, rating: Int) {
+		ratingWrite(rating)?.let { syncManager.enqueue(it, song.id) }
 		if (songDao.setSongRating(song.id, rating) == 0) {
 			songDao.insertSong(song.toEntity().copy(userRating = rating))
-		}
-		when (rating) {
-			0 -> syncManager.enqueueAction(SyncActionType.STAR_0, song.id)
-			1 -> syncManager.enqueueAction(SyncActionType.STAR_1, song.id)
-			2 -> syncManager.enqueueAction(SyncActionType.STAR_2, song.id)
-			3 -> syncManager.enqueueAction(SyncActionType.STAR_3, song.id)
-			4 -> syncManager.enqueueAction(SyncActionType.STAR_4, song.id)
-			5 -> syncManager.enqueueAction(SyncActionType.STAR_5, song.id)
 		}
 	}
 }

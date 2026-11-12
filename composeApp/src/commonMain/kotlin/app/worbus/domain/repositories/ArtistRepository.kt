@@ -119,17 +119,18 @@ class ArtistRepository(
 
 	suspend fun starArtist(artist: DomainArtist) {
 		val now = Clock.System.now()
+		// Queued before Room is written (review minor 6): a pull's batch in between then sees it.
+		syncManager.enqueue(SyncActionType.STAR, artist.id, now)
 		if (artistDao.setArtistStarredAt(artist.id, now.toEpochMilliseconds()) == 0) {
 			artistDao.insertArtist(artist.toEntity().copy(starredAt = now))
 		}
-		syncManager.enqueueAction(SyncActionType.STAR, artist.id, now)
 	}
 
 	suspend fun unstarArtist(artist: DomainArtist) {
+		syncManager.enqueue(SyncActionType.UNSTAR, artist.id)
 		if (artistDao.setArtistStarredAt(artist.id, null) == 0) {
 			artistDao.insertArtist(artist.toEntity().copy(starredAt = null))
 		}
-		syncManager.enqueueAction(SyncActionType.UNSTAR, artist.id)
 	}
 }
 

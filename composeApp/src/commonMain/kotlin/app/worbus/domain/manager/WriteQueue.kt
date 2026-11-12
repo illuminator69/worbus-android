@@ -73,6 +73,17 @@ private val RATING_FAMILY = setOf(
 	SyncActionType.STAR_3, SyncActionType.STAR_4, SyncActionType.STAR_5
 )
 
+/** The write that sets [rating] (0 clears it), or null outside 0..5. */
+fun ratingWrite(rating: Int): SyncActionType? = when (rating) {
+	0 -> SyncActionType.STAR_0
+	1 -> SyncActionType.STAR_1
+	2 -> SyncActionType.STAR_2
+	3 -> SyncActionType.STAR_3
+	4 -> SyncActionType.STAR_4
+	5 -> SyncActionType.STAR_5
+	else -> null
+}
+
 /** The rating a `STAR_n` write sets, or null for any other type. */
 fun ratingOf(type: SyncActionType): Int? = when (type) {
 	SyncActionType.STAR_0 -> 0
@@ -256,8 +267,22 @@ class WriteQueue(
 	/** Logout: the writes belong to the account that made them, and must not go out as the next one. */
 	suspend fun clear() = locked { store.clear() }
 
-	/** A pull's write of server rows, given the overlay to apply to them (rule 6). */
-	suspend fun <T> withOverlay(block: suspend (PendingOverlay) -> T): T = block(overlay())
+	/**
+	 * A pull's write of server rows, given the overlay to apply to them (rule 6), with the queue held
+	 * from the overlay's read to the end of the write (review minor 6): a star or rating enqueued
+	 * meanwhile waits, and its caller writes Room after the batch, so the batch cannot write the
+	 * server's older value over it. Callers queue a star before they write Room
+	 * (`SyncManager.enqueue`), so a batch that reads the overlay after it sees it.
+	 */
+	suspend fun <T> withOverlay(block: suspend (PendingOverlay) -> T): T = locked { block(readOverlay()) }
+
+	private suspend fun readOverlay(): PendingOverlay = try {
+		PendingOverlay(store.pending())
+	} catch (e: Exception) {
+		if (e is CancellationException) throw e
+		log("pending writes unreadable for the pull's overlay", e)
+		PendingOverlay.NONE
+	}
 
 	/** The overlay a pull applies to what it writes (rule 6). Never fails a pull: unreadable, it is empty. */
 	suspend fun overlay(): PendingOverlay = try {

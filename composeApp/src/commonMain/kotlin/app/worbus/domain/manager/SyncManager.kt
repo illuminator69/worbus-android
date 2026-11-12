@@ -292,9 +292,16 @@ class SyncManager(
 	 * a failed attempt; a star's is the star's own time, which a pull's overlay writes back. The pass waits for the lock instead of giving up while a pull holds it: a write made
 	 * during a full pull used to wait for the next 15-minute cycle.
 	 */
-	/** [enqueueAction] for a caller that writes the same change to Room. */
-	suspend fun enqueue(actionType: SyncActionType, itemId: String, time: Instant = Clock.System.now()) =
-		enqueueAction(actionType, itemId, time)
+	/**
+	 * Queue a write and return once it is in the queue, then send what the queue holds in the
+	 * background. For a caller that writes the same change to Room: it calls this first (review
+	 * minor 6), so a pull's batch either sees the write in its overlay or has finished before the
+	 * caller's own Room write lands ([WriteQueue.withOverlay]).
+	 */
+	suspend fun enqueue(actionType: SyncActionType, itemId: String, time: Instant = Clock.System.now()) {
+		writeQueue.enqueue(actionType, itemId, time)
+		scope.launch { syncMutex.withLock { processQueue() } }
+	}
 
 	fun enqueueAction(actionType: SyncActionType, itemId: String, time: Instant = Clock.System.now()) {
 		scope.launch {

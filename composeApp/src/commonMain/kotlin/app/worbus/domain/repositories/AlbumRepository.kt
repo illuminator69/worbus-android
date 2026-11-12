@@ -24,6 +24,7 @@ import app.worbus.util.rowsInOrder
 import app.worbus.util.toSqlQuery
 import kotlin.time.Clock
 import kotlinx.coroutines.withContext
+import app.worbus.domain.manager.ratingWrite
 
 class AlbumRepository(
 	private val albumDao: AlbumDao,
@@ -128,30 +129,24 @@ class AlbumRepository(
 
 	suspend fun starAlbum(album: DomainAlbum) {
 		val now = Clock.System.now()
+		// Queued before Room is written (review minor 6): a pull's batch in between then sees it.
+		syncManager.enqueue(SyncActionType.STAR, album.id, now)
 		if (albumDao.setAlbumStarredAt(album.id, now.toEpochMilliseconds()) == 0) {
 			albumDao.insertAlbum(album.toEntity().copy(starredAt = now))
 		}
-		syncManager.enqueueAction(SyncActionType.STAR, album.id, now)
 	}
 
 	suspend fun unstarAlbum(album: DomainAlbum) {
+		syncManager.enqueue(SyncActionType.UNSTAR, album.id)
 		if (albumDao.setAlbumStarredAt(album.id, null) == 0) {
 			albumDao.insertAlbum(album.toEntity().copy(starredAt = null))
 		}
-		syncManager.enqueueAction(SyncActionType.UNSTAR, album.id)
 	}
 
 	suspend fun rateAlbum(album: DomainAlbum, rating: Int) {
+		ratingWrite(rating)?.let { syncManager.enqueue(it, album.id) }
 		if (albumDao.setAlbumRating(album.id, rating) == 0) {
 			albumDao.insertAlbum(album.toEntity().copy(userRating = rating))
-		}
-		when (rating) {
-			0 -> syncManager.enqueueAction(SyncActionType.STAR_0, album.id)
-			1 -> syncManager.enqueueAction(SyncActionType.STAR_1, album.id)
-			2 -> syncManager.enqueueAction(SyncActionType.STAR_2, album.id)
-			3 -> syncManager.enqueueAction(SyncActionType.STAR_3, album.id)
-			4 -> syncManager.enqueueAction(SyncActionType.STAR_4, album.id)
-			5 -> syncManager.enqueueAction(SyncActionType.STAR_5, album.id)
 		}
 	}
 }
