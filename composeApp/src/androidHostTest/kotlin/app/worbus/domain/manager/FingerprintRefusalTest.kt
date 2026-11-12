@@ -118,6 +118,12 @@ class FingerprintRefusalTest {
 	fun aNonPrimaryUsersFingerprintMixIsNotATryAgain() {
 		val owners = mixPageState(fingerprintFailure(FingerprintAnswer.Refused(403, "primary_only"))!!)
 		kotlin.test.assertNotEquals<MixPageState>(MixPageState.Refused("primary_only"), owners, "not the retry sentence")
-		kotlin.test.assertIs<MixPageState.Refused>(mixPageState(fingerprintFailure(FingerprintAnswer.Refused(503, "busy"))!!))
+		assertEquals(MixPageState.OwnersListening, owners)
+		val busy = mixPageState(fingerprintFailure(FingerprintAnswer.Refused(503, "busy"))!!)
+		kotlin.test.assertIs<MixPageState.Refused>(busy)
+		kotlin.test.assertTrue(busy.retries, "a busy server may answer the next pull")
+		val badRequest = mixPageState(fingerprintFailure(FingerprintAnswer.Refused(400, "bad_request"))!!)
+		kotlin.test.assertIs<MixPageState.Refused>(badRequest)
+		assertFalse(badRequest.retries, "the hub's own bad_request is not a pull away")
 	}
 }

@@ -37,7 +37,12 @@ sealed interface MixPageState {
 	/** Built from the listening fingerprint, which this AudioMuse is too old for: it needs [need] (B-359). */
 	data class AudioMuseTooOld(val need: String) : MixPageState
 	/** The fingerprint was refused (the hub's or AudioMuse's [code]): said, not shown as an empty mix. */
-	data class Refused(val code: String) : MixPageState
+	data class Refused(val code: String) : MixPageState {
+		/** Only a busy server, or a refusal that names nothing, may answer another pull. */
+		val retries: Boolean get() = code.isBlank() || code == "busy"
+	}
+	/** `403 primary_only`: the fingerprint is the server owner's listening; no pull will change that (review of fix round 2, minor 1). */
+	data object OwnersListening : MixPageState
 }
 
 /** The page's state for what [RadioManager.buildMix] made. */
@@ -46,7 +51,7 @@ internal fun mixPageState(result: MixBuildResult): MixPageState = when (result) 
 	MixBuildResult.Empty -> MixPageState.Empty
 	MixBuildResult.NeedsAudioMuse -> MixPageState.NeedsAudioMuse
 	is MixBuildResult.AudioMuseTooOld -> MixPageState.AudioMuseTooOld(result.need)
-	is MixBuildResult.Refused -> MixPageState.Refused(result.code)
+	is MixBuildResult.Refused -> if (result.code == "primary_only") MixPageState.OwnersListening else MixPageState.Refused(result.code)
 }
 
 /**

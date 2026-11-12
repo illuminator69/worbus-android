@@ -65,6 +65,8 @@ import worbus.composeapp.generated.resources.mix_page_continues
 import worbus.composeapp.generated.resources.mix_page_audiomuse_too_old
 import worbus.composeapp.generated.resources.mix_page_empty
 import worbus.composeapp.generated.resources.mix_page_refused
+import worbus.composeapp.generated.resources.mix_page_refused_final
+import worbus.composeapp.generated.resources.mix_page_owners_listening
 import worbus.composeapp.generated.resources.mix_page_fresh
 import worbus.composeapp.generated.resources.mix_unknown_kind
 import worbus.composeapp.generated.resources.radio_mood_needs_audiomuse
@@ -327,7 +329,14 @@ fun MixDetailScreen(mixId: String) {
 								ContentUnavailable(
 									modifier = Modifier.padding(vertical = 32.dp),
 									icon = Icons.Outlined.Equalizer,
-									label = stringResource(Res.string.mix_page_refused)
+									label = stringResource(if (shown.retries) Res.string.mix_page_refused else Res.string.mix_page_refused_final)
+								)
+							}
+							MixPageState.OwnersListening -> item(key = "owners-listening") {
+								ContentUnavailable(
+									modifier = Modifier.padding(vertical = 32.dp),
+									icon = Icons.Outlined.Equalizer,
+									label = stringResource(Res.string.mix_page_owners_listening)
 								)
 							}
 							MixPageState.UnknownKind -> item(key = "unknown") {

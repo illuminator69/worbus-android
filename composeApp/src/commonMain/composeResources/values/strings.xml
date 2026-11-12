@@ -1348,6 +1348,8 @@
 	<string name="mix_page_empty">This mix came up empty just now. Pull to try again.</string>
 	<string name="mix_page_audiomuse_too_old">AudioMuse needs updating: this mix is built from your listening, which needs AudioMuse %1$s or later.</string>
 	<string name="mix_page_refused">This mix could not be built: the server refused it. Pull to try again.</string>
+	<string name="mix_page_refused_final">This mix could not be built: the server refused it.</string>
+	<string name="mix_page_owners_listening">This mix is built from the server owner's listening, so only they can play it.</string>
 	<string name="radio_mood_needs_audiomuse">A mood radio needs AudioMuse, and it is not answering now. Pull to try again.</string>
 	<string name="mix_page_fresh">Built fresh each time you open it.</string>
 	<string name="mix_page_continues">When these end, the radio carries on.</string>
