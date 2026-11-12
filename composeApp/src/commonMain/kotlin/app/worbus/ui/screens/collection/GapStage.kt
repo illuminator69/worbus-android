@@ -131,7 +131,10 @@ fun gapStage(input: GapInput): GapStage {
 	// A fill that failed keeps the box open, saying why, until it is dismissed or tried again: also
 	// over the sources it was requested from (seen on the AVD: the sources view, with no rows left
 	// and no search running, read as searching for good). A new search tap is the way out.
-	if (fill != null && fill.settled && fill.outcome == LbBotManager.OUTCOME_FAILED && !input.searchAsked) {
+	// B-231 (the shared rule, point 4): a pending match's ledger settle (`failed` at `needs_match`) is the
+	// match pending, not a failed fill; the box goes on over the tracks still to fetch.
+	val matchPendingSettle = awaiting && fill?.state == "needs_match"
+	if (fill != null && fill.settled && fill.outcome == LbBotManager.OUTCOME_FAILED && !input.searchAsked && !matchPendingSettle) {
 		return GapStage.Failed(gapReason(gap).ifBlank { fill.reason }, gap.mp3WouldHelp || fill.mp3WouldHelp)
 	}
 	if (input.view == GapView.SOURCES) {
