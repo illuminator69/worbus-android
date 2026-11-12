@@ -157,14 +157,13 @@ data class UpkeepMemory(
 	val owner: String = "",
 	val clockMs: Long = 0L,
 	val lastWallMs: Long = 0L,
-	/** The song count of the last complete pull that was not a shrink, for this [owner]; 0 = none yet. */
-	val libraryRef: Int = 0,
-	/** [clockMs] when the library first read as shrunk below [libraryRef]; 0 while it does not. */
-	val shrunkSinceMs: Long = 0L,
 	/** The re-fetch budget's day: when it started on [clockMs], and how many were asked since. */
 	val refetchDayStartMs: Long = 0L,
 	val refetchedInDay: Int = 0,
-	/** Follow-up 2 (minor 3): the shrink reference and its shrunk-since, PER owner key (kept across switches). */
+	/**
+	 * Per owner key (follow-up 2, minor 3: kept across switches): the song count of the last complete pull
+	 * that was not a shrink, and [clockMs] when the library first read as shrunk below it (0 while not).
+	 */
 	val libraryRefs: Map<String, Int> = emptyMap(),
 	val shrunkSince: Map<String, Long> = emptyMap(),
 	/** Follow-up 2 (minor 6): per changed song, when ([clockMs]) a re-fetch was last asked, and how many times. */
@@ -259,6 +258,11 @@ fun successorOf(old: OriginFields, candidates: List<SongEntity>, listed: Set<Str
 /** How far a successor's length may be from the gone song's, in whole seconds. */
 const val SUCCESSOR_SECONDS = 2
 
+/** How well [next] matches the gone song [old], lower first: the length's distance, then 0 for the same album. */
+internal fun successorScore(old: OriginFields, next: SongEntity): Pair<Long, Int> =
+	abs(next.duration.inWholeSeconds - old.seconds) to
+		(if (creditKey(next.albumTitle.orEmpty()) == creditKey(old.album)) 0 else 1)
+
 class DownloadUpkeep(
 	private val store: DownloadOriginStore,
 	private val downloads: UpkeepDownloads,
@@ -299,7 +303,8 @@ class DownloadUpkeep(
 		var mem = memory.load()
 		val step = if (mem.lastWallMs == 0L) 0L else (wall - mem.lastWallMs).coerceIn(0L, CLOCK_STEP_MAX_MS)
 		val key = "${me.server}\u0000${me.account}"
-		if (mem.owner != key) mem = UpkeepMemory(owner = key, clockMs = mem.clockMs)
+		// Follow-up 2 (minor 3): the shrink references are per owner and survive a switch (A to B to A).
+		if (mem.owner != key) mem = mem.copy(owner = key)
 		val clock = mem.clockMs + step
 		mem = mem.copy(clockMs = clock, lastWallMs = wall)
 
@@ -317,8 +322,10 @@ class DownloadUpkeep(
 		fun mine(record: DownloadOriginEntity?) = record != null && record.server == me.server && record.account == me.account
 		val playing = inUse()
 
-		// CHANGED, and placing records: Room holds only this session's library, so a song it holds
-		// proves a download (with no record, or one from before 3) is this session's.
+		// CHANGED, and placing records. Follow-up 2 (minor 1): a download with no record, or one from
+		// before 3, is placed only when THIS pass's complete pull lists its id: Room may still hold the
+		// previous session's songs (logout's wipe can lose a race with the next login's first pull).
+		val listedNow = pull.listed
 		val songs = held.keys.toList().chunked(500).flatMap { songsById(it) }.associateBy { it.songId }
 		var baselined = 0
 		var adopted = 0
@@ -328,11 +335,11 @@ class DownloadUpkeep(
 			val origin = songOrigin(song)
 			val record = records[row.songId]
 			when {
-				record == null -> {
+				record == null -> if (listedNow != null && row.songId in listedNow) {
 					write(DownloadOriginEntity(row.songId, origin, wall, server = me.server, account = me.account))
 					baselined++
 				}
-				record.server.isEmpty() && record.account.isEmpty() -> {
+				record.server.isEmpty() && record.account.isEmpty() -> if (listedNow != null && row.songId in listedNow) {
 					val kept = record.origin.takeIf { it.startsWith(ORIGIN_VERSION) } ?: origin
 					write(record.copy(origin = kept, server = me.server, account = me.account, goneSeenAt = 0L, gonePulls = 0))
 					adopted++
@@ -351,10 +358,24 @@ class DownloadUpkeep(
 		// what is over it, or playing or queued here, waits for a later pass.
 		if (clock - mem.refetchDayStartMs >= DAY_MS) mem = mem.copy(refetchDayStartMs = clock, refetchedInDay = 0)
 		val room = minOf(REFETCH_PER_PASS, REFETCH_PER_DAY - mem.refetchedInDay).coerceAtLeast(0)
-		val ready = changed.filter { (song, _) -> song.songId !in playing }.sortedBy { it.first.songId }
+		// Follow-up 2 (minor 6): the oldest ask first (never asked before any), and a song asked again
+		// only after its backoff, which doubles with each ask still showing the change (a failure), so
+		// re-fetches that keep failing go to the back and cannot spend every pass.
+		val changedIds = changed.map { it.first.songId }.toSet()
+		val askedAt = mem.refetchAskedAt.filterKeys { it in changedIds }
+		val asks = mem.refetchAsks.filterKeys { it in changedIds }
+		val ready = changed
+			.filter { (song, _) -> song.songId !in playing }
+			.filter { (song, _) -> refetchDue(askedAt[song.songId], asks[song.songId] ?: 0, clock) }
+			.sortedWith(compareBy({ askedAt[it.first.songId] ?: Long.MIN_VALUE }, { it.first.songId }))
 		val refetchNow = ready.take(room)
 		refetchNow.forEach { (song, row) -> downloads.refetch(song, row) }
-		mem = mem.copy(refetchedInDay = mem.refetchedInDay + refetchNow.size)
+		val nowAsked = refetchNow.map { it.first.songId }
+		mem = mem.copy(
+			refetchedInDay = mem.refetchedInDay + refetchNow.size,
+			refetchAskedAt = askedAt + nowAsked.associateWith { clock },
+			refetchAsks = asks + nowAsked.associateWith { (asks[it] ?: 0) + 1 }
+		)
 		val deferred = (changed.map { it.first.songId } - refetchNow.map { it.first.songId }.toSet()).sorted()
 
 		// GONE: only this session's downloads with a real record, only against a complete pull's list.
@@ -378,9 +399,17 @@ class DownloadUpkeep(
 				val fields = originFields(records.getValue(id).origin) ?: continue
 				successorOf(fields, songsAt(fields.track, fields.disc), listed, held.keys)?.let { successors[id] = it }
 			}
-			val claimedTwice = successors.values.groupBy { it.songId }.filterValues { it.size > 1 }.keys
-			for ((id, next) in successors) {
-				if (next.songId in claimedTwice) continue
+			// Follow-up 2 (minor 5): two old ids claiming one successor move the better one (the closer
+			// length, then the same album); an exact tie moves neither. The other falls through.
+			val chosen = successors.entries.groupBy { it.value.songId }.mapNotNull { (_, claims) ->
+				if (claims.size == 1) return@mapNotNull claims.single().toPair()
+				val scored = claims.map { claim ->
+					val fields = originFields(records.getValue(claim.key).origin)!!
+					claim to successorScore(fields, claim.value)
+				}.sortedWith(compareBy({ it.second.first }, { it.second.second }))
+				if (scored[0].second == scored[1].second) null else scored[0].first.toPair()
+			}
+			for ((id, next) in chosen) {
 				if (!downloads.move(id, next)) continue
 				moved[id] = next.songId
 				// The record goes with it, origin and all: the move keeps the file as it was, so a retag
@@ -394,14 +423,18 @@ class DownloadUpkeep(
 
 			// Minor 3: a library that shrank since the last complete pull (an unmounted share, a library
 			// mid-rebuild) is not a place to judge from.
-			val ref = mem.libraryRef
+			// Follow-up 2: per owner, and an owner with none yet is measured against Room's song count as
+			// the pull began (the library as last cached), so a share missing at the first pull is seen.
+			val ref = mem.libraryRefs[key] ?: pull.songsBefore?.takeIf { it > 0 } ?: 0
+			val since = mem.shrunkSince[key] ?: 0L
 			val shrank = ref > 0 && ref - listed.size > maxOf(SHRINK_MIN_SONGS, ref * SHRINK_PERCENT / 100)
-			mem = when {
-				!shrank -> mem.copy(libraryRef = listed.size, shrunkSinceMs = 0L)
-				mem.shrunkSinceMs == 0L -> mem.copy(shrunkSinceMs = clock)
-				clock - mem.shrunkSinceMs >= SHRINK_ACCEPT_MS -> mem.copy(libraryRef = listed.size, shrunkSinceMs = 0L)
-				else -> mem
+			val (newRef, newSince) = when {
+				!shrank -> listed.size to 0L
+				since == 0L -> ref to clock
+				clock - since >= SHRINK_ACCEPT_MS -> listed.size to 0L
+				else -> ref to since
 			}
+			mem = mem.copy(libraryRefs = mem.libraryRefs + (key to newRef), shrunkSince = mem.shrunkSince + (key to newSince))
 
 			when {
 				candidates.isEmpty() -> Unit
@@ -475,6 +508,16 @@ class DownloadUpkeep(
 		const val REFETCH_PER_DAY = 100
 		private val DAY_MS: Long = 24.hours.inWholeMilliseconds
 
+		/** Minor 6: the wait after the first ask still showing a change; it doubles with each, up to a day. */
+		val REFETCH_BACKOFF_MS: Long = 2.hours.inWholeMilliseconds
+
+		/** Whether a changed song asked [asks] times, last at [askedAt], may be asked again at [clock]. */
+		fun refetchDue(askedAt: Long?, asks: Int, clock: Long): Boolean {
+			if (askedAt == null || asks <= 0) return true
+			val wait = (REFETCH_BACKOFF_MS shl (asks - 1).coerceAtMost(4)).coerceAtMost(DAY_MS)
+			return clock - askedAt >= wait
+		}
+
 		/** Rule 3: [candidates] of [downloads] is too many to judge in one pass. */
 		fun goneStorm(candidates: Int, downloads: Int): Boolean =
 			candidates > GONE_PER_PULL_MAX || (candidates > 3 && candidates * 2 > downloads)
@@ -489,8 +532,7 @@ class DownloadUpkeep(
  */
 class DownloadOrigins(
 	private val dao: DownloadOriginDao,
-	private val songDao: SongDao,
-	private val owner: () -> DownloadOwner?
+	private val songDao: SongDao
 ) : DownloadOriginStore {
 	override suspend fun all(): List<DownloadOriginEntity> = dao.all()
 	override suspend fun put(rows: List<DownloadOriginEntity>) {
@@ -501,8 +543,12 @@ class DownloadOrigins(
 		songIds.chunked(500).forEach { dao.delete(idsAsJson(it)) }
 	}
 
-	suspend fun recordFetched(songId: String, fetched: SongEntity?) {
-		val me = owner() ?: return
+	/**
+	 * [owner] is whose the download is, taken when it was QUEUED (follow-up 2, minor 2): a download of A's
+	 * song that lands after a switch to B is still A's. Null (no session then) records nothing.
+	 */
+	suspend fun recordFetched(songId: String, fetched: SongEntity?, owner: DownloadOwner?) {
+		val me = owner ?: return
 		val song = songDao.getSongById(songId) ?: fetched ?: return
 		dao.upsert(listOf(DownloadOriginEntity(songId, songOrigin(song), Clock.System.now().toEpochMilliseconds(),
 			server = me.server, account = me.account)))
@@ -548,13 +594,20 @@ internal suspend fun moveDownload(
 	now: Long
 ): Boolean {
 	val from = row.filePath ?: return false
-	if (!files.move(from, newPath)) return false
+	// Follow-up 2 (minor 4): a move cut short after its rename (the old file gone, the new one there)
+	// is finished, not refused; otherwise the old id fell to the gone rules and the file was orphaned.
+	val cutShort = files.size(from) <= 0L && files.size(newPath) > 0L
+	if (!cutShort && !files.move(from, newPath)) return false
 	rekeyRows(row.copy(songId = toId, filePath = newPath, updatedAt = now), row.songId)
 	return true
 }
 
-/** Follow-up 2 (minor 5): whether the successor's own row stops a move. Seam: any row does. */
-internal fun moveBlockedBy(successorRow: DownloadEntity?): Boolean = successorRow != null
+/**
+ * Follow-up 2 (minor 5): whether the successor's own row stops a move. Only a finished download does;
+ * a QUEUED, DOWNLOADING or FAILED one (a playlist policy queued the new id after the re-key) is replaced
+ * by the moved download, its transfer stopped first.
+ */
+internal fun moveBlockedBy(successorRow: DownloadEntity?): Boolean = successorRow?.status == DownloadStatus.DOWNLOADED
 
 /**
  * Fetch a changed song again over its download ([row]): into [tempPath] by [transfer] (which writes

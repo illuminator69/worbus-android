@@ -67,7 +67,8 @@ class DownloadUpkeepWiringGuardTest {
 		assertTrue("fun downloadOwner(): DownloadOwner?" in session)
 		val upkeepFile = sourceFile("src/commonMain/kotlin/app/worbus/domain/manager/DownloadUpkeep.kt").readText()
 		val record = upkeepFile.substringAfter("suspend fun recordFetched(").substringBefore("\n\t}\n")
-		assertTrue("owner()" in record && "server = " in record && "account = " in record, "a fetched file is recorded with its owner:\n$record")
+		// Follow-up 2 (minor 2): the owner is handed in (taken when queued), see theOwnerIsTakenWhenTheDownloadIsQueued.
+		assertTrue("server = " in record && "account = " in record, "a fetched file is recorded with its owner:\n$record")
 	}
 
 	@Test

@@ -111,6 +111,9 @@ class DbRepository(
 		Logger.i("DbRepository", "Database wiped completely.")
 	}
 
+	/** Room's song count (the library as last cached); follow-up 2 of Q-165 reads it before a full pull. */
+	suspend fun cachedSongCount(): Int = songDao.count()
+
 	/**
 	 * The whole library. The answer (Q-165) is the song ids the pull listed when it was COMPLETE and
 	 * stable (the same condition the prune needs, B-037), else null: what `DownloadUpkeep` may judge

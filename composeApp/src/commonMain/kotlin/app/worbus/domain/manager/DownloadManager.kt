@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -358,6 +359,9 @@ class DownloadManager(
 		// library sweep, which counts its whole batch up front (see downloadLibrary).
 		incrementCounter: Boolean = true
 	): Job {
+		// Follow-up 2 (minor 2): whose this download is, taken now, while it is queued. A transfer that
+		// lands after a logout and a login as someone else is still the first session's.
+		val owner = sessionManager.downloadOwner()
 		val job = scope.launch(Dispatchers.IO) {
 			// Check-and-claim in ONE critical section: two concurrent calls for the same songId must
 			// not both pass the "already active?" check before either claims it (would double-download).
@@ -425,7 +429,7 @@ class DownloadManager(
 				awaitDownloadConstraints()
 
 				downloadSemaphore.withPermit {
-					executeDownloadProcess(song, bitrate, format, source)
+					executeDownloadProcess(song, bitrate, format, source, owner)
 				}
 			} catch (e: CancellationException) {
 				// A cancelled download must not linger as QUEUED/DOWNLOADING forever.
@@ -730,7 +734,8 @@ class DownloadManager(
 		song: DomainSong,
 		bitrate: Int = 0,
 		format: String? = null,
-		source: String = DownloadSource.MANUAL
+		source: String = DownloadSource.MANUAL,
+		owner: DownloadOwner? = null
 	) {
 		try {
 			Logger.i("DownloadManager", "beginning download for ${song.id}")
@@ -739,7 +744,7 @@ class DownloadManager(
 			cacheCoverArt(song.coverArtId)
 			cacheAlbumCoverArt(song.albumId)
 			cacheLyrics(song)
-			downloadAudioFile(song, bitrate, format, source)
+			downloadAudioFile(song, bitrate, format, source, owner)
 
 		} catch (e: Exception) {
 			if (e is CancellationException) throw e
@@ -865,7 +870,8 @@ class DownloadManager(
 		song: DomainSong,
 		bitrate: Int = 0,
 		format: String? = null,
-		source: String = DownloadSource.MANUAL
+		source: String = DownloadSource.MANUAL,
+		owner: DownloadOwner? = null
 	) {
 		val path = storageManager.getDownloadPath(song.id, song.fileExtension.orEmpty())
 		val tempPath = storageManager.getTempDownloadPath(song.id, song.fileExtension.orEmpty())
@@ -899,7 +905,7 @@ class DownloadManager(
 			Logger.i("DownloadManager", "wrote download for ${song.id}")
 			// Q-165: what this file was made from, so a later change on the server is seen.
 			try {
-				origins.recordFetched(song.id, song.toEntity())
+				origins.recordFetched(song.id, song.toEntity(), owner)
 			} catch (e: Exception) {
 				if (e is CancellationException) throw e
 				Logger.w("DownloadManager", "could not record what ${song.id} was fetched from; the next pull records it", e)
@@ -925,6 +931,7 @@ class DownloadManager(
 	 * fetched at.
 	 */
 	override fun refetch(song: SongEntity, row: DownloadEntity) {
+		val owner = sessionManager.downloadOwner()
 		scope.launch(Dispatchers.IO) {
 			val claimed = activeDownloadsMutex.withLock {
 				if (activeDownloads.containsKey(song.songId)) false
@@ -951,7 +958,7 @@ class DownloadManager(
 						now = now()
 					)
 					if (swapped) {
-						origins.recordFetched(song.songId, song)
+						origins.recordFetched(song.songId, song, owner)
 						Logger.i("DownloadManager", "re-fetched ${song.songId}, changed on the server")
 					} else {
 						Logger.w("DownloadManager", "re-fetch of ${song.songId} did not finish; the old copy stays")
@@ -972,17 +979,24 @@ class DownloadManager(
 	 * is transferring, and never over another download.
 	 */
 	override suspend fun move(fromId: String, to: SongEntity): Boolean {
-		if (activeDownloadsMutex.withLock { activeDownloads.containsKey(fromId) || activeDownloads.containsKey(to.songId) }) return false
 		val row = downloadDao.getDownloadById(fromId) ?: return false
 		val path = row.filePath ?: return false
-		if (row.status != DownloadStatus.DOWNLOADED || downloadDao.getDownloadById(to.songId) != null) return false
+		if (row.status != DownloadStatus.DOWNLOADED || moveBlockedBy(downloadDao.getDownloadById(to.songId))) return false
+		// The old id must not be transferring; one of the new id (an unfinished successor row) is stopped
+		// first, so its `.part` and its row cannot land over the moved download.
+		val successorJob = activeDownloadsMutex.withLock {
+			if (activeDownloads.containsKey(fromId)) return false
+			activeDownloads.remove(to.songId)
+		}
+		successorJob?.cancelAndJoin()
 		val extension = path.substringAfterLast('/').substringAfterLast('.', "")
 		val moved = moveDownload(
 			row = row,
 			toId = to.songId,
 			newPath = storageManager.getDownloadPath(to.songId, extension),
 			files = files,
-			rekeyRows = { newRow, oldId -> downloadDao.insertDownload(newRow); downloadDao.deleteDownload(oldId) },
+			// One downloads.db transaction: the new row in (over the successor's unfinished one), the old out.
+			rekeyRows = { newRow, oldId -> downloadDao.rekey(newRow, oldId) },
 			now = now()
 		)
 		if (moved) Logger.i("DownloadManager", "carried $fromId to ${to.songId}: Navidrome re-keyed it")

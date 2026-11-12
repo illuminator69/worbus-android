@@ -352,6 +352,8 @@ class SyncManager(
 
 		// A new attempt clears any prior failure flag while it runs.
 		_syncState.update { it.fullPullStarted() }
+		// Follow-up 2 (minor 3): the library as last cached, before this pull changes it.
+		val songsBefore = try { repository.cachedSongCount() } catch (e: Exception) { if (e is kotlin.coroutines.cancellation.CancellationException) throw e; null }
 
 		// Held in the foreground for the length of the pull. Without it the process is
 		// frozen as soon as the app is left, and the pull sat half-done under a
@@ -372,7 +374,7 @@ class SyncManager(
 			preferenceManager.lastFullSyncTime = startedAt.toEpochMilliseconds()
 			Logger.i("SyncManager", "Full library sync complete.")
 			// Q-165: what the pull listed when it was complete and stable, else null.
-			_pulls.tryEmit(PullSeen(result.getOrNull()))
+			_pulls.tryEmit(PullSeen(result.getOrNull(), songsBefore))
 		} else {
 			// With the cause. Without it the log said a sync failed and nothing about why.
 			Logger.e("SyncManager", "Full library sync failed; keeping cached library.", result.exceptionOrNull())

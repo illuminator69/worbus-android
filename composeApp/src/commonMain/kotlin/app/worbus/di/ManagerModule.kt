@@ -79,7 +79,7 @@ val managerModule = module {
 	singleOf(::DownloadManager)
 	// Q-165: what each download was made from (writes.db 2), and the upkeep after every pull: a song
 	// changed on the server is fetched again, one gone from it removed (DownloadUpkeep's four rules).
-	single { DownloadOrigins(get(), get(), owner = { get<SessionManager>().downloadOwner() }) }
+	singleOf(::DownloadOrigins)
 	single(createdAtStart = true) {
 		DownloadUpkeep(
 			store = get<DownloadOrigins>(),
