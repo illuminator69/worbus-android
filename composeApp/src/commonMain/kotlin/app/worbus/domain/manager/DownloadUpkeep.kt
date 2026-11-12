@@ -100,7 +100,11 @@ fun songAnswerOf(error: Throwable?): SongAnswer = when {
 }
 
 /** A library pull as the upkeep reads it: [listed] is the song ids of a COMPLETE and stable full pull (B-037), else null. */
-data class PullSeen(val listed: Set<String>?)
+data class PullSeen(
+	val listed: Set<String>?,
+	/** Follow-up 2 (minor 3): Room's song count when the pull started (the library as last cached), or null. */
+	val songsBefore: Int? = null
+)
 
 /** What one upkeep pass did, for its log line and the tests. */
 data class UpkeepReport(
@@ -159,7 +163,13 @@ data class UpkeepMemory(
 	val shrunkSinceMs: Long = 0L,
 	/** The re-fetch budget's day: when it started on [clockMs], and how many were asked since. */
 	val refetchDayStartMs: Long = 0L,
-	val refetchedInDay: Int = 0
+	val refetchedInDay: Int = 0,
+	/** Follow-up 2 (minor 3): the shrink reference and its shrunk-since, PER owner key (kept across switches). */
+	val libraryRefs: Map<String, Int> = emptyMap(),
+	val shrunkSince: Map<String, Long> = emptyMap(),
+	/** Follow-up 2 (minor 6): per changed song, when ([clockMs]) a re-fetch was last asked, and how many times. */
+	val refetchAskedAt: Map<String, Long> = emptyMap(),
+	val refetchAsks: Map<String, Int> = emptyMap()
 )
 
 interface UpkeepMemoryStore {
@@ -533,16 +543,18 @@ internal suspend fun moveDownload(
 	toId: String,
 	newPath: String,
 	files: DownloadFiles,
-	insertRow: suspend (DownloadEntity) -> Unit,
-	deleteRow: suspend (String) -> Unit,
+	/** The new row in, the old id's row out: one `downloads.db` transaction (follow-up 2, minor 4). */
+	rekeyRows: suspend (newRow: DownloadEntity, oldId: String) -> Unit,
 	now: Long
 ): Boolean {
 	val from = row.filePath ?: return false
 	if (!files.move(from, newPath)) return false
-	insertRow(row.copy(songId = toId, filePath = newPath, updatedAt = now))
-	deleteRow(row.songId)
+	rekeyRows(row.copy(songId = toId, filePath = newPath, updatedAt = now), row.songId)
 	return true
 }
+
+/** Follow-up 2 (minor 5): whether the successor's own row stops a move. Seam: any row does. */
+internal fun moveBlockedBy(successorRow: DownloadEntity?): Boolean = successorRow != null
 
 /**
  * Fetch a changed song again over its download ([row]): into [tempPath] by [transfer] (which writes

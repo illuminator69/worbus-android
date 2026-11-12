@@ -982,8 +982,7 @@ class DownloadManager(
 			toId = to.songId,
 			newPath = storageManager.getDownloadPath(to.songId, extension),
 			files = files,
-			insertRow = { downloadDao.insertDownload(it) },
-			deleteRow = { downloadDao.deleteDownload(it) },
+			rekeyRows = { newRow, oldId -> downloadDao.insertDownload(newRow); downloadDao.deleteDownload(oldId) },
 			now = now()
 		)
 		if (moved) Logger.i("DownloadManager", "carried $fromId to ${to.songId}: Navidrome re-keyed it")

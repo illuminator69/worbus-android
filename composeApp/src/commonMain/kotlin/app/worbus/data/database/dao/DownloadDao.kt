@@ -4,6 +4,7 @@ import androidx.room3.Dao
 import androidx.room3.Insert
 import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
+import androidx.room3.Transaction
 import kotlinx.coroutines.flow.Flow
 import app.worbus.data.database.entities.DownloadEntity
 import app.worbus.data.database.entities.DownloadStatus
@@ -85,4 +86,14 @@ interface DownloadDao {
 	/** Clear one section of the download center at once (e.g. "dismiss all failed"). */
 	@Query("DELETE FROM DownloadEntity WHERE status = :status")
 	suspend fun clearDownloadsByStatus(status: DownloadStatus)
+
+	/**
+	 * Follow-up 2 (minor 4): a re-keyed download's rows in one transaction, the new one in (over any
+	 * row the new id had) and the old one out, so a crash leaves one or the other, never both or none.
+	 */
+	@Transaction
+	suspend fun rekey(newRow: DownloadEntity, oldId: String) {
+		insertDownload(newRow)
+		deleteDownload(oldId)
+	}
 }
