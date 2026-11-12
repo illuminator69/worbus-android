@@ -218,6 +218,31 @@ class GapStageTest {
 	}
 
 	/**
+	 * Fix round 5, the final VM check: "Pick the best source for me" over only live / remix / cover
+	 * folders. lb-bot refuses them all (0 enqueues), the gap stays `picking`, and the reason is in its
+	 * source task (`status error`, `error` its sentence). The box went back to "2 tracks missing" with
+	 * no reason. An auto-pick that ended in error says lb-bot's words, in whatever view, until a new
+	 * search or a Dismiss.
+	 */
+	@Test
+	fun anAutoPickThatEndedInErrorSaysLbBotsReason() {
+		val reason = "3 of 3 source(s) rejected the request (No file in this source matched the missing tracks — closest: '03 - Lantern Three (Cover).flac' (another version of the track))"
+		val refused = gap(
+			status = "picking",
+			tracks = listOf(track(1, "present"), track(2, "present"), track(3, "picked"), track(4, "picked")),
+			sourceTask = LbGapTask(id = "t-9", status = "error", error = reason)
+		)
+		for (view in GapView.entries) {
+			assertEquals(GapStage.PickFailed(reason, "t-9", false), gapStage(input(gap = refused, view = view)), "$view")
+		}
+		// A new search is the way out; so is Dismiss, by the task's id.
+		assertEquals(GapStage.Searching, gapStage(input(gap = refused, view = GapView.SOURCES, searchAsked = true)))
+		assertEquals(GapStage.Folded(2), gapStage(GapInput(refused, 2, null, GapView.FOLDED, false, false, 100_000L, dismissedPickTask = "t-9")))
+		// A task that ended well, or an error with no words, is no such stage.
+		assertEquals(GapStage.Folded(2), gapStage(input(gap = refused.copy(sourceTask = LbGapTask(id = "t-9", status = "complete")))))
+	}
+
+	/**
 	 * B-231 round 2 (b), the coordinator's ruling for both clients: a plain failed fill (a real
 	 * failure, not the `needs_match` settle) on a pending match shows Failed.
 	 */
