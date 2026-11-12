@@ -72,6 +72,8 @@ import worbus.composeapp.generated.resources.option_last_sync
 import worbus.composeapp.generated.resources.option_live_status
 import worbus.composeapp.generated.resources.option_pending_actions
 import worbus.composeapp.generated.resources.subtitle_pending_actions
+import worbus.composeapp.generated.resources.subtitle_pending_refused
+import worbus.composeapp.generated.resources.subtitle_pending_waiting_and_refused
 import worbus.composeapp.generated.resources.subtitle_rebuild_database
 import worbus.composeapp.generated.resources.subtitle_trigger_sync
 import worbus.composeapp.generated.resources.title_danger_zone
@@ -115,6 +117,7 @@ fun SettingsDataStorageScreen() {
 
 	val syncState by viewModel.syncState.collectAsStateWithLifecycle()
 	val pendingActionCount by viewModel.pendingActionCount.collectAsStateWithLifecycle()
+	val pendingLine by viewModel.pendingLine.collectAsStateWithLifecycle()
 	val downloadCount by viewModel.downloadCount.collectAsStateWithLifecycle(0)
 	val downloadSize by viewModel.downloadSize.collectAsStateWithLifecycle(0L)
 
@@ -265,11 +268,13 @@ fun SettingsDataStorageScreen() {
 						onClick = dropUnlessResumed { backStack.add(Screen.Settings.PendingActions) },
 						content = { Text(stringResource(Res.string.option_pending_actions)) },
 						supportingContent = {
+							// B-373 walk: a write the server refused is not waiting for the network.
 							Text(
-								text = stringResource(
-									Res.string.subtitle_pending_actions,
-									pendingActionCount
-								)
+								text = when {
+									pendingLine.refused == 0 -> stringResource(Res.string.subtitle_pending_actions, pendingLine.waiting)
+									pendingLine.waiting == 0 -> pluralStringResource(Res.plurals.subtitle_pending_refused, pendingLine.refused, pendingLine.refused)
+									else -> pluralStringResource(Res.plurals.subtitle_pending_waiting_and_refused, pendingLine.refused, pendingLine.waiting, pendingLine.refused)
+								}
 							)
 						},
 						shapes = SegmentedListItemDefaults.segmentedShapes(index = 3, count = 4)

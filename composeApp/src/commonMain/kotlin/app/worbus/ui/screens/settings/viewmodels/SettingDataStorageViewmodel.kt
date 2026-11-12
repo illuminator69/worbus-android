@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import app.worbus.domain.manager.SyncManager
 import app.worbus.domain.manager.WriteQueue
+import app.worbus.domain.manager.PendingLine
+import app.worbus.domain.manager.pendingLineOf
 import app.worbus.domain.manager.ConnectivityManager
 import app.worbus.domain.manager.DownloadManager
 import app.worbus.domain.manager.rebuildLibrary
@@ -34,6 +36,10 @@ class SettingsDataStorageViewModel(
 	val pendingActionCount: StateFlow<Int>
 		field = MutableStateFlow(0)
 
+	/** B-373 walk: the row tells writes waiting from writes the server refused. */
+	val pendingLine: StateFlow<PendingLine>
+		field = MutableStateFlow(PendingLine(0, 0))
+
 	val downloadCount = downloadManager.downloadCount.stateIn(
 		viewModelScope, SharingStarted.WhileSubscribed(5000), 0
 	)
@@ -53,7 +59,10 @@ class SettingsDataStorageViewModel(
 	 */
 	private fun loadPendingActions() {
 		viewModelScope.launch(Dispatchers.IO) {
-			writeQueue.observe().collect { pendingActionCount.value = it.size }
+			writeQueue.observe().collect {
+				pendingActionCount.value = it.size
+				pendingLine.value = pendingLineOf(it)
+			}
 		}
 	}
 
@@ -78,6 +87,7 @@ class SettingsDataStorageViewModel(
 		viewModelScope.launch(Dispatchers.IO) {
 			writeQueue.clear()
 			pendingActionCount.value = 0
+			pendingLine.value = PendingLine(0, 0)
 		}
 	}
 

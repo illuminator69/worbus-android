@@ -31,6 +31,11 @@ import kotlin.time.Instant
  */
 
 /** One write waiting for the server: a star, a rating, a scrobble or a playlist delete. */
+/** What Storage's "Pending sync actions" row says of the queue: how many wait, how many the server refused. */
+data class PendingLine(val waiting: Int, val refused: Int)
+
+fun pendingLineOf(writes: List<QueuedWrite>): PendingLine = PendingLine(waiting = writes.size, refused = 0)
+
 data class QueuedWrite(
 	val id: Long,
 	val type: SyncActionType,

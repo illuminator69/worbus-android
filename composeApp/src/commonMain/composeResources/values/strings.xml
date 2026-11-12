@@ -1681,6 +1681,14 @@
 		<item quantity="one">%1$d downloaded song (%2$s) will be deleted from this device. It stays in your library and can be downloaded again.</item>
 		<item quantity="other">%1$d downloaded songs (%2$s) will be deleted from this device. They stay in your library and can be downloaded again.</item>
 	</plurals>
+	<plurals name="subtitle_pending_refused">
+		<item quantity="one">%1$d refused by the server</item>
+		<item quantity="other">%1$d refused by the server</item>
+	</plurals>
+	<plurals name="subtitle_pending_waiting_and_refused">
+		<item quantity="one">%1$d waiting to be sent · %2$d refused by the server</item>
+		<item quantity="other">%1$d waiting to be sent · %2$d refused by the server</item>
+	</plurals>
 	<string name="info_danger_rebuild">This deletes this device's copy of your library and the changes still waiting to be sent, then pulls everything again from your server. Downloaded songs stay.</string>
 	<!-- Worbus P2 -->
 	<string name="info_server_add_address">Add the Worbus Server's address to connect</string>
