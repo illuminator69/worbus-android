@@ -78,4 +78,32 @@ class DownloadUpkeepWiringGuardTest {
 		assertTrue(init.indexOf("sweepScratch") in 0 until init.indexOf("reconcileInterruptedDownloads()"),
 			"the sweep runs before anything is started again:\n$init")
 	}
+
+	// ---- follow-up 2 ---- //
+
+	@Test
+	fun theOwnerIsTakenWhenTheDownloadIsQueued() {
+		// Minor 2: a download of A's song landing after a switch to B is still A's.
+		val queue = manager.substringAfter("fun downloadSong(").substringBefore("downloadDao.insertDownload(")
+		assertTrue("val owner = sessionManager.downloadOwner()" in queue, "taken before the row is QUEUED:\n$queue")
+		val first = manager.substringAfter("private suspend fun downloadAudioFile(").substringBefore("private fun now()")
+		assertTrue("origins.recordFetched(song.id, song.toEntity(), owner)" in first, first)
+		val upkeepFile = sourceFile("src/commonMain/kotlin/app/worbus/domain/manager/DownloadUpkeep.kt").readText()
+		val record = upkeepFile.substringAfter("suspend fun recordFetched(").substringBefore("\n\t}\n")
+		assertTrue("owner: DownloadOwner?" in record && "owner()" !in record, "the owner is passed in, never read at landing:\n$record")
+	}
+
+	@Test
+	fun aMoveIsOneTransactionAndReplacesAnUnfinishedSuccessor() {
+		val move = manager.substringAfter("override suspend fun move(").substringBefore("\n\t}\n")
+		assertTrue("downloadDao.rekey(" in move, "the two row writes are one transaction:\n$move")
+		assertTrue("moveBlockedBy(" in move, move)
+		assertTrue("cancelAndJoin()" in move, "a transfer of the successor is stopped before its row is replaced:\n$move")
+	}
+
+	@Test
+	fun aPullSaysHowBigTheCachedLibraryWas() {
+		val full = sync.substringAfter("private suspend fun fullPull(").substringBefore("private suspend fun processQueue")
+		assertTrue("songsBefore" in full, "Room's song count before the pull goes with its report:\n$full")
+	}
 }

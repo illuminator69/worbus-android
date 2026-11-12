@@ -43,7 +43,7 @@ class DownloadFileOpsTest {
 		val inserted = mutableListOf<DownloadEntity>()
 		val deleted = mutableListOf<String>()
 		val target = File(dir, "n1.flac")
-		val ok = runBlocking { moveDownload(row, "n1", target.absolutePath, files, { inserted += it }, { deleted += it }, now = 99L) }
+		val ok = runBlocking { moveDownload(row, "n1", target.absolutePath, files, { n, o -> inserted += n; deleted += o }, now = 99L) }
 		assertTrue(ok)
 		assertFalse(old.exists())
 		assertContentEquals(bytes, target.readBytes())
@@ -59,11 +59,35 @@ class DownloadFileOpsTest {
 		val there = File(dir, "n1.flac").apply { writeBytes(byteArrayOf(9)) }
 		val row = DownloadEntity(songId = "s1", status = DownloadStatus.DOWNLOADED, filePath = old.absolutePath)
 		val inserted = mutableListOf<DownloadEntity>()
-		val ok = runBlocking { moveDownload(row, "n1", there.absolutePath, files, { inserted += it }, { }, now = 99L) }
+		val ok = runBlocking { moveDownload(row, "n1", there.absolutePath, files, { n, _ -> inserted += n }, now = 99L) }
 		assertFalse(ok)
 		assertContentEquals(bytes, old.readBytes())
 		assertContentEquals(byteArrayOf(9), there.readBytes())
 		assertEquals(emptyList(), inserted)
+	}
+
+	@Test
+	fun aMoveCutShortAfterItsRenameIsFinished() {
+		// Follow-up 2, minor 4: killed after the rename, before the rows. The old row names a file that is
+		// gone, `<new>.<ext>` is there with no row: the next pass's move finishes it.
+		val target = File(dir, "n1.flac").apply { writeBytes(bytes) }
+		val row = DownloadEntity(songId = "s1", status = DownloadStatus.DOWNLOADED, filePath = File(dir, "s1.flac").absolutePath)
+		val rekeyed = mutableListOf<Pair<String, String>>()
+		val ok = runBlocking { moveDownload(row, "n1", target.absolutePath, files, { n, o -> rekeyed += n.songId to o }, now = 99L) }
+		assertTrue(ok)
+		assertEquals(listOf("n1" to "s1"), rekeyed)
+		assertContentEquals(bytes, target.readBytes())
+	}
+
+	@Test
+	fun aSuccessorsUnfinishedRowDoesNotBlockTheMove() {
+		// Follow-up 2, minor 5: a QUEUED or FAILED row of the new id (a playlist policy queued it after the
+		// re-key) is replaced by the moved download; only a finished one blocks it.
+		for (status in listOf(DownloadStatus.QUEUED, DownloadStatus.FAILED, DownloadStatus.DOWNLOADING, DownloadStatus.NOT_DOWNLOADED)) {
+			assertFalse(moveBlockedBy(DownloadEntity(songId = "n1", status = status)), "$status")
+		}
+		assertFalse(moveBlockedBy(null))
+		assertTrue(moveBlockedBy(DownloadEntity(songId = "n1", status = DownloadStatus.DOWNLOADED)))
 	}
 
 	@Test

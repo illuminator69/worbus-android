@@ -72,6 +72,8 @@ class DownloadUpkeepTest {
 		val removed = mutableListOf<String>()
 		val moved = mutableListOf<Pair<String, String>>()
 		var playing = emptySet<String>()
+		/** Re-fetches of these always fail (a transcode error, a length mismatch). */
+		var failing = emptySet<String>()
 		var memory = UpkeepMemory()
 		val store = object : DownloadOriginStore {
 			override suspend fun all() = origins.values.toList()
@@ -82,6 +84,7 @@ class DownloadUpkeepTest {
 			override suspend fun downloaded() = rows.values.toList()
 			override fun refetch(song: SongEntity, row: DownloadEntity) {
 				refetched += song.songId
+				if (song.songId in failing) return // the transfer failed: nothing recorded
 				// The swap finished: DownloadManager records what the new file was made from.
 				val o = owner!!
 				origins[song.songId] = DownloadOriginEntity(song.songId, songOrigin(song), clock, server = o.server, account = o.account)
@@ -115,7 +118,7 @@ class DownloadUpkeepTest {
 			origins[it] = DownloadOriginEntity(it, songOrigin(room.getValue(it)), clock, server = by.server, account = by.account)
 		}
 
-		fun pass(listed: Set<String>?) = runBlocking { upkeep.afterPull(PullSeen(listed)) }
+		fun pass(listed: Set<String>?, songsBefore: Int? = null) = runBlocking { upkeep.afterPull(PullSeen(listed, songsBefore)) }
 
 		/** [n] passes, [every] apart on the wall clock, each a complete pull listing [listed]. */
 		fun passes(n: Int, every: kotlin.time.Duration, listed: () -> Set<String>?) = (1..n).map {
@@ -149,6 +152,8 @@ class DownloadUpkeepTest {
 	fun aDownloadWithNoRecordIsRecordedUnderThisSessionNotFetched() {
 		val w = World(listOf("s1"))
 		w.pass(listed = null)
+		assertTrue("s1" !in w.origins, "follow-up 2: a sweep with no list places nothing (Room may hold another session's songs)")
+		w.pass(listed = setOf("s1"))
 		assertEquals(emptyList(), w.refetched, "a file from before this build is taken as it is")
 		val record = w.origins.getValue("s1")
 		assertEquals(songOrigin(w.room.getValue("s1")), record.origin, "and what it is now is recorded")
@@ -525,5 +530,96 @@ class DownloadUpkeepTest {
 		deleted.forEach { w.answers[it] = SongAnswer.GONE }
 		w.passes(8, 12.hours) { ids.toSet() - deleted + others }
 		assertEquals(deleted, w.removed.toSet(), "20 songs of 10,000: under max(25, 2 %), judged as before")
+	}
+
+	// ---- follow-up 2 (REVIEW-phase-b-android-ownerfollowup-2026-11-12) ------------------------ //
+
+	@Test
+	fun roomHoldingAnotherSessionsSongsPlacesNothing() {
+		// Minor 1: an upgrade with no records, a switch A to B before any pass, and Room still holding A's
+		// songs (logout's wipe lost the race): only B's own complete pull may place a download.
+		val a = (1..5).map { song("a$it") }
+		val b = (1..10).map { song("b$it") }
+		val w = World(a.map { it.songId } + b.map { it.songId }, a + b) // Room holds both
+		w.owner = ownerB
+		a.forEach { w.answers[it.songId] = SongAnswer.GONE }
+		w.pass(listed = null)
+		assertTrue(a.none { it.songId in w.origins }, "a sweep places nothing")
+		w.passes(10, 12.hours) { b.map { it.songId }.toSet() }
+		assertTrue(a.none { it.songId in w.origins }, "B's complete pulls never listed A's songs, so they are never B's")
+		assertEquals(emptyList(), w.removed)
+		assertEquals(emptyList(), w.asked)
+		assertTrue(b.all { w.origins.getValue(it.songId).server == ownerB.server }, "B's own are placed by B's pull")
+	}
+
+	@Test
+	fun aFirstPullIsMeasuredAgainstTheCachedLibrary() {
+		// Minor 3: no reference yet (an upgrade), and a share is already missing at the first complete pull.
+		val ids = (1..200).map { "s$it" }
+		val w = World(ids)
+		w.recordAll()
+		val missing = (1..20).map { "s$it" }.toSet()
+		missing.forEach { w.answers[it] = SongAnswer.GONE }
+		val others = (1..7_800).map { "o$it" }.toSet()
+		val reports = (1..14).map {
+			w.pass(ids.toSet() - missing + others, songsBefore = 10_000).also { w.clock += 12.hours.inWholeMilliseconds }
+		}
+		assertEquals(emptyList(), w.removed, "Room held 10,000 songs before the pull, and the pull lists 7,980")
+		assertTrue(reports.first().goneHeld.contains("shrank"), reports.first().goneHeld)
+	}
+
+	@Test
+	fun aSwitchAndBackKeepsTheOwnersReference() {
+		// Minor 3: A to B to A must not reopen the gap.
+		val ids = (1..200).map { "s$it" }
+		val w = World(ids)
+		w.recordAll()
+		val others = (1..9_800).map { "o$it" }.toSet()
+		w.pass(ids.toSet() + others)
+		w.owner = ownerB
+		w.passes(2, 12.hours) { setOf("b1") }
+		w.owner = ownerA
+		val missing = (1..20).map { "s$it" }.toSet()
+		missing.forEach { w.answers[it] = SongAnswer.GONE }
+		w.passes(14, 12.hours) { ids.toSet() - missing + others.drop(1_980) }
+		assertEquals(emptyList(), w.removed, "A's reference of 10,000 survived B")
+	}
+
+	@Test
+	fun twoOldIdsClaimingOneSuccessorMoveTheBetterOne() {
+		// Minor 5: s1 is the exact match (same length, same album); s2 a near one on another album.
+		val old = listOf(
+			song("s1", title = "Track 1", track = 1, album = "Re-key Album", seconds = 181),
+			song("s2", title = "Track 1", track = 1, album = "Other Album", seconds = 182)
+		) + (3..10).map { song("s$it") }
+		val w = World(old.map { it.songId }, old)
+		w.recordAll()
+		w.room.remove("s1"); w.room.remove("s2")
+		w.room["n1"] = song("n1", title = "Track 1", track = 1, album = "Re-key Album", seconds = 181)
+		w.answers["s2"] = SongAnswer.GONE
+		w.pass(w.room.keys.toSet())
+		assertEquals(listOf("s1" to "n1"), w.moved, "the closer one moves")
+		assertEquals(1, w.origins.getValue("s2").gonePulls, "the other falls through to the gone rules")
+	}
+
+	@Test
+	fun aFailingReFetchDoesNotStarveTheOthers() {
+		// Minor 6: twenty re-fetches that always fail were first by id on every pass.
+		val ids = (10..39).map { "s$it" }
+		val w = World(ids)
+		w.recordAll()
+		ids.forEach { w.room[it] = w.room.getValue(it).copy(year = 1999) }
+		w.failing = (10..29).map { "s$it" }.toSet()
+		val first = w.pass(listed = null)
+		assertEquals((10..29).map { "s$it" }, first.refetched, "the first twenty by id")
+		w.clock += 1.hours.inWholeMilliseconds
+		val second = w.pass(listed = null)
+		assertEquals((30..39).map { "s$it" }, second.refetched.take(10), "next pass: the ones never asked first")
+		assertTrue(second.refetched.size <= 10, "and the failed ones wait out their backoff: ${second.refetched}")
+		assertTrue((30..39).all { w.origins.getValue("s$it").origin == songOrigin(w.room.getValue("s$it")) })
+		// A failure keeps backing off: over a day, a failing song is asked far less than once a pass.
+		repeat(23) { w.clock += 1.hours.inWholeMilliseconds; w.pass(listed = null) }
+		val asksOfOne = w.refetched.count { it == "s10" }
+		assertTrue(asksOfOne in 2..6, "s10 asked $asksOfOne times in 25 hourly passes")
 	}
 }
