@@ -33,7 +33,8 @@ class BackupRulesDatabaseGuardTest {
 			.findAll(scope).map { it.groupValues[1] }.toSet()
 	}
 
-	private fun expectedFiles() = databases.flatMap { listOf(it, "$it-wal", "$it-shm") }.toSet()
+	// -journal too (review of fix round 2, nit 4): Room in TRUNCATE journal mode (a low-RAM device) has one for the length of a transaction.
+	private fun expectedFiles() = databases.flatMap { listOf(it, "$it-wal", "$it-shm", "$it-journal") }.toSet()
 
 	@Test
 	fun theDatabaseListIsReadFromTheCode() {
