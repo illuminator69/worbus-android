@@ -121,6 +121,7 @@ import app.worbus.ui.theme.warning
 import app.worbus.ui.util.Fold
 import app.worbus.ui.util.rememberFoldMotion
 import app.worbus.ui.util.rememberNowPlayingCoverAmbient
+import app.worbus.ui.util.rememberCanShare
 
 /*
  * navi-connect P1: the avatar menu. It holds what the four-button bar does not: the groups (since P6
@@ -435,7 +436,7 @@ private fun AvatarMenuContent() {
 	val lbAccess by lbBot.lbAccess.collectAsState()
 	val autoplayOn by radioManager.autoplayOn.collectAsState()
 	val lbConfigured = lbAccess.let { lbBot.isConfigured }
-	val canShare = sessionManager.canUserShare()
+	val canShare = rememberCanShare(sessionManager)
 	val items = remember(lbConfigured, canShare, attention, webUrl, downloads, roles) {
 		avatarMenuItems(lbConfigured, canShare, menuAttentionBadge(attention, lbConfigured), webUrl, downloads.isOn, roles.admin)
 	}

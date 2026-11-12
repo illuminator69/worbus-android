@@ -37,6 +37,7 @@ import okio.ByteString.Companion.encodeUtf8
 import kotlin.random.Random
 import app.worbus.di.navidromeHeadersSource
 import app.worbus.di.navidromeHeaders
+import kotlinx.coroutines.flow.update
 
 class SessionManager(
 	private val settings: Settings,
@@ -49,7 +50,16 @@ class SessionManager(
 	private val _isLoggedIn = MutableStateFlow(false)
 	val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
-	private var currentUser: User? = null
+	private var currentUser: User?
+		get() = _currentUser.value
+		set(value) { _currentUser.value = value }
+
+	/** The session's Navidrome user once loaded (null before, and with no session): a composable reads it as state. */
+	private val _currentUser = MutableStateFlow<User?>(null)
+	val currentUserState: StateFlow<User?> = _currentUser.asStateFlow()
+
+	/** A user fetch is out: the sheets ask on every recomposition, and one request answers them all (B-308). */
+	private val userFetching = MutableStateFlow(false)
 	private val mutex = Mutex()
 	private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -606,15 +616,25 @@ class SessionManager(
 		throw Exception("Failed to get current user because the username is blank")
 	}
 
+	/**
+	 * The user, or null while it has not loaded; a miss asks Navidrome once (B-308). No session, no
+	 * request: the sheets call this in composition, and a logged-out launch used to log a stack
+	 * trace for a user it could never fetch. One fetch at a time, however often it is called; a
+	 * failed one may be asked again by the next call.
+	 */
 	fun getCachedUser(): User? {
-		if (currentUser != null) {
-			return currentUser
-		}
+		currentUser?.let { return it }
+		if (!_isLoggedIn.value) return null
+		var claimed = false
+		userFetching.update { busy -> claimed = !busy; true }
+		if (!claimed) return null
 		scope.launch {
 			try {
 				fetchCurrentUser()
 			} catch (e: Exception) {
-				Logger.e("SessionManager", "Failed to fetch current user info", e)
+				Logger.w("SessionManager", "Failed to fetch current user info", e)
+			} finally {
+				userFetching.value = false
 			}
 		}
 		return currentUser

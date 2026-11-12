@@ -86,6 +86,7 @@ import app.worbus.ui.components.common.CoverArt
 import app.worbus.ui.components.common.MarqueeText
 import app.worbus.ui.components.common.RatingRow
 import app.worbus.ui.util.rememberCoverAmbient
+import app.worbus.ui.util.rememberCanShare
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -286,7 +287,7 @@ fun CollectionSheet(
 				)
 			}
 
-			if (onShare != null && sessionManager.canUserShare()) {
+			if (onShare != null && rememberCanShare(sessionManager)) {
 				ListItem(
 					content = { Text(stringResource(Res.string.action_share)) },
 					leadingContent = { Icon(Icons.Outlined.Share, null) },

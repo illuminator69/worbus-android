@@ -105,6 +105,7 @@ import app.worbus.domain.models.DomainSongArtist
 import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.flow.map
 import app.worbus.domain.manager.DownloadManager
+import app.worbus.ui.util.rememberCanShare
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -241,7 +242,7 @@ fun SongSheet(
 		HorizontalDivider(Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
 
 		Column(Modifier.verticalScroll(rememberScrollState())) {
-			if (onShare != null && sessionManager.canUserShare()) {
+			if (onShare != null && rememberCanShare(sessionManager)) {
 				ListItem(
 					content = { Text(stringResource(Res.string.action_share)) },
 					leadingContent = { Icon(Icons.Outlined.Share, null) },
