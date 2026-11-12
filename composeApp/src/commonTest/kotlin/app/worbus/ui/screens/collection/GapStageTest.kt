@@ -157,6 +157,37 @@ class GapStageTest {
 	}
 
 	/**
+	 * B-231 round 3, the VM walk (`RESULTS-phase-b-walk-2026-11-12.md`): the walk's gap, tracks
+	 * `[present, present, downloaded, missing]` at `picking`. The sources view said "For the 2 missing
+	 * tracks only" and "Request 2 tracks" (the desktop: 1), and while the one track was fetched the
+	 * box said "Getting 2 tracks … 1 of 2". Every count in the box is the tracks to fetch (rule 2).
+	 */
+	@Test
+	fun theBoxCountsOnlyTheTracksToFetchOnTheWalksGap() {
+		val walk = gap(status = "picking", tracks = listOf(track(1, "present"), track(2, "present"), track(3, "downloaded"), track(4, "missing")))
+		assertEquals(1, gapFetchCount(walk), "the sources view's header and Request button")
+
+		// The fetch that follows: lb-bot says downloading, track 3 still downloaded from before.
+		var held = heldForMatch(emptySet(), walk)
+		val fetching = gap(status = "downloading", tracks = listOf(track(1, "present"), track(2, "present"), track(3, "downloaded"), track(4, "downloading")))
+		held = heldForMatch(held, fetching)
+		val running = gapStage(GapInput(fetching, 2, null, GapView.SOURCES, false, false, 100_000L, heldForMatch = held))
+		assertIs<GapStage.Active>(running)
+		assertEquals(listOf(0, 1), listOf(running.done, running.wanted), "Getting 1 track, 0 of 1")
+
+		// Track 4 arrives; the fill is still settling.
+		val arrived = gap(status = "downloading", tracks = listOf(track(1, "present"), track(2, "present"), track(3, "downloaded"), track(4, "downloaded")))
+		held = heldForMatch(held, arrived)
+		val landing = gapStage(GapInput(arrived, 2, null, GapView.SOURCES, true, false, 100_000L, heldForMatch = held))
+		assertIs<GapStage.Active>(landing)
+		assertEquals(listOf(1, 1), listOf(landing.done, landing.wanted), "1 of 1")
+
+		// Not a pending match (no downloaded track at picking): every missing track counts, as before.
+		assertEquals(2, gapFetchCount(gap(status = "picking")))
+		assertEquals(emptySet(), heldForMatch(setOf("0-3"), gap(status = "ready")), "a gap at rest that is no pending match holds nothing")
+	}
+
+	/**
 	 * B-231 round 2 (b), the coordinator's ruling for both clients: a plain failed fill (a real
 	 * failure, not the `needs_match` settle) on a pending match shows Failed.
 	 */
