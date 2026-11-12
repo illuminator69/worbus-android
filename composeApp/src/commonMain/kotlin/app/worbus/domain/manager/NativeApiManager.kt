@@ -5,7 +5,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.put
@@ -24,6 +23,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okio.ByteString.Companion.encodeUtf8
 import app.worbus.di.synchronized
+import app.worbus.di.NavidromeOnlyHeaders
+import app.worbus.di.navidromeHeadersFor
+import app.worbus.di.navidromeRequestHeaders
 import app.worbus.util.Logger
 import app.worbus.util.userAgent
 import io.ktor.client.plugins.UserAgent
@@ -47,6 +49,11 @@ class NativeApiManager(
 
 	private val client = HttpClient {
 		install(UserAgent) { agent = userAgent() }
+		// The custom headers and the JWT toward this session's Navidrome only, decided on every hop
+		// (review of the fix round, minor 6): a 302 to an auth portal on another host carries neither.
+		navidromeRequestHeaders { url, request ->
+			navidromeHeadersFor(url, base(), preferenceManager.customHeadersMap() + request.attributes.getOrNull(NavidromeOnlyHeaders).orEmpty())
+		}
 		install(ContentNegotiation) {
 			json(Json {
 				ignoreUnknownKeys = true
@@ -57,6 +64,8 @@ class NativeApiManager(
 	}
 
 	private fun base(): String = settings.getString("instanceUrl", "").trimEnd('/')
+
+	private fun nativeBearer(token: String) = mapOf("X-ND-Authorization" to "Bearer $token")
 
 	private fun credentials() = NativeCredentials(base(), settings.getString("username", ""), secrets.navidromePassword)
 
@@ -71,7 +80,6 @@ class NativeApiManager(
 		val credentials = credentials()
 		val response: JsonObject = client.post("${credentials.base}/auth/login") {
 			contentType(ContentType.Application.Json)
-			preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
 			setBody(buildJsonObject {
 				put("username", credentials.username)
 				put("password", credentials.password)
@@ -87,17 +95,15 @@ class NativeApiManager(
 		val activeToken = token ?: login()
 		var response = client.post("${base()}$path") {
 			contentType(ContentType.Application.Json)
-			header("X-ND-Authorization", "Bearer $activeToken")
-			preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
+			attributes.put(NavidromeOnlyHeaders, nativeBearer(activeToken))
 			setBody(body.toString())
 		}
 		if (response.status == HttpStatusCode.Unauthorized) {
 			val freshToken = login()
 			response = client.post("${base()}$path") {
 				contentType(ContentType.Application.Json)
-				header("X-ND-Authorization", "Bearer $freshToken")
-				preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
-				setBody(body.toString())
+				attributes.put(NavidromeOnlyHeaders, nativeBearer(freshToken))
+					setBody(body.toString())
 			}
 		}
 		return response
@@ -107,8 +113,7 @@ class NativeApiManager(
 		val activeToken = token ?: login()
 		suspend fun send(bearer: String) = client.put("${base()}$path") {
 			contentType(ContentType.Application.Json)
-			header("X-ND-Authorization", "Bearer $bearer")
-			preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
+			attributes.put(NavidromeOnlyHeaders, nativeBearer(bearer))
 			setBody(body.toString())
 		}
 
@@ -119,8 +124,7 @@ class NativeApiManager(
 	private suspend fun authedGet(path: String, params: Map<String, String>): HttpResponse {
 		val activeToken = token ?: login()
 		suspend fun send(bearer: String) = client.get("${base()}$path") {
-			header("X-ND-Authorization", "Bearer $bearer")
-			preferenceManager.customHeadersMap().forEach { (key, value) -> header(key, value) }
+			attributes.put(NavidromeOnlyHeaders, nativeBearer(bearer))
 			params.forEach { (key, value) -> parameter(key, value) }
 		}
 

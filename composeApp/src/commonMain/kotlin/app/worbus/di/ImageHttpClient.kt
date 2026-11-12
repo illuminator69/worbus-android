@@ -8,6 +8,7 @@ import io.ktor.client.plugins.UserAgent
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.plugins.api.SendingRequest
 import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.util.AttributeKey
 import io.ktor.http.URLBuilder
 import io.ktor.http.Url
@@ -80,11 +81,23 @@ private val AddedNavidromeHeaders = AttributeKey<Map<String, String>>("AddedNavi
  * goes through the send pipeline, which is where this runs. A header the request set itself is
  * never touched.
  */
-fun HttpClientConfig<*>.navidromeHeaders(headersFor: (String) -> Map<String, String>) {
+fun HttpClientConfig<*>.navidromeHeaders(headersFor: (String) -> Map<String, String>) =
+	navidromeRequestHeaders { url, _ -> headersFor(url) }
+
+/**
+ * A credential one request carries for the session's Navidrome only (review of the fix round,
+ * minor 6: NativeApiManager's `X-ND-Authorization: Bearer <jwt>`), as header name to value. Put on
+ * the request as an attribute, not a header, so that [navidromeRequestHeaders] decides it on every
+ * hop like the custom headers: a redirect off Navidrome does not carry the JWT.
+ */
+val NavidromeOnlyHeaders = AttributeKey<Map<String, String>>("NavidromeOnlyHeaders")
+
+/** [navidromeHeaders], where [headersFor] also sees the request (its [NavidromeOnlyHeaders]). */
+fun HttpClientConfig<*>.navidromeRequestHeaders(headersFor: (url: String, request: HttpRequestBuilder) -> Map<String, String>) {
 	install(createClientPlugin("NavidromeHeaders") {
 		on(SendingRequest) { request, _ ->
 			val added = request.attributes.getOrNull(AddedNavidromeHeaders).orEmpty()
-			val wanted = headersFor(request.url.buildString())
+			val wanted = headersFor(request.url.buildString(), request)
 			for ((name, value) in added) {
 				if (wanted[name] != value && request.headers.getAll(name) == listOf(value)) request.headers.remove(name)
 			}

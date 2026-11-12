@@ -16,7 +16,6 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CoroutineScope
@@ -86,6 +85,10 @@ class SessionManager(
 			install(UserAgent) { agent = userAgent() }
 			install(HttpTimeout)
 			reachability.observe(this)
+			// The custom headers toward the session's Navidrome only, decided on every hop (review of the
+			// fix round, minor 6): set per request they followed a 302 to another host. Read at each
+			// request, so a new server or new headers apply without rebuilding this client.
+			navidromeHeaders(navidromeHeadersSource({ settings.getString("instanceUrl", "") }, { preferenceManager.customHeadersMap() }))
 		}
 	}
 
@@ -286,9 +289,6 @@ class SessionManager(
 		return run {
 			val envelope: SubsonicArtistsEnvelope =
 				httpClient.get("$base/rest/getArtists.view") {
-					preferenceManager.customHeadersMap().forEach { (key, value) ->
-						header(key, value)
-					}
 					parameter("u", username)
 					parameter("t", token)
 					parameter("s", salt)
@@ -333,9 +333,6 @@ class SessionManager(
 		return run {
 			val envelope: SubsonicArtistInfo2Envelope =
 				httpClient.get("$base/rest/getArtistInfo2.view") {
-					preferenceManager.customHeadersMap().forEach { (key, value) ->
-						header(key, value)
-					}
 					parameter("u", username)
 					parameter("t", token)
 					parameter("s", salt)
@@ -367,9 +364,6 @@ class SessionManager(
 		return run {
 			val envelope: SubsonicSimilarEnvelope =
 				httpClient.get("$base/rest/getSimilarSongs2.view") {
-					preferenceManager.customHeadersMap().forEach { (key, value) ->
-						header(key, value)
-					}
 					parameter("u", username)
 					parameter("t", token)
 					parameter("s", salt)
@@ -401,9 +395,6 @@ class SessionManager(
 		return run {
 			val envelope: SubsonicExtensionsEnvelope =
 				httpClient.get("$base/rest/getOpenSubsonicExtensions.view") {
-					preferenceManager.customHeadersMap().forEach { (key, value) ->
-						header(key, value)
-					}
 					parameter("u", username)
 					parameter("t", token)
 					parameter("s", salt)
@@ -455,9 +446,6 @@ class SessionManager(
 						connectTimeoutMillis = 15_000
 						requestTimeoutMillis = 30_000
 					}
-					preferenceManager.customHeadersMap().forEach { (key, value) ->
-						header(key, value)
-					}
 					parameter("u", username)
 					parameter("t", token)
 					parameter("s", salt)
@@ -500,9 +488,6 @@ class SessionManager(
 		return run {
 			val envelope: SubsonicSonicMatchEnvelope =
 				httpClient.get("$base/rest/getSonicSimilarTracks.view") {
-					preferenceManager.customHeadersMap().forEach { (key, value) ->
-						header(key, value)
-					}
 					parameter("u", username)
 					parameter("t", token)
 					parameter("s", salt)
@@ -533,9 +518,6 @@ class SessionManager(
 		return run {
 			val envelope: SubsonicSonicMatchEnvelope =
 				httpClient.get("$base/rest/findSonicPath.view") {
-					preferenceManager.customHeadersMap().forEach { (key, value) ->
-						header(key, value)
-					}
 					parameter("u", username)
 					parameter("t", token)
 					parameter("s", salt)
@@ -570,15 +552,12 @@ class SessionManager(
 		val salt = Random.nextBytes(12)
 			.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
 		val token = "$password$salt".encodeUtf8().md5().hex()
-		val customHeaders = preferenceManager.customHeadersMap()
-
 		return run {
 			val all = mutableListOf<RawArtist>()
 			var offset = 0
 			while (true) {
 				val envelope: SubsonicSearchEnvelope =
 					httpClient.get("$base/rest/search3.view") {
-						customHeaders.forEach { (key, value) -> header(key, value) }
 						parameter("u", username)
 						parameter("t", token)
 						parameter("s", salt)
