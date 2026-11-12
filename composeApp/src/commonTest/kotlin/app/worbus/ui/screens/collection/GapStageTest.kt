@@ -122,6 +122,17 @@ class GapStageTest {
 		assertEquals(GapStage.Attention("Reconcile in lb-bot"), gapStage(input(gap = stalled, view = GapView.SOURCES)))
 	}
 
+	/**
+	 * B-231, the shared rule's point 4 (desktop results, "B-231: the shared rule"): the ledger's settle
+	 * for a pending match (`failed` at `needs_match`, Q-031) is the match pending, not a failed fill.
+	 */
+	@Test
+	fun aPendingMatchsLedgerSettleIsNotAFailedFill() {
+		val awaiting = gap(status = "picking", tracks = listOf(track(1, "present"), track(2, "downloaded"), track(3, "missing")))
+		val pending = fill("failed").copy(state = "needs_match")
+		assertEquals(GapStage.Tracks(listOf(track(3, "missing")), 3), gapStage(input(gap = awaiting, fill = pending, view = GapView.TRACKS)))
+	}
+
 	@Test
 	fun aPendingMatchThatStillOffersTheRestSaysOpenInLbBotAboveIt() {
 		val awaiting = gap(status = "picking", tracks = listOf(track(1, "present"), track(2, "downloaded"), track(3, "missing")))
