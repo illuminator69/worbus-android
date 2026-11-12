@@ -299,6 +299,8 @@ class CollectionDetailViewModel(
 	fun autoGap() {
 		val groupId = gapGroupId ?: return
 		_gapBox.update { it.copy(working = true, error = null) }
+		// The task this tap replaces: a new one that ends in error releases the box at once.
+		val taskBefore = lbBotManager.gaps.value[groupId]?.sourceTask?.id.orEmpty()
 		viewModelScope.launch {
 			val result = lbBotManager.gapAuto(groupId)
 			_gapBox.update {
@@ -306,8 +308,13 @@ class CollectionDetailViewModel(
 				else it.copy(working = false, committed = true, view = GapView.TRACKS)
 			}
 			if (result is LbBotManager.LbResult.Ok) {
+				// Fix round 5: an auto-pick lb-bot refused queues nothing and ends its task in error;
+				// the box then says why (GapStage.PickFailed) rather than "Getting…" for 30 s.
 				withTimeoutOrNull(GAP_COMMIT_RELEASE_MS) {
-					lbBotManager.gaps.first { it[groupId]?.status == "downloading" }
+					lbBotManager.gaps.first { gaps ->
+						val gap = gaps[groupId]
+						gap?.status == "downloading" || gap?.sourceTask?.let { it.status == "error" && it.id != taskBefore } == true
+					}
 				}
 				_gapBox.update { it.copy(committed = false) }
 			}
