@@ -17,7 +17,7 @@
    out.) The re-syncable library caches are left behind rather than moved as a stale snapshot.
 
    No Room database travels, in either direction (BackupRulesDatabaseGuardTest reads every
-   getDatabasePath in the code and requires each file, with its -wal and -shm, in all three
+   getDatabasePath in the code and requires each file, with its -wal, -shm and -journal, in all three
    sections of the two rule files). cache.db is re-syncable; downloads.db names files that
    are not copied; writes.db is the offline write queue, which belongs to the session that made
    it, and the session does not travel: a restored queue was sent as whoever signed in next.
@@ -44,6 +44,9 @@
 			path="cache.db-shm" />
 		<exclude
 			domain="database"
+			path="cache.db-journal" />
+		<exclude
+			domain="database"
 			path="downloads.db" />
 		<exclude
 			domain="database"
@@ -53,6 +56,9 @@
 			path="downloads.db-shm" />
 		<exclude
 			domain="database"
+			path="downloads.db-journal" />
+		<exclude
+			domain="database"
 			path="writes.db" />
 		<exclude
 			domain="database"
@@ -60,6 +66,9 @@
 		<exclude
 			domain="database"
 			path="writes.db-shm" />
+		<exclude
+			domain="database"
+			path="writes.db-journal" />
 	</cloud-backup>
 	<device-transfer>
 		<exclude
@@ -76,6 +85,9 @@
 			path="cache.db-shm" />
 		<exclude
 			domain="database"
+			path="cache.db-journal" />
+		<exclude
+			domain="database"
 			path="downloads.db" />
 		<exclude
 			domain="database"
@@ -85,6 +97,9 @@
 			path="downloads.db-shm" />
 		<exclude
 			domain="database"
+			path="downloads.db-journal" />
+		<exclude
+			domain="database"
 			path="writes.db" />
 		<exclude
 			domain="database"
@@ -92,5 +107,8 @@
 		<exclude
 			domain="database"
 			path="writes.db-shm" />
+		<exclude
+			domain="database"
+			path="writes.db-journal" />
 	</device-transfer>
 </data-extraction-rules>
