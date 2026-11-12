@@ -90,7 +90,7 @@ destructive fallback, so a bump makes a rollback to 0.7.0 drop every download re
 (`writes.db`, at 1; B-373, Phase B fix round 2026-11-12)** is the offline write queue (stars, ratings,
 scrobbles, playlist deletes not yet sent) and the record of what was moved out of the cache's old
 `SyncActionEntity`; same policy as downloads (no destructive fallback, the first-open check, a migration and
-an exported schema per version: `WritesDbPolicyTest`). The six queue rules are in `WriteQueue.kt`. 23 added the lb-bot index mirror (§5) through a
+an exported schema per version: `WritesDbPolicyTest`). The six queue rules are in `WriteQueue.kt`. **No database travels in a backup or a device transfer** (each file with its `-wal` / `-shm`, in all three sections of `backup_rules.xml` and `data_extraction_rules.xml`; `BackupRulesDatabaseGuardTest` reads every `getDatabasePath` in the code): a restore starts logged out, so a restored write queue was sent as whoever signed in next. 23 added the lb-bot index mirror (§5) through a
 hand-written `MIGRATION_CACHE_22_23`, and 24 (with downloads 5) only indices (§2 rule 5), so an
 upgrade keeps the cached library rather than wiping it.
 
