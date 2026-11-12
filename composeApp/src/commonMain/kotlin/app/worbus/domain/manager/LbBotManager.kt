@@ -3139,7 +3139,7 @@ class LbBotManager(
 	suspend fun gapAuto(groupId: String): LbResult<LbOk> {
 		if (groupId.isBlank()) return LbResult.Failed(LbError.Rejected(400, ""))
 		val res = postJson<_, LbOk>("/lb/gap/auto", LbGroupRequest(groupId))
-		if (res is LbResult.Ok) startGapWatch(groupId)
+		if (res is LbResult.Ok) startGapWatch(groupId, taskId = res.value.taskId)
 		return res
 	}
 
@@ -3226,7 +3226,7 @@ class LbBotManager(
 		)
 	}
 
-	fun startGapWatch(groupId: String, artist: String = "", album: String = "") {
+	fun startGapWatch(groupId: String, artist: String = "", album: String = "", taskId: String = "") {
 		if (groupId.isBlank()) return
 		putWatch(
 			LbWatch(
@@ -3234,7 +3234,8 @@ class LbBotManager(
 				key = groupId,
 				startedAt = nowMs(),
 				artist = artist,
-				album = album
+				album = album,
+				taskId = taskId
 			)
 		)
 	}
@@ -4214,7 +4215,9 @@ data class LbOk(
 	/** Upstream's own sentence when it refuses with a 200. Shown verbatim. */
 	val error: String = "",
 	/** lb-bot already had this in flight; the second request was a no-op. */
-	val alreadyActive: Boolean = false
+	val alreadyActive: Boolean = false,
+	/** The background task the action started (a gap's auto-pick), "" when it started none. */
+	@SerialName("task_id") val taskId: String = ""
 )
 
 /** Ranked Soulseek folders for one release-group, with the album they were sought for. */
@@ -5651,7 +5654,13 @@ internal data class LbWatch(
 	/** Digest of the last answer. Identical twice running means nothing is moving. */
 	val fingerprint: String = "",
 	val quietTicks: Int = 0,
-	val nextPollAt: Long = 0L
+	val nextPollAt: Long = 0L,
+	/**
+	 * The source task this device's Pick the best source for me started (its answer's `task_id`),
+	 * the only proof that a task which ended in error is this device's (fix round 5, the shared rule
+	 * "an auto-pick that ended in error"). "" for every other row.
+	 */
+	val taskId: String = ""
 ) {
 	/** When this row last did anything — its sort key, live or dead. */
 	fun finishedAtOrStart(): Long = if (finishedAt > 0L) finishedAt else startedAt
@@ -5732,7 +5741,8 @@ internal data class LbWatch(
 		lastErrorTicks = lastErrorTicks,
 		verifyGaveUp = verifyGaveUp,
 		leftOut = leftOut,
-		retryPeer = if (kind == "gap") "" else sourcePeer
+		retryPeer = if (kind == "gap") "" else sourcePeer,
+		taskId = taskId
 	)
 }
 
@@ -5792,7 +5802,9 @@ data class LbFillEntry(
 	/** [LbFillStatus.leftOut] as last reported. Always 0 on a gap fill, which has none. */
 	val leftOut: Int = 0,
 	/** The peer a plain Retry asks again: the one the user picked, until a retry rules it out. */
-	val retryPeer: String = ""
+	val retryPeer: String = "",
+	/** [LbWatch.taskId]: the auto-pick task this device started for a gap, "" otherwise. */
+	val taskId: String = ""
 ) {
 	val isRunning: Boolean get() = !settled
 
