@@ -95,8 +95,7 @@ fun gapStage(input: GapInput): GapStage {
 			else -> GapStage.Loading
 		}
 	}
-	val transferring = input.committed || gap.status == "downloading" ||
-		gap.tracks.any { it.state in IN_FLIGHT_TRACK_STATES }
+	val transferring = input.committed || gapTransferring(gap)
 	// Worbus P1: with downloading off nothing is transferring, whatever a record from before says.
 	if (transferring && input.downloadsOn) {
 		return gapActive(gap, input.heldForMatch)
@@ -122,8 +121,8 @@ fun gapStage(input: GapInput): GapStage {
 	// B-231 round 2: the pending match does not depend on a search (the desktop's `gapMatchPending`,
 	// point 1): only Attention waits for no search in flight (point 3). Gated on `searching` it fell
 	// away while another device searched, and the box counted and listed the downloaded tracks too.
-	val awaiting = !gap.stalledPlacement && gap.awaitingMatch(searching = false)
-	val missing = if (awaiting) all.filter { it.state != "downloaded" } else all
+	val awaiting = gapMatchPending(gap)
+	val missing = gapTracksToFetch(gap)
 	// Worbus P1: with downloading off the box is the user's fold over what is missing, whatever view
 	// or fill is left from before; none of the stages below can be acted on, and their words are a
 	// download's (Attention's "Downloaded, but needs sorting out in lb-bot" included).
@@ -161,20 +160,60 @@ fun gapStage(input: GapInput): GapStage {
 /** A gap track's identity across reads: its disc and position. */
 fun gapTrackKey(track: LbGapTrack): String = "${track.disc}-${track.position}"
 
-/** The in-flight stage's counts: "Getting N tracks", "x of N". */
-internal fun gapActive(gap: LbGap, heldForMatch: Set<String>): GapStage.Active =
-	GapStage.Active(
-		done = gap.tracksDone,
-		wanted = gap.tracksWanted,
-		failed = gap.tracksFailed,
-		steps = requestSteps(gapStepState(gap), gap.tracksDone, gap.tracksWanted)
+/** lb-bot is moving tracks for this gap. */
+private fun gapTransferring(gap: LbGap): Boolean =
+	gap.status == "downloading" || gap.tracks.any { it.state in IN_FLIGHT_TRACK_STATES }
+
+/**
+ * B-231, the shared rule's point 1: a pending match is `picking` with a track `downloaded`, not a
+ * stalled placement, whether or not a search is in flight (the desktop's `gapMatchPending`).
+ */
+fun gapMatchPending(gap: LbGap): Boolean = !gap.stalledPlacement && gap.awaitingMatch(searching = false)
+
+/**
+ * The shared rule's point 2: the tracks a search or fetch is for, the missing ones less those a
+ * pending match holds as `downloaded` (the desktop's `gapTracksToFetch`). Every count the box shows
+ * is of these (round 3, the VM walk).
+ */
+fun gapTracksToFetch(gap: LbGap): List<LbGapTrack> {
+	val missing = missingTracks(gap)
+	return if (gapMatchPending(gap)) missing.filter { it.state != "downloaded" } else missing
+}
+
+/**
+ * The in-flight stage's counts ("Getting N tracks", "x of N") over the tracks the fetch is for:
+ * every track not `present`, less the ones a pending match held as `downloaded` before it began
+ * ([heldForMatch]) and still holds. lb-bot's record says `downloading` during the fetch, so the
+ * pending match cannot be read off it then.
+ */
+internal fun gapActive(gap: LbGap, heldForMatch: Set<String>): GapStage.Active {
+	val held = gap.copy(tracks = gap.tracks.filterNot { it.state == "downloaded" && gapTrackKey(it) in heldForMatch })
+	// Never "Getting 0 tracks": a fetch accepted before its record moves counts what the record says.
+	val fetched = if (held.tracksWanted > 0) held else gap
+	return GapStage.Active(
+		done = fetched.tracksDone,
+		wanted = fetched.tracksWanted,
+		failed = fetched.tracksFailed,
+		steps = requestSteps(gapStepState(fetched), fetched.tracksDone, fetched.tracksWanted)
 	)
+}
 
-/** How many tracks the sources view's header and its Request button count. */
-fun gapFetchCount(gap: LbGap?): Int = gap?.tracks?.count { it.state != "present" && it.state != "done" } ?: 0
+/** How many tracks the sources view's header and its Request button count: the tracks to fetch. */
+fun gapFetchCount(gap: LbGap?): Int = gap?.let { gapTracksToFetch(it).size } ?: 0
 
-/** The tracks a pending match holds as `downloaded`, as this device last saw them ([GapInput.heldForMatch]). */
-fun heldForMatch(previous: Set<String>, gap: LbGap?): Set<String> = emptySet()
+/**
+ * The tracks ([gapTrackKey]) a pending match holds as `downloaded`, as this device last saw them,
+ * for [GapInput.heldForMatch]: read afresh while the gap is a pending match, kept (those still
+ * `downloaded`) while a fetch runs, and nothing once the gap is neither. A fetch this device first
+ * sees already running (started elsewhere, the page opened mid-fetch) has nothing remembered and
+ * counts every track not `present`, as before.
+ */
+fun heldForMatch(previous: Set<String>, gap: LbGap?): Set<String> = when {
+	gap == null -> previous
+	gapMatchPending(gap) -> gap.tracks.filter { it.state == "downloaded" }.map(::gapTrackKey).toSet()
+	gapTransferring(gap) -> gap.tracks.filter { it.state == "downloaded" && gapTrackKey(it) in previous }.map(::gapTrackKey).toSet()
+	else -> emptySet()
+}
 
 /** The tracks the album still lacks, in tracklist order. */
 fun missingTracks(gap: LbGap): List<LbGapTrack> = gap.tracks.filter { it.state !in HELD_TRACK_STATES }
