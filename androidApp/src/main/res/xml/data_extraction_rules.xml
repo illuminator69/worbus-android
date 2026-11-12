@@ -15,6 +15,12 @@
    install that has not opened since this change can still hold the old plaintext values
    there until its first launch moves them, which is one more reason cloud backup leaves it
    out.) The re-syncable library caches are left behind rather than moved as a stale snapshot.
+
+   No Room database travels, in either direction (BackupRulesDatabaseGuardTest reads every
+   getDatabasePath in the code and requires each file, with its -wal and -shm, in all three
+   sections of the two rule files). cache.db is re-syncable; downloads.db names files that
+   are not copied; writes.db is the offline write queue, which belongs to the session that made
+   it, and the session does not travel: a restored queue was sent as whoever signed in next.
 -->
 <data-extraction-rules>
 	<cloud-backup>
@@ -32,7 +38,28 @@
 			path="cache.db" />
 		<exclude
 			domain="database"
+			path="cache.db-wal" />
+		<exclude
+			domain="database"
+			path="cache.db-shm" />
+		<exclude
+			domain="database"
 			path="downloads.db" />
+		<exclude
+			domain="database"
+			path="downloads.db-wal" />
+		<exclude
+			domain="database"
+			path="downloads.db-shm" />
+		<exclude
+			domain="database"
+			path="writes.db" />
+		<exclude
+			domain="database"
+			path="writes.db-wal" />
+		<exclude
+			domain="database"
+			path="writes.db-shm" />
 	</cloud-backup>
 	<device-transfer>
 		<exclude
@@ -43,6 +70,27 @@
 			path="cache.db" />
 		<exclude
 			domain="database"
+			path="cache.db-wal" />
+		<exclude
+			domain="database"
+			path="cache.db-shm" />
+		<exclude
+			domain="database"
 			path="downloads.db" />
+		<exclude
+			domain="database"
+			path="downloads.db-wal" />
+		<exclude
+			domain="database"
+			path="downloads.db-shm" />
+		<exclude
+			domain="database"
+			path="writes.db" />
+		<exclude
+			domain="database"
+			path="writes.db-wal" />
+		<exclude
+			domain="database"
+			path="writes.db-shm" />
 	</device-transfer>
 </data-extraction-rules>

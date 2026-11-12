@@ -16,6 +16,9 @@
 
    Cached library data lives in the Room databases and is re-syncable, so it is excluded too
    rather than dragging a stale copy of the library onto a new device.
+   writes.db (the offline write queue) is excluded because the session it belongs to is not
+   restored: a restored queue would be sent as whoever signed in next. Each database's -wal and
+   -shm are named too (BackupRulesDatabaseGuardTest).
 -->
 <full-backup-content>
 	<exclude
@@ -32,5 +35,26 @@
 		path="cache.db" />
 	<exclude
 		domain="database"
+		path="cache.db-wal" />
+	<exclude
+		domain="database"
+		path="cache.db-shm" />
+	<exclude
+		domain="database"
 		path="downloads.db" />
+	<exclude
+		domain="database"
+		path="downloads.db-wal" />
+	<exclude
+		domain="database"
+		path="downloads.db-shm" />
+	<exclude
+		domain="database"
+		path="writes.db" />
+	<exclude
+		domain="database"
+		path="writes.db-wal" />
+	<exclude
+		domain="database"
+		path="writes.db-shm" />
 </full-backup-content>
