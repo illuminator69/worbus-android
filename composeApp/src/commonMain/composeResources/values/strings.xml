@@ -1503,6 +1503,7 @@
 	<string name="request_search_failed">Couldn't search for sources</string>
 	<string name="request_cancel">Cancel request</string>
 	<string name="request_retry_from">From %1$s</string>
+	<string name="request_started_elsewhere">Requested on another device.</string>
 	<string name="request_leave_any_time">Leave this page any time. Progress also shows in Source history.</string>
 	<string name="request_refused">lb-bot would not take that request.</string>
 	<string name="request_found_from_link">Found from your link</string>

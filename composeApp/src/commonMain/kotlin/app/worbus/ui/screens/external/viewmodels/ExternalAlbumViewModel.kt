@@ -10,6 +10,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import app.worbus.data.database.dao.AlbumDao
 import app.worbus.data.database.dao.ArtistDao
@@ -39,6 +41,7 @@ import app.worbus.domain.models.SavedQueueSource
 import app.worbus.shared.MediaPlayerViewModel
 import app.worbus.ui.components.common.FillButton
 import app.worbus.ui.screens.external.SourceSearch
+import app.worbus.ui.screens.external.fillElsewhere
 import app.worbus.ui.screens.external.preselectedSource
 import app.worbus.util.Logger
 import app.worbus.domain.manager.isDownloadsOffRefusal
@@ -379,6 +382,66 @@ class ExternalAlbumViewModel(
 					indexRowAsked = true
 					if (SOURCES_AUTO_START && lbBotManager.supportsSourcePicker) findSources()
 					startArrivalSearchIfDue()
+					followElsewhere(detail?.releases.orEmpty().flatMap { variant ->
+						listOf(variant.releaseMbid) + variant.editions.map { it.releaseMbid }
+					})
+				}
+			}
+		}
+	}
+
+	/**
+	 * B-396 (the owner's ruling, 2026-11-12): a fill of this release-group that another device (or
+	 * lb-bot's own page) started shows here as its progress, from lb-bot's status for the album.
+	 *
+	 * Two sources, the newest deciding ([fillElsewhere]): `/lb/fills` read over the group's pressings
+	 * (the other device may have asked for any of them; one read, 32 at most), and the hub's `fill`
+	 * frames, which lb-bot pushes for every step keyed by the rgid and `LbBotManager` keeps in `fills`
+	 * whether or not anything here watches it. The read runs when the page opens, every
+	 * [ELSEWHERE_POLL_MS] while a fill runs, and again when a frame says one is running; nothing is
+	 * read while this device's own fill for it runs (its ledger row is the box's).
+	 *
+	 * **No watch is started for it**, so it has no Downloads row and settles into no notification:
+	 * only `LbBotManager`'s watches do either (`FillElsewhereReadGuardTest`).
+	 */
+	private var elsewhereJob: Job? = null
+
+	private fun followElsewhere(releaseMbids: List<String>) {
+		val asked = releaseMbids.filter { it.isNotBlank() }.distinct().take(32)
+		if (asked.isEmpty() || elsewhereJob?.isActive == true) return
+		elsewhereJob = viewModelScope.launch {
+			var read: LbFillStatus? = null
+			fun publish() {
+				val views = listOfNotNull(read, lbBotManager.fills.value[rgid])
+				val running = fillElsewhere(rgid, views)
+				if (running != _state.value.request.elsewhere) updateRequest { it.copy(elsewhere = running) }
+				// It landed: the page follows the album into the library as for its own request.
+				if (running == null && views.any { it.normalized().state == "verified" }) followLanding()
+			}
+			launch {
+				lbBotManager.fills.map { it[rgid] }.distinctUntilChanged().collect { publish() }
+			}
+			while (true) {
+				// This device's own fill of it is the box's (its ledger row): nothing is read meanwhile.
+				lbBotManager.ledger.first { rows -> rows.none { it.key == rgid && !it.settled } }
+				when (val result = lbBotManager.fills(asked, emptyList())) {
+					// Kept whatever its state: the newest view decides, and a verified one ends a frame's run.
+					is LbBotManager.LbResult.Ok -> read = result.value.albums.values
+						.map { it.normalized() }
+						.filter { it.state != "unknown" && (it.rgid.isBlank() || it.rgid == rgid) }
+						.maxByOrNull { it.updatedAt }
+					// A failed read is not an answer: what was shown stays.
+					is LbBotManager.LbResult.Failed -> Unit
+				}
+				publish()
+				if (_state.value.request.elsewhere != null) {
+					delay(ELSEWHERE_POLL_MS)
+				} else {
+					// Idle until a NEW frame says a fill of this release-group runs (lb-bot pushes its
+					// first step); the frame already held was weighed by the read above.
+					lbBotManager.fills.map { it[rgid] }.distinctUntilChanged().drop(1).first { frame ->
+						frame != null && fillElsewhere(rgid, listOf(frame)) != null
+					}
 				}
 			}
 		}
@@ -524,7 +587,7 @@ class ExternalAlbumViewModel(
 				done = arrivalSearchDone,
 				editionKnown = _state.value.detail != null && request.editionMbid.isNotBlank(),
 				searching = request.search is SourceSearch.Searching,
-				fillRunning = lbBotManager.isFilling(rgid),
+				fillRunning = lbBotManager.isFilling(rgid) || request.elsewhere != null,
 				supported = lbBotManager.supportsSourcePicker,
 				downloadsOn = lbBotManager.downloadsOn
 			)
@@ -586,6 +649,8 @@ class ExternalAlbumViewModel(
 		// A request that is already running (from here, another device, before a restart) is
 		// the box's Active stage; a POST now would be a second request for it.
 		if (lbBotManager.ledger.value.any { it.key == rgid && !it.settled }) return
+		// B-396: nor one another device started, which the box shows running.
+		if (_state.value.request.elsewhere != null) return
 		updateRequest { it.copy(starting = true, error = null, refused = false, allFilesNote = AllFilesNote.None) }
 		val quality = _state.value.request.quality
 		val edition = chosenEdition()
@@ -918,3 +983,6 @@ private const val LANDING_FOLLOW_MS = 180_000L
 
 /** How often it looks between library bumps. */
 private const val LANDING_POLL_MS = 5_000L
+
+/** B-396: how often a fill another device started is read again while it runs (frames come between). */
+private const val ELSEWHERE_POLL_MS = 10_000L

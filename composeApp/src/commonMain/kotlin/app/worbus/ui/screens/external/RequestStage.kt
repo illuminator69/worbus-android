@@ -122,6 +122,18 @@ fun requestStage(input: RequestInput): RequestStage {
 			requestSteps(fill.state, fill.done, fill.total)
 		)
 	}
+	// B-396: a fill this device did not start, running as lb-bot reports it. It is shown as this
+	// device's would be, with nothing to press: its Cancel, Retry and the rest act on a ledger row,
+	// and this device keeps none for it (no Downloads row, no notification: the owner's ruling).
+	val elsewhere = input.elsewhere?.takeIf { it.state in ELSEWHERE_LIVE_STATES }
+	if (elsewhere != null) {
+		val entry = elsewhereEntry(elsewhere)
+		return RequestStage.Active(
+			describeFill(entry, input.now, wishlistAvailable = false, tooOld = input.tooOld).copy(buttons = emptyList()),
+			requestSteps(entry.state, entry.done, entry.total),
+			startedElsewhere = true
+		)
+	}
 	// An `incomplete` album is partly owned: a settled fill for it (failed, a pick waiting) still shows
 	// (audit L4b-05); with no fill, what the library holds of it is what there is to say.
 	if (input.indexed != null && !input.indexed.isMissing &&
@@ -217,8 +229,57 @@ fun requestActions(view: FillPresentation): List<FillButton> = ACTION_ORDER.filt
 fun chooseEditionLineShown(arrivalWanted: Boolean, detailLoaded: Boolean, editionMbid: String): Boolean =
 	arrivalWanted && detailLoaded && editionMbid.isBlank()
 
+/** lb-bot's states for a whole-album fill that is still moving (PROTOCOL §15.2): the box shows these. */
+val ELSEWHERE_LIVE_STATES = setOf("searching", "queued", "downloading", "placing", "placed")
+
 /**
  * B-396 (the owner's ruling, 2026-11-12): the fill of [rgid] another device started, as lb-bot reports
- * it. Seam: not read yet.
+ * it, or null when none is running.
+ *
+ * [views] are what this device has heard of the release-group's fills: `/lb/fills` read over the
+ * group's pressings (the other device may have asked for any of them), and the hub's `fill` frame,
+ * which lb-bot pushes for every step keyed by the rgid. The NEWEST view that says anything decides
+ * (`updatedAt`, lb-bot's last state change or progress): a frame left over from a step that has
+ * since finished must not keep the box on Downloading once a read says verified. `unknown` is
+ * lb-bot's "nothing for this pressing" and says nothing about another pressing, so it is never the
+ * newest. A view of another release-group is not this page's.
  */
-fun fillElsewhere(rgid: String, views: Collection<LbFillStatus>): LbFillStatus? = null
+fun fillElsewhere(rgid: String, views: Collection<LbFillStatus>): LbFillStatus? =
+	views.asSequence()
+		.map { it.normalized() }
+		.filter { it.state != "unknown" && (it.rgid.isBlank() || it.rgid == rgid) }
+		.maxByOrNull { it.updatedAt }
+		?.takeIf { it.state in ELSEWHERE_LIVE_STATES }
+
+/** A read-only ledger-shaped view of lb-bot's [status], for [describeFill]. Never stored. */
+internal fun elsewhereEntry(status: LbFillStatus): LbFillEntry = LbFillEntry(
+	key = status.rgid,
+	isGap = false,
+	rgid = status.rgid,
+	groupId = status.groupId,
+	releaseMbid = status.releaseMbid,
+	artist = status.artist,
+	album = status.album,
+	quality = status.quality,
+	state = status.state,
+	outcome = "running",
+	reason = status.reason,
+	percent = status.percent,
+	done = status.done,
+	total = status.total,
+	mp3WouldHelp = status.mp3WouldHelp,
+	failureKind = status.failureKind,
+	retryable = status.retryable,
+	attempts = status.attempts,
+	settled = false,
+	startedAt = 0L,
+	finishedAt = 0L,
+	cancellable = false,
+	failedFiles = status.failed,
+	bytesDone = status.bytesDone,
+	bytesTotal = status.bytesTotal,
+	speedBps = status.speedBps,
+	lastSource = status.source,
+	verifyGaveUp = status.verifyGaveUp,
+	leftOut = status.leftOut ?: 0
+)

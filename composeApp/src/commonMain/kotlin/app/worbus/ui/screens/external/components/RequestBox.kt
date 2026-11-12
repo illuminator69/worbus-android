@@ -78,6 +78,7 @@ import worbus.composeapp.generated.resources.request_search_failed
 import worbus.composeapp.generated.resources.request_starting
 import worbus.composeapp.generated.resources.request_this_album
 import worbus.composeapp.generated.resources.title_sources
+import worbus.composeapp.generated.resources.request_started_elsewhere
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import app.worbus.ui.screens.external.chooseEditionLineShown
@@ -188,7 +189,9 @@ fun RequestBox(
 			starting = request.starting,
 			wishlistAvailable = wishlistAvailable,
 			now = now.longValue,
-			tooOld = rememberLbTooOld()
+			tooOld = rememberLbTooOld(),
+			// B-396: a fill another device started, as lb-bot reports it.
+			elsewhere = request.elsewhere
 		)
 	)
 	if (stage == RequestStage.Absent) return
@@ -365,8 +368,10 @@ private fun StageContent(
 
 		is RequestStage.Active -> {
 			ActiveContent(stage.view, stage.steps)
+			// B-396: another device's fill, followed from lb-bot's status; nothing here acts on it.
+			if (stage.startedElsewhere) Caption(stringResource(Res.string.request_started_elsewhere))
 			// Also how a request started from another client surfaces.
-			if (request.alreadyRunning) Caption(stringResource(Res.string.info_already_downloading))
+			else if (request.alreadyRunning) Caption(stringResource(Res.string.info_already_downloading))
 			AllFilesCaption(request.allFilesNote)
 			if (FillButton.CANCEL in stage.view.buttons) {
 				TextButton(onClick = { onAction(FillButton.CANCEL) }, enabled = !request.acting) {
