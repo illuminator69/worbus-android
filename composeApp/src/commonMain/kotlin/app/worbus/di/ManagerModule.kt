@@ -13,6 +13,8 @@ import app.worbus.domain.manager.ConnectivityManager
 import app.worbus.domain.manager.DownloadManager
 import app.worbus.domain.manager.DownloadOrigins
 import app.worbus.domain.manager.DownloadUpkeep
+import app.worbus.domain.manager.PreferenceUpkeepMemory
+import app.worbus.shared.MediaPlayerViewModel
 import app.worbus.domain.manager.songAnswerOf
 import app.worbus.data.database.dao.SongDao
 import app.worbus.domain.manager.EqualiserManager
@@ -77,14 +79,22 @@ val managerModule = module {
 	singleOf(::DownloadManager)
 	// Q-165: what each download was made from (writes.db 2), and the upkeep after every pull: a song
 	// changed on the server is fetched again, one gone from it removed (DownloadUpkeep's four rules).
-	singleOf(::DownloadOrigins)
+	single { DownloadOrigins(get(), get(), owner = { get<SessionManager>().downloadOwner() }) }
 	single(createdAtStart = true) {
 		DownloadUpkeep(
 			store = get<DownloadOrigins>(),
 			downloads = get<DownloadManager>(),
 			songsById = { ids -> get<SongDao>().getSongsByIds(ids) },
 			askSong = { id -> songAnswerOf(runCatching { get<SessionManager>().api.getSong(id) }.exceptionOrNull()) },
-			isOnline = { get<ConnectivityManager>().isOnline.value }
+			isOnline = { get<ConnectivityManager>().isOnline.value },
+			owner = { get<SessionManager>().downloadOwner() },
+			memory = PreferenceUpkeepMemory(
+				read = { get<PreferenceManager>().downloadUpkeepMemory },
+				write = { get<PreferenceManager>().downloadUpkeepMemory = it }
+			),
+			// The LOCAL player's queue (the playing song is in it): those are the files it reads.
+			inUse = { get<MediaPlayerViewModel>().localUiState.value.queue.mapTo(HashSet()) { it.id } },
+			songsAt = { track, disc -> get<SongDao>().getSongsAt(track, disc) }
 		).apply { follow(get<SyncManager>().pulls) }
 	}
 	singleOf(::AlbumModeSmartPlaylists)

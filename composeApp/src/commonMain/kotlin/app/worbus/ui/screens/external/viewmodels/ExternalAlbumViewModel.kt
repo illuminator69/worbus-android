@@ -193,6 +193,9 @@ class ExternalAlbumViewModel(
 	// Above `init`, which calls load(): a property initialiser placed after it would run
 	// afterwards and null out the job load() had just stored.
 	private var loadJob: Job? = null
+	/** B-396's follower, and whether the page is started (its reads wait for it). Above `init` too. */
+	private var elsewhereJob: Job? = null
+	private val started = MutableStateFlow(false)
 	private var tracklistJob: Job? = null
 	private var metaJob: Job? = null
 	/** The edition the shown tracklist belongs to: its size is that edition's track count only. */
@@ -404,7 +407,10 @@ class ExternalAlbumViewModel(
 	 * **No watch is started for it**, so it has no Downloads row and settles into no notification:
 	 * only `LbBotManager`'s watches do either (`FillElsewhereReadGuardTest`).
 	 */
-	private var elsewhereJob: Job? = null
+
+	fun setStarted(started: Boolean) {
+		this.started.value = started
+	}
 
 	private fun followElsewhere(releaseMbids: List<String>) {
 		val asked = releaseMbids.filter { it.isNotBlank() }.distinct().take(32)
@@ -422,6 +428,8 @@ class ExternalAlbumViewModel(
 				lbBotManager.fills.map { it[rgid] }.distinctUntilChanged().collect { publish() }
 			}
 			while (true) {
+				// Not from the back stack (review nit): a page under another one reads nothing.
+				started.first { it }
 				// This device's own fill of it is the box's (its ledger row): nothing is read meanwhile.
 				lbBotManager.ledger.first { rows -> rows.none { it.key == rgid && !it.settled } }
 				when (val result = lbBotManager.fills(asked, emptyList())) {

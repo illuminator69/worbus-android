@@ -28,4 +28,10 @@ expect class StorageManager {
 	fun getFileSize(path: String): Long
 	suspend fun saveFile(path: String, channel: ByteReadChannel)
 	fun clearDownloads()
+
+	/** Major 1: rename [from] to [to] only when [to] does not exist. */
+	fun moveFile(from: String, to: String): Boolean
+
+	/** Minor 4: delete the scratch files (`*.part`) last written before [before]; how many went. */
+	fun sweepScratch(before: Long): Int
 }

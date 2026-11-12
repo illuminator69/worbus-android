@@ -74,6 +74,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.awaitCancellation
 import worbus.composeapp.generated.resources.Res
 import worbus.composeapp.generated.resources.request_found_from_link
 import worbus.composeapp.generated.resources.request_on_wishlist
@@ -152,6 +156,18 @@ fun ExternalAlbumScreen(
 	)
 	// Saved with the entry, so coming back to this page (or a restored stack) does not ask again.
 	var arrivalSearchAsked by rememberSaveable { mutableStateOf(false) }
+	// B-396 (review nit): another device's fill is read only while this page is started, not from the back stack.
+	val lifecycleOwner = LocalLifecycleOwner.current
+	LaunchedEffect(lifecycleOwner, viewModel) {
+		lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+			viewModel.setStarted(true)
+			try {
+				awaitCancellation()
+			} finally {
+				viewModel.setStarted(false)
+			}
+		}
+	}
 	LaunchedEffect(findSources) {
 		if (findSources && !arrivalSearchAsked) {
 			arrivalSearchAsked = true

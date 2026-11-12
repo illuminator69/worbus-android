@@ -131,6 +131,14 @@ class SessionManager(
 	/** Worbus P3: the Navidrome address this session signed in to ("" for none), for looking beside it. */
 	fun instanceUrl(): String = settings.getString("instanceUrl", "")
 
+	/** Q-165 follow-up (major 2): whose a download fetched now is; null with no session. */
+	fun downloadOwner(): DownloadOwner? {
+		if (!_isLoggedIn.value) return null
+		val username = settings.getStringOrNull("username")?.takeIf { it.isNotBlank() } ?: return null
+		val url = instanceUrl().takeIf { it.isNotBlank() } ?: return null
+		return DownloadOwner.of(url, username)
+	}
+
 	/**
 	 * The server and name of a session whose password is missing, for the login screen to fill
 	 * in; null when there is none (never logged in, or logged out).

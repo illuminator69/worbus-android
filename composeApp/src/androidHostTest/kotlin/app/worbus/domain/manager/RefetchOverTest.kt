@@ -74,6 +74,7 @@ class RefetchOverTest {
 		override fun size(path: String): Long = File(path).length()
 		override fun replace(tempPath: String, path: String): Boolean = replaceAtomically(File(tempPath), File(path))
 		override fun delete(path: String) { File(path).delete() }
+		override fun move(from: String, to: String): Boolean = moveIfAbsent(File(from), File(to))
 	}
 
 	private val url get() = "http://127.0.0.1:${server.address.port}/rest/stream.view?id=s1"

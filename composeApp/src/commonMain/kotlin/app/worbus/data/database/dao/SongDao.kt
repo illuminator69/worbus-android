@@ -96,6 +96,10 @@ interface SongDao {
 	@Query("SELECT * FROM SongEntity WHERE songId IN (:ids)")
 	suspend fun getSongsByIds(ids: List<String>): List<SongEntity>
 
+	/** Q-165 follow-up (major 1): the songs at one disc and track number, a re-keyed download's candidates. */
+	@Query("SELECT * FROM SongEntity WHERE IFNULL(trackNumber, 0) = :track AND IFNULL(discNumber, 0) = :disc")
+	suspend fun getSongsAt(track: Int, disc: Int): List<SongEntity>
+
 	/** Every song's id, title and artist, for Search's typo-tolerant pass (P3). */
 	@Query("SELECT songId AS id, title AS name, artistName AS artist FROM SongEntity")
 	suspend fun searchNames(): List<SearchNameRow>

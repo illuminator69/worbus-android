@@ -67,6 +67,10 @@ actual class StorageManager(
 		}
 	}
 
+	actual fun moveFile(from: String, to: String): Boolean = moveIfAbsent(File(from), File(to))
+
+	actual fun sweepScratch(before: Long): Int = sweepScratchFiles(File(context.filesDir, "downloads"), before)
+
 	actual fun clearDownloads() {
 		val dir = File(context.filesDir, "downloads")
 		if (dir.exists()) {
@@ -89,9 +93,14 @@ internal fun replaceAtomically(temp: File, target: File): Boolean {
 
 /**
  * Minor 4: scratch files (`*.part`) in [dir] last written before [before] (a process killed
- * mid-transfer leaves one, and nothing else removes it). Seam: removes nothing yet.
+ * mid-transfer leaves one, and nothing else removes it). One this process is writing is newer, and stays.
  */
-internal fun sweepScratchFiles(dir: File, before: Long): Int = 0
+internal fun sweepScratchFiles(dir: File, before: Long): Int =
+	dir.listFiles().orEmpty().count { it.isFile && it.name.endsWith(".part") && it.lastModified() < before && it.delete() }
 
-/** Major 1: rename [from] to [to] only when [to] does not exist. Seam: moves nothing yet. */
-internal fun moveIfAbsent(from: File, to: File): Boolean = false
+/**
+ * Major 1: rename [from] to [to] only when [to] does not exist (a file there is another download's).
+ * One `rename(2)` in one directory. The check and the rename are two steps; nothing else names a file
+ * `<id>.<ext>` for an id this device is not downloading, so nothing writes [to] between them.
+ */
+internal fun moveIfAbsent(from: File, to: File): Boolean = from.exists() && !to.exists() && from.renameTo(to)

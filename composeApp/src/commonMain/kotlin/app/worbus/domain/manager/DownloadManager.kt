@@ -90,7 +90,11 @@ class DownloadManager(
 		override fun delete(path: String) {
 			storageManager.deleteFile(path)
 		}
+		override fun move(from: String, to: String): Boolean = storageManager.moveFile(from, to)
 	}
+
+	/** When this manager was made: a scratch file older than that is a killed process's (minor 4). */
+	private val startedAt = Clock.System.now().toEpochMilliseconds()
 
 	private val activeDownloadsMutex = Mutex()
 	private val activeDownloads = mutableMapOf<String, Job>()
@@ -217,6 +221,15 @@ class DownloadManager(
 			backfillMissingFileSizes()
 		}
 		scope.launch {
+			// Q-165 follow-up (minor 4): a process killed mid-transfer left its `.part`, which nothing
+			// else removes. Swept before anything is started again; a newer one is this process's own.
+			try {
+				val swept = storageManager.sweepScratch(before = startedAt)
+				if (swept > 0) Logger.i("DownloadManager", "removed $swept scratch file(s) a killed transfer left")
+			} catch (e: Exception) {
+				if (e is CancellationException) throw e
+				Logger.w("DownloadManager", "could not sweep scratch files", e)
+			}
 			// Nothing survives a process death mid-transfer: any row still claiming to be active
 			// has no coroutine behind it, so start it again.
 			reconcileInterruptedDownloads()
@@ -951,6 +964,30 @@ class DownloadManager(
 				activeDownloadsMutex.withLock { activeDownloads.remove(song.songId) }
 			}
 		}
+	}
+
+	/**
+	 * Major 1: the download of [fromId] carried to [to], the song Navidrome re-keyed it as
+	 * ([moveDownload]): `<to>.<ext>` (the old file's extension), the row re-keyed. Not while either id
+	 * is transferring, and never over another download.
+	 */
+	override suspend fun move(fromId: String, to: SongEntity): Boolean {
+		if (activeDownloadsMutex.withLock { activeDownloads.containsKey(fromId) || activeDownloads.containsKey(to.songId) }) return false
+		val row = downloadDao.getDownloadById(fromId) ?: return false
+		val path = row.filePath ?: return false
+		if (row.status != DownloadStatus.DOWNLOADED || downloadDao.getDownloadById(to.songId) != null) return false
+		val extension = path.substringAfterLast('/').substringAfterLast('.', "")
+		val moved = moveDownload(
+			row = row,
+			toId = to.songId,
+			newPath = storageManager.getDownloadPath(to.songId, extension),
+			files = files,
+			insertRow = { downloadDao.insertDownload(it) },
+			deleteRow = { downloadDao.deleteDownload(it) },
+			now = now()
+		)
+		if (moved) Logger.i("DownloadManager", "carried $fromId to ${to.songId}: Navidrome re-keyed it")
+		return moved
 	}
 
 	/** A download whose song is gone from the server: its file and its row. */

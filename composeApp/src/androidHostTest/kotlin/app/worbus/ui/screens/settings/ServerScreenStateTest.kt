@@ -18,7 +18,8 @@ import kotlin.test.assertTrue
 /**
  * Worbus settings N3, then Worbus P2 (lane N2): the Server page says where the link stands in one
  * sentence per state, signs in instead of asking for a token, and nothing on it names an internal
- * (navi-connect, Tier 2, HUB_TOKEN, WebSocket) or says lb-bot.
+ * (navi-connect, Tier 2, HUB_TOKEN, WebSocket). "lb-bot" is the one exception (B-327, the owner's
+ * ruling 2026-11-12: lb-bot everywhere), spelled that way only.
  */
 class ServerScreenStateTest {
 

@@ -187,7 +187,7 @@ internal fun sameArtist(a: String, b: String): Boolean {
  */
 internal data class CreditedAct(val key: String, val bracketed: Boolean, val alone: List<String>)
 
-private val TRAILING_BRACKET = Regex("""^([^()（）]*)[(（]([^()（）]*)[)）][\s\p{Z}]*$""")
+private val TRAILING_BRACKET = Regex("""^([^()（）]*)[(（]([^()（）]*)[)）][\s\p{Z}\uFEFF]*$""")
 
 /** Words that only tell two acts of one name apart (lower-case keys): the desktop's list, verbatim. */
 internal val CREDIT_DISAMBIGUATORS: Set<String> = listOf(
@@ -243,9 +243,9 @@ internal fun sameAct(x: CreditedAct, y: CreditedAct): Boolean {
 internal val CREDIT_SEPARATORS = Regex(
 	// B-313: the keywords are whole words in any script, by explicit lookarounds (a letter, mark,
 	// decimal digit or connector beside one keeps it inside a word): `\b` read "Iannis Xénakis" as
-	// "Iannis" + "énakis" wherever it is ASCII (the JVM's host tests; JavaScript). `[\s\p{Z}]` is
-	// JavaScript's `\s` (Unicode spaces), which the JVM's ASCII `\s` is not.
-	"""[\s\p{Z}]+-[\s\p{Z}]+|[\s\p{Z}]*(?:&|\+|,|;|•|(?<![\p{L}\p{M}\p{Nd}\p{Pc}])(?:feat\.?|featuring|with|vs\.?|x)(?![\p{L}\p{M}\p{Nd}\p{Pc}]))[\s\p{Z}]*""",
+	// "Iannis" + "énakis" wherever it is ASCII (the JVM's host tests; JavaScript). `[\s\p{Z}\uFEFF]` is
+	// JavaScript's `\s` (Unicode spaces and the byte-order mark), which the JVM's ASCII `\s` is not.
+	"""[\s\p{Z}\uFEFF]+-[\s\p{Z}\uFEFF]+|[\s\p{Z}\uFEFF]*(?:&|\+|,|;|•|(?<![\p{L}\p{M}\p{Nd}\p{Pc}])(?:feat\.?|featuring|with|vs\.?|x)(?![\p{L}\p{M}\p{Nd}\p{Pc}]))[\s\p{Z}\uFEFF]*""",
 	RegexOption.IGNORE_CASE
 )
 
