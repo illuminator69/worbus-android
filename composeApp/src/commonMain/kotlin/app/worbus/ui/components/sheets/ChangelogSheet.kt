@@ -58,6 +58,8 @@ import app.worbus.ui.components.common.Markdown
 import app.worbus.ui.components.dialogs.LinkConfirmationDialog
 import app.worbus.ui.theme.defaultFont
 import app.worbus.ui.util.rememberNowPlayingCoverAmbient
+import app.worbus.util.userAgent
+import io.ktor.client.plugins.UserAgent
 
 @Serializable
 data class GitHubRelease(
@@ -73,6 +75,7 @@ class ChangelogViewModel(
 		field = MutableStateFlow(null)
 
 	private val updateClient = HttpClient {
+		install(UserAgent) { agent = userAgent() }
 		install(ContentNegotiation) {
 			json(Json { ignoreUnknownKeys = true })
 		}

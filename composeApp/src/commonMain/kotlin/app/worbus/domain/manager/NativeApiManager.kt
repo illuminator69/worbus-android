@@ -25,6 +25,8 @@ import kotlinx.serialization.json.put
 import okio.ByteString.Companion.encodeUtf8
 import app.worbus.di.synchronized
 import app.worbus.util.Logger
+import app.worbus.util.userAgent
+import io.ktor.client.plugins.UserAgent
 
 /**
  * Minimal client for Navidrome's NATIVE REST API (not Subsonic) — needed for
@@ -44,6 +46,7 @@ class NativeApiManager(
 	private val tokens = NativeTokenCache()
 
 	private val client = HttpClient {
+		install(UserAgent) { agent = userAgent() }
 		install(ContentNegotiation) {
 			json(Json {
 				ignoreUnknownKeys = true

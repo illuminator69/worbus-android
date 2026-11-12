@@ -4,6 +4,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.WebSockets
 import java.util.concurrent.TimeUnit
+import app.worbus.util.userAgent
+import io.ktor.client.plugins.UserAgent
 
 /**
  * How often a hub WebSocket pings, and how long it waits for the pong before OkHttp fails the
@@ -24,6 +26,7 @@ private const val WS_PING_INTERVAL_S = 10L
  * Used by [HubManager] (through [HubSocketClientFactory]) and by every cast bridge's socket.
  */
 fun pingingWebSocketClient(): HttpClient = HttpClient(OkHttp) {
+	install(UserAgent) { agent = userAgent() }
 	engine {
 		config { pingInterval(WS_PING_INTERVAL_S, TimeUnit.SECONDS) }
 	}

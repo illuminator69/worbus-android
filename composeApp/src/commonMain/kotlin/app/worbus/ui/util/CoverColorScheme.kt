@@ -28,7 +28,6 @@ import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
 import com.materialkolor.dynamiccolor.ColorSpec
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.http.Url
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -45,22 +44,17 @@ import app.worbus.util.Logger
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
+import app.worbus.di.sharedImageHttpClient
 
 /**
- * One client for ALL cover-art palette extraction. Built OUTSIDE composition on
- * purpose: constructing an [HttpClient] inside a `@Composable` allocated a fresh
- * client — and its connection pool + engine threads — on every recomposition, and
- * nothing ever closed them.
+ * The client palette extraction fetches covers with: the app's one image client (B-336, B-363), so a
+ * wash's cover carries the Worbus user agent and, toward the session's Navidrome only, the custom
+ * headers, as every other cover does. It had its own bare client, which sent `ktor-client` and no
+ * headers, so behind a header-gated proxy every cover drew and no wash ever resolved. Shared and
+ * built outside composition: a client built in a `@Composable` allocated a connection pool and
+ * engine threads on every recomposition.
  */
-internal val paletteHttpClient: HttpClient by lazy {
-	HttpClient {
-		install(HttpTimeout) {
-			requestTimeoutMillis = 60_000
-			connectTimeoutMillis = 60_000
-			socketTimeoutMillis = 60_000
-		}
-	}
-}
+internal val paletteHttpClient: HttpClient get() = sharedImageHttpClient
 
 /**
  * Derived Material schemes, keyed by the inputs that produce them.

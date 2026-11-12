@@ -30,6 +30,8 @@ import app.worbus.domain.models.lyrics.LyricsResult
 import app.worbus.domain.parser.LyricsContentParser
 import app.worbus.util.Logger
 import kotlin.time.Duration.Companion.milliseconds
+import app.worbus.util.userAgent
+import io.ktor.client.plugins.UserAgent
 
 class LyricsRepository(
 	private val lyricDao: LyricDao,
@@ -38,6 +40,7 @@ class LyricsRepository(
 ) {
 
 	private val client = HttpClient {
+		install(UserAgent) { agent = userAgent() }
 		install(HttpTimeout) {
 			requestTimeoutMillis = 40000
 			connectTimeoutMillis = 40000
