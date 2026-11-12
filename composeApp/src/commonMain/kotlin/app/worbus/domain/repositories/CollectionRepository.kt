@@ -38,9 +38,10 @@ class CollectionRepository(
 		when (val collection = getLocalData(collectionId)) {
 			is DomainAlbum -> {
 				val album = sessionManager.api.getAlbum(collection.id)
-				val overlay = writeQueue.overlay()
-				songDao.updateSongsByAlbumId(album.id, album.songs.map { overlay.song(it.toEntity()) })
-				albumDao.insertAlbum(overlay.album(album.toEntity()))
+				writeQueue.withOverlay { overlay ->
+					songDao.updateSongsByAlbumId(album.id, album.songs.map { overlay.song(it.toEntity()) })
+					albumDao.insertAlbum(overlay.album(album.toEntity()))
+				}
 				albumDao.getAlbumById(album.id)!!.toDomainModel()
 			}
 

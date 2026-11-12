@@ -292,6 +292,10 @@ class SyncManager(
 	 * a failed attempt; a star's is the star's own time, which a pull's overlay writes back. The pass waits for the lock instead of giving up while a pull holds it: a write made
 	 * during a full pull used to wait for the next 15-minute cycle.
 	 */
+	/** [enqueueAction] for a caller that writes the same change to Room. */
+	suspend fun enqueue(actionType: SyncActionType, itemId: String, time: Instant = Clock.System.now()) =
+		enqueueAction(actionType, itemId, time)
+
 	fun enqueueAction(actionType: SyncActionType, itemId: String, time: Instant = Clock.System.now()) {
 		scope.launch {
 			writeQueue.enqueue(actionType, itemId, time)

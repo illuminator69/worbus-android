@@ -322,9 +322,10 @@ class DbRepository(
 					}
 
 					if (albumBatch.size >= dbChunkSize || songBatch.size >= 1500) {
-						val overlay = writeQueue.overlay()
-						albumDao.insertAlbums(albumBatch.map(overlay::album))
-						songDao.insertSongs(songBatch.map(overlay::song))
+						writeQueue.withOverlay { overlay ->
+							albumDao.insertAlbums(albumBatch.map(overlay::album))
+							songDao.insertSongs(songBatch.map(overlay::song))
+						}
 
 						finalSongsSynced += songBatch.size
 						albumBatch.clear()
@@ -333,9 +334,10 @@ class DbRepository(
 				}
 
 				if (albumBatch.isNotEmpty() || songBatch.isNotEmpty()) {
-					val overlay = writeQueue.overlay()
-					if (albumBatch.isNotEmpty()) albumDao.insertAlbums(albumBatch.map(overlay::album))
-					if (songBatch.isNotEmpty()) songDao.insertSongs(songBatch.map(overlay::song))
+					writeQueue.withOverlay { overlay ->
+						if (albumBatch.isNotEmpty()) albumDao.insertAlbums(albumBatch.map(overlay::album))
+						if (songBatch.isNotEmpty()) songDao.insertSongs(songBatch.map(overlay::song))
+					}
 					finalSongsSynced += songBatch.size
 				}
 			}
@@ -423,9 +425,10 @@ class DbRepository(
 		}
 		if (albums.isEmpty()) error("none of ${wanted.size} album(s) could be fetched")
 		val entities = albums.map { it.toEntities(it) }
-		val overlay = writeQueue.overlay()
-		albumDao.insertAlbums(entities.map { overlay.album(it.first) })
-		entities.flatMap { it.second }.map(overlay::song).chunked(1500).forEach { songDao.insertSongs(it) }
+		writeQueue.withOverlay { overlay ->
+			albumDao.insertAlbums(entities.map { overlay.album(it.first) })
+			entities.flatMap { it.second }.map(overlay::song).chunked(1500).forEach { songDao.insertSongs(it) }
+		}
 		Logger.i("DbRepository", "- Targeted sync: ${albums.size} album(s)")
 		albums.size
 	}
@@ -619,9 +622,10 @@ class DbRepository(
 		val songIds = songEntities.map { it.songId }.toSet()
 
 		if (songEntities.isNotEmpty()) {
-			val overlay = writeQueue.overlay()
-			songEntities.chunked(dbChunkSize).forEach { chunk ->
-				songDao.insertSongs(chunk.map(overlay::song))
+			writeQueue.withOverlay { overlay ->
+				songEntities.chunked(dbChunkSize).forEach { chunk ->
+					songDao.insertSongs(chunk.map(overlay::song))
+				}
 			}
 
 			val crossRefs = songEntities.mapIndexed { index, it ->
@@ -676,8 +680,9 @@ class DbRepository(
 		if (!artistListMayReplace(listed.size, held)) {
 			error("the server listed no artists; keeping the $held in the library")
 		}
-		val overlay = writeQueue.overlay()
-		listed.map(overlay::artist).chunked(dbChunkSize).forEach { chunk -> artistDao.insertArtists(chunk) }
+		writeQueue.withOverlay { overlay ->
+			listed.map(overlay::artist).chunked(dbChunkSize).forEach { chunk -> artistDao.insertArtists(chunk) }
+		}
 		artistDao.deleteObsoleteArtists(listed.map { it.artistId }.toSet())
 	}
 

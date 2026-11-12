@@ -256,6 +256,9 @@ class WriteQueue(
 	/** Logout: the writes belong to the account that made them, and must not go out as the next one. */
 	suspend fun clear() = locked { store.clear() }
 
+	/** A pull's write of server rows, given the overlay to apply to them (rule 6). */
+	suspend fun <T> withOverlay(block: suspend (PendingOverlay) -> T): T = block(overlay())
+
 	/** The overlay a pull applies to what it writes (rule 6). Never fails a pull: unreadable, it is empty. */
 	suspend fun overlay(): PendingOverlay = try {
 		PendingOverlay(pending())
