@@ -53,28 +53,54 @@ class ServerReachability(
 	@Volatile
 	var probe: (suspend () -> Unit)? = null
 
-	/** Guards [probing], [confirming] and [verdict]: reports arrive on OkHttp's threads. */
+	/** Guards [probing], [confirming], [verdict] and the tickets: reports arrive on OkHttp's threads. */
 	private val lock = Any()
 	private var probing: Job? = null
 	private var confirming: Job? = null
 
-	/** While [confirming]: what the exchanges reported meanwhile said (true answered, false down). */
-	private var verdict: Boolean? = null
+	/**
+	 * Review (fix round) minor 4: reports are ordered by when their REQUEST STARTED, not by when they
+	 * arrive. Each exchange takes a ticket as it is sent ([startTicket]); a report without one is
+	 * taken as starting now. A failure from a request that started before something answered is
+	 * older evidence than that answer and is not acted on, and during a confirm the newest-started
+	 * report decides: a slow name lookup begun before Navidrome came back, failing after the probe
+	 * answered, used to take the app offline for 30 s.
+	 */
+	private var tickets = 0L
 
-	fun answered() {
+	/** The start ticket of the newest-started request that answered. */
+	private var newestAnswer = 0L
+
+	/** While [confirming]: what the exchanges reported meanwhile said (true answered, false down), and the ticket of the request that said it. */
+	private var verdict: Boolean? = null
+	private var verdictTicket = 0L
+
+	/** A ticket for a request starting now. */
+	fun startTicket(): Long = synchronized(lock) { ++tickets }
+
+	fun answered(started: Long = startTicket()) {
 		synchronized(lock) {
-			if (confirming != null) verdict = true
+			if (started > newestAnswer) newestAnswer = started
+			if (confirming != null && started > verdictTicket) {
+				verdict = true
+				verdictTicket = started
+			}
 			probing?.cancel()
 			probing = null
 		}
 		_reachable.value = true
 	}
 
-	fun failed(t: Throwable) {
+	fun failed(t: Throwable, started: Long = startTicket()) {
 		if (!isServerDown(t)) return
 		synchronized(lock) {
+			// Something that started later has answered since: this is older news.
+			if (started < newestAnswer) return@synchronized
 			if (confirming != null) {
-				verdict = false
+				if (started > verdictTicket) {
+					verdict = false
+					verdictTicket = started
+				}
 				return@synchronized
 			}
 			if (!_reachable.value) {
@@ -83,6 +109,7 @@ class ServerReachability(
 			}
 			val ask = probe ?: return@synchronized
 			verdict = null
+			verdictTicket = 0L
 			confirming = scope.launch { confirm(ask) }
 		}
 	}
@@ -94,7 +121,7 @@ class ServerReachability(
 			ask()
 		} catch (e: Exception) {
 			if (e is CancellationException) {
-				synchronized(lock) { confirming = null; verdict = null }
+				synchronized(lock) { confirming = null; verdict = null; verdictTicket = 0L }
 				throw e
 			}
 			thrown = e
@@ -103,6 +130,7 @@ class ServerReachability(
 			val down = verdict == false || (verdict == null && thrown != null && isServerDown(thrown))
 			confirming = null
 			verdict = null
+			verdictTicket = 0L
 			if (down) {
 				_reachable.value = false
 				startProbingLocked()
@@ -116,6 +144,8 @@ class ServerReachability(
 			confirming?.cancel()
 			confirming = null
 			verdict = null
+			verdictTicket = 0L
+			// Tickets keep counting: a straggler from before the reset stays older than what follows.
 			probing?.cancel()
 			probing = null
 		}
@@ -159,14 +189,15 @@ class ServerReachability(
 		config.install(createClientPlugin("NavidromeReachability") {
 			on(Send) { request ->
 				if (!onlyFor(request.url.buildString())) return@on proceed(request)
+				val started = startTicket()
 				val call = try {
 					proceed(request)
 				} catch (e: Throwable) {
-					if (e !is CancellationException) failed(e)
+					if (e !is CancellationException) failed(e, started)
 					throw e
 				}
-				if (call.response.status.value in GATEWAY_DOWN) failed(GatewayDown(call.response.status.value))
-				else answered()
+				if (call.response.status.value in GATEWAY_DOWN) failed(GatewayDown(call.response.status.value), started)
+				else answered(started)
 				call
 			}
 		})
