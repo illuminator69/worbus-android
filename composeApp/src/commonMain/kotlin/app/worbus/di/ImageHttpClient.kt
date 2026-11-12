@@ -17,16 +17,22 @@ import org.koin.mp.KoinPlatform
  * cover on another host (Cover Art Archive, Deezer, a preview's image) gets none.
  */
 fun navidromeHeadersFor(requestUrl: String, instanceUrl: String, headers: Map<String, String>): Map<String, String> {
-	if (headers.isEmpty() || instanceUrl.isBlank()) return emptyMap()
-	val request = parsedUrl(requestUrl) ?: return emptyMap()
-	val server = parsedUrl(instanceUrl) ?: return emptyMap()
+	if (headers.isEmpty()) return emptyMap()
+	return if (isNavidromeUrl(requestUrl, instanceUrl)) headers else emptyMap()
+}
+
+/** Is [requestUrl] the Navidrome at [instanceUrl]: the same scheme, host and port, and a path under its own. */
+fun isNavidromeUrl(requestUrl: String, instanceUrl: String): Boolean {
+	if (instanceUrl.isBlank()) return false
+	val request = parsedUrl(requestUrl) ?: return false
+	val server = parsedUrl(instanceUrl) ?: return false
 	val sameOrigin = request.protocol.name.equals(server.protocol.name, ignoreCase = true) &&
 		request.host.equals(server.host, ignoreCase = true) &&
 		request.port == server.port
 	val serverPath = server.encodedPath.trimEnd('/')
 	val underServer = serverPath.isEmpty() || request.encodedPath == serverPath ||
 		request.encodedPath.startsWith("$serverPath/")
-	return if (sameOrigin && underServer) headers else emptyMap()
+	return sameOrigin && underServer
 }
 
 private fun parsedUrl(raw: String): Url? = try {

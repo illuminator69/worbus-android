@@ -91,7 +91,12 @@ class SessionManager(
 		_isLoggedIn.value = settings.getStringOrNull("username") != null && secrets.navidromePassword.isNotEmpty()
 		if (_isLoggedIn.value) getCachedUser()
 		// Q-165: while Navidrome does not answer, this is what asks again (and its answer is observed).
-		reachability.probe = { api.ping() }
+		// Only with a session: logged out, there is no server to ask (and the old one is not asked).
+		if (_isLoggedIn.value) reachability.probe = ::pingSession
+	}
+
+	private suspend fun pingSession() {
+		api.ping()
 	}
 
 	/** Worbus P3: the Navidrome address this session signed in to ("" for none), for looking beside it. */
@@ -196,6 +201,7 @@ class SessionManager(
 		// The trial client reported nothing; the session's own one is built observed.
 		api = createClient(instanceUrl, username, password)
 		reachability.reset()
+		reachability.probe = ::pingSession
 		_isLoggedIn.value = true
 	}
 
@@ -210,6 +216,7 @@ class SessionManager(
 		secrets.navidromePassword = ""
 		_isLoggedIn.value = false
 		currentUser = null
+		reachability.probe = null
 		reachability.reset()
 	}
 

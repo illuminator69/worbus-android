@@ -120,7 +120,7 @@ private fun Throwable.isWrongCredentials(): Boolean = when (this) {
 	else -> false
 }
 
-private fun Throwable.isGatewayFailure(): Boolean {
+internal fun Throwable.isGatewayFailure(): Boolean {
 	if (this is ResponseException) return runCatching { response.status.value }.getOrNull() in GATEWAY_STATUSES
 	return GATEWAY_STATUS_IN_MESSAGE.containsMatchIn(message ?: "")
 }

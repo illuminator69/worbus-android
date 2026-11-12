@@ -141,6 +141,8 @@ import app.worbus.domain.models.toSavedQueueKind
 import app.worbus.domain.repositories.SavedQueueRepository
 import app.worbus.util.resolveGainMode
 import app.worbus.domain.models.displayName
+import app.worbus.di.isNavidromeUrl
+import app.worbus.domain.manager.ServerReachability
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService(), KoinComponent {
@@ -161,6 +163,7 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 
 	private val syncManager: SyncManager by inject()
 	private val sessionManager: SessionManager by inject()
+	private val reachability: ServerReachability by inject()
 	private val preferenceManager: PreferenceManager by inject()
 	private val hubManager: HubManager by inject()
 	private val appPresence: AppPresence by inject()
@@ -237,6 +240,10 @@ class PlaybackService : MediaLibraryService(), KoinComponent {
 				connectTimeoutMillis = 15_000
 				socketTimeoutMillis = 60_000
 			}
+			// Audio fetched fine says Navidrome answers (review major 2): without it, recovery from a
+			// false "offline" waited for the 30 s probe while songs streamed. Navidrome's requests
+			// only: a preview host refusing is not Navidrome down.
+			reachability.observe(this, onlyFor = { isNavidromeUrl(it, sessionManager.instanceUrl()) })
 			val customHeaders = preferenceManager.customHeadersMap()
 			if (customHeaders.isNotEmpty()) {
 				defaultRequest {

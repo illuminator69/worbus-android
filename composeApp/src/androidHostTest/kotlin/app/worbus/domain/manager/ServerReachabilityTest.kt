@@ -55,7 +55,10 @@ class ServerReachabilityTest {
 	@Test
 	fun aGatewayErrorIsNavidromeDown() = runBlocking {
 		status = 502
+		// The confirming probe meets the same proxy answer.
+		reach.probe = { client.get("$base/rest/ping.view") }
 		call()
+		withTimeout(5_000) { reach.reachable.first { !it } }
 		assertFalse(reach.reachable.value)
 	}
 
@@ -79,7 +82,7 @@ class ServerReachabilityTest {
 	fun aFailureThatIsNotTheServerGoneDoesNotMarkItDown() {
 		reach.failed(IllegalStateException("could not parse the body"))
 		assertTrue(reach.reachable.value)
-		assertEquals(true, isNothingAnswering(ServerReachability.GatewayDown(503)))
+		assertEquals(true, isServerDown(ServerReachability.GatewayDown(503)))
 	}
 
 	/** Every value [ServerReachability.reachable] took while [block] ran, and for [settle] after. */
@@ -154,5 +157,13 @@ class ServerReachabilityTest {
 		val player = sourceFile("src/androidMain/kotlin/app/worbus/shared/MediaPlayer.android.kt").readText()
 			.substringAfter("streamingClient = HttpClient(OkHttp) {").substringBefore("\n\t\t}\n")
 		assertTrue(Regex("""reachability\.observe\(this,\s*onlyFor""").containsMatchIn(player), "the streaming client reports Navidrome's exchanges:\n$player")
+	}
+
+	/** Review nit: logged out there is no probe, so a late failure asks no server (the old one included). */
+	@Test
+	fun withNoSessionALateFailureAsksNothing() {
+		reach.probe = null
+		reach.failed(java.net.ConnectException("Connection refused"))
+		assertTrue(reach.reachable.value, "no session: nothing to be offline from")
 	}
 }

@@ -12,6 +12,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import app.worbus.di.synchronized
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
@@ -25,12 +27,20 @@ import kotlin.time.Duration.Companion.seconds
  * downloaded copies. [ConnectivityManager.isOnline] is now the network AND this.
  *
  * Fed by what the app's own Navidrome requests meet ([observe], a client plugin on the Subsonic
- * clients), not by guessing: a response, any status but a gateway's 502–504, says it answers;
- * nothing answering ([writeFailure]'s STOP kinds: refused, timed out, not resolved, a gateway error)
- * says it does not. While it does not, [probe] is asked every [probeEvery], and at once when the
- * network changes, so recovery does not wait for a request nobody makes while "offline".
+ * clients and the streaming client), not by guessing:
+ * - a response, any status but a gateway's 502–504, says it answers;
+ * - only a failure to reach it at all says it may be down ([isServerDown]: refused, no route, a name
+ *   that did not resolve, a connect timeout, a gateway's 502–504, a TLS handshake met plain http).
+ *   A read that stalls or a connection reset after it was made is a slow or flaky link to a server
+ *   that is there (review major 2: one stalled `getAlbumList2` page used to take the whole app
+ *   offline for 30 s, and the player then skipped streamable songs);
+ * - and even that is not believed from one request: [probe] is asked at once, and only when it
+ *   fails the same way does the app count Navidrome down.
+ * While it is down, [probe] is asked every [probeEvery], and at once when the network changes, so
+ * recovery does not wait for a request nobody makes while "offline".
  *
- * Starts reachable: an unknown server is not a down one, and the first request will tell.
+ * Starts reachable: an unknown server is not a down one, and the first request will tell. With no
+ * [probe] (no session), a failure is not acted on: there is nothing to ask and nothing to be offline from.
  */
 class ServerReachability(
 	private val probeEvery: Duration = 30.seconds,
@@ -39,42 +49,98 @@ class ServerReachability(
 	private val _reachable = MutableStateFlow(true)
 	val reachable: StateFlow<Boolean> = _reachable.asStateFlow()
 
-	/** One small request to Navidrome (SessionManager's `ping`). Its outcome is reported by [observe]. */
+	/** One small request to Navidrome (SessionManager's `ping`), null without a session. Its outcome is reported by [observe]. */
+	@Volatile
 	var probe: (suspend () -> Unit)? = null
 
+	/** Guards [probing], [confirming] and [verdict]: reports arrive on OkHttp's threads. */
+	private val lock = Any()
 	private var probing: Job? = null
+	private var confirming: Job? = null
+
+	/** While [confirming]: what the exchanges reported meanwhile said (true answered, false down). */
+	private var verdict: Boolean? = null
 
 	fun answered() {
+		synchronized(lock) {
+			if (confirming != null) verdict = true
+			probing?.cancel()
+			probing = null
+		}
 		_reachable.value = true
-		probing?.cancel()
-		probing = null
 	}
 
 	fun failed(t: Throwable) {
-		if (!isNothingAnswering(t)) return
-		if (_reachable.value) _reachable.value = false
-		startProbing()
+		if (!isServerDown(t)) return
+		synchronized(lock) {
+			if (confirming != null) {
+				verdict = false
+				return@synchronized
+			}
+			if (!_reachable.value) {
+				startProbingLocked()
+				return@synchronized
+			}
+			val ask = probe ?: return@synchronized
+			verdict = null
+			confirming = scope.launch { confirm(ask) }
+		}
+	}
+
+	/** One failure seen while Navidrome counted as up: ask it once, now, and believe that. */
+	private suspend fun confirm(ask: suspend () -> Unit) {
+		var thrown: Throwable? = null
+		try {
+			ask()
+		} catch (e: Exception) {
+			if (e is CancellationException) {
+				synchronized(lock) { confirming = null; verdict = null }
+				throw e
+			}
+			thrown = e
+		}
+		synchronized(lock) {
+			val down = verdict == false || (verdict == null && thrown != null && isServerDown(thrown))
+			confirming = null
+			verdict = null
+			if (down) {
+				_reachable.value = false
+				startProbingLocked()
+			}
+		}
 	}
 
 	/** A new session, server or network: what was learned about the old one no longer holds. */
-	fun reset() = answered()
+	fun reset() {
+		synchronized(lock) {
+			confirming?.cancel()
+			confirming = null
+			verdict = null
+			probing?.cancel()
+			probing = null
+		}
+		_reachable.value = true
+	}
 
 	/** The OS network changed: if Navidrome was down, ask now instead of at the next tick. */
 	fun networkChanged() {
 		if (_reachable.value) return
-		probing?.cancel()
-		probing = null
-		startProbing(immediately = true)
+		synchronized(lock) {
+			probing?.cancel()
+			probing = null
+			startProbingLocked(immediately = true)
+		}
 	}
 
-	private fun startProbing(immediately: Boolean = false) {
-		if (probing?.isActive == true) return
-		val ask = probe ?: return
+	/** The caller holds [lock]. */
+	private fun startProbingLocked(immediately: Boolean = false) {
+		if (probing?.isActive == true || probe == null) return
 		probing = scope.launch {
 			if (!immediately) delay(probeEvery)
 			while (isActive && !_reachable.value) {
 				try {
-					ask()
+					// Logged out meanwhile: the probe is gone, and so is the server it asked.
+					(probe ?: break)()
 				} catch (e: Exception) {
 					if (e is CancellationException) throw e
 					// Reported by the plugin already; wait for the next tick.
@@ -114,11 +180,28 @@ class ServerReachability(
 	}
 }
 
-/** Nothing answered: refused, timed out, a name that did not resolve, a TLS handshake met plain http, a gateway down. */
-internal fun isNothingAnswering(t: Throwable): Boolean {
-	if (causeChain(t).any { it is ServerReachability.GatewayDown }) return true
-	return when (loginFailureKind(t)) {
-		LoginFailureKind.UNREACHABLE, LoginFailureKind.TLS_TO_PLAIN_HTTP -> true
-		else -> false
-	}
+/**
+ * Navidrome could not be reached at all (review major 2): the connection was refused, had no route,
+ * timed out connecting, the name did not resolve, an https handshake met plain http, or a reverse
+ * proxy answered 502–504 for it. Not a read timeout or a reset after the connection was made (a
+ * slow or flaky link to a server that is there), and not a request outliving its own time cap.
+ */
+internal fun isServerDown(t: Throwable): Boolean {
+	val chain = causeChain(t)
+	if (chain.any { it is ServerReachability.GatewayDown || it.isGatewayFailure() }) return true
+	if (loginFailureKind(t) == LoginFailureKind.TLS_TO_PLAIN_HTTP) return true
+	return chain.any { it::class.simpleName in CONNECT_FAILURES || it.isConnectTimeout() }
 }
+
+private val CONNECT_FAILURES = setOf(
+	"UnknownHostException",
+	"UnresolvedAddressException",
+	"ConnectException",
+	"NoRouteToHostException",
+	"PortUnreachableException",
+	"ConnectTimeoutException"
+)
+
+/** OkHttp's own word for a connect timeout, when Ktor has not already mapped it to ConnectTimeoutException. */
+private fun Throwable.isConnectTimeout(): Boolean =
+	this::class.simpleName == "SocketTimeoutException" && (message ?: "").contains("connect", ignoreCase = true)
