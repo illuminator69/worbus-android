@@ -156,17 +156,39 @@ class BrowseResolver(
 }
 
 /**
- * Two credits naming the same act.
+ * Two credits naming the same act (B-313): each credit is split into its acts on
+ * [CREDIT_SEPARATORS], each act normalised ([creditKey]), and the two agree when one act is in both.
  *
- * Equality is too strict in one direction only: MusicBrainz writes the full
- * credit ("Daft Punk feat. Julian Casablancas") where Deezer writes the act.
- * So a prefix on a **token** boundary counts, and an unrelated artist that
- * merely starts with the same letters does not.
+ * MusicBrainz writes the full credit ("Daft Punk feat. Julian Casablancas") where Deezer writes the
+ * act, and a library tag can be one string of several ("Phoebe Bridgers • Phoebe Bridgers, …",
+ * "Lana Del Rey - Nikki Lane"). The old rule, a prefix on a token boundary, split nothing and called
+ * "Pink" the same as "Pink Floyd" (containment is not agreement). The split is Worbus for desktop's
+ * `album-match.ts` rule verbatim, with its vectors (`SameArtistTest`).
+ *
+ * The normaliser is NOT the desktop's: this one keeps letters and digits in any script, the
+ * desktop's only ASCII ones (so a non-Latin credit never matches there). Which is right is the
+ * owner's open decision (B-313); the split does not depend on it.
  */
 internal fun sameArtist(a: String, b: String): Boolean {
-	val x = creditKey(a)
-	val y = creditKey(b)
-	return x == y || x.startsWith("$y ") || y.startsWith("$x ")
+	val x = creditActs(a)
+	val y = creditActs(b)
+	return x.any { it in y }
+}
+
+/**
+ * Where a credit string separates acts: a hyphen-minus with whitespace on both sides, a bullet with
+ * or without spaces, `&`, `+`, `,`, `;`, feat./featuring, with, vs./vs, x. Never `/` and never an
+ * unspaced hyphen (AC/DC, Jay-Z, Run-DMC are one act each). Worbus for desktop's `CREDIT_SEPARATORS`.
+ */
+internal val CREDIT_SEPARATORS = Regex(
+	"""\s+-\s+|\s*(?:&|\+|,|;|•|\bfeat\.?\b|\bfeaturing\b|\bwith\b|\bvs\.?\b|\bx\b)\s*""",
+	RegexOption.IGNORE_CASE
+)
+
+/** The acts a credit names, each normalised; a credit that is nothing but separators is one act, itself. */
+internal fun creditActs(credit: String): Set<String> {
+	val acts = credit.split(CREDIT_SEPARATORS).map(::creditKey).filter { it.isNotBlank() }.toSet()
+	return acts.ifEmpty { setOf(creditKey(credit)) }
 }
 
 /** Lower-cased, punctuation-free, single-spaced. */
