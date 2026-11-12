@@ -118,7 +118,10 @@ fun gapStage(input: GapInput): GapStage {
 	// `downloaded` can still be searched for, fetched and Auto-filled from here, as with any gap; the
 	// box says Open in lb-bot above its stage (`gapAwaitingMatch`). With nothing else to fetch it is
 	// Attention, as a stalled placement always is: no search or fetch from here can help then.
-	val awaiting = gap.awaitingMatch(searching)
+	// B-231 round 2: the pending match does not depend on a search (the desktop's `gapMatchPending`,
+	// point 1): only Attention waits for no search in flight (point 3). Gated on `searching` it fell
+	// away while another device searched, and the box counted and listed the downloaded tracks too.
+	val awaiting = !gap.stalledPlacement && gap.awaitingMatch(searching = false)
 	val missing = if (awaiting) all.filter { it.state != "downloaded" } else all
 	// Worbus P1: with downloading off the box is the user's fold over what is missing, whatever view
 	// or fill is left from before; none of the stages below can be acted on, and their words are a
@@ -127,12 +130,13 @@ fun gapStage(input: GapInput): GapStage {
 		return if (input.view == GapView.FOLDED) GapStage.Folded(missing.size.takeIf { it > 0 } ?: input.mirroredMissing)
 		else GapStage.Tracks(missing, gap.total)
 	}
-	if (gap.stalledPlacement || (awaiting && missing.isEmpty())) return GapStage.Attention(gapReason(gap))
+	if (gap.stalledPlacement || (!searching && awaiting && missing.isEmpty())) return GapStage.Attention(gapReason(gap))
 	// A fill that failed keeps the box open, saying why, until it is dismissed or tried again: also
 	// over the sources it was requested from (seen on the AVD: the sources view, with no rows left
 	// and no search running, read as searching for good). A new search tap is the way out.
 	// B-231 (the shared rule, point 4): a pending match's ledger settle (`failed` at `needs_match`) is the
-	// match pending, not a failed fill; the box goes on over the tracks still to fetch.
+	// match pending, not a failed fill; the box goes on over the tracks still to fetch. Any other failed
+	// fill is a failure, pending match or not (the coordinator's ruling for both clients, round 2).
 	val matchPendingSettle = awaiting && fill?.state == "needs_match"
 	if (fill != null && fill.settled && fill.outcome == LbBotManager.OUTCOME_FAILED && !input.searchAsked && !matchPendingSettle) {
 		return GapStage.Failed(gapReason(gap).ifBlank { fill.reason }, gap.mp3WouldHelp || fill.mp3WouldHelp)
