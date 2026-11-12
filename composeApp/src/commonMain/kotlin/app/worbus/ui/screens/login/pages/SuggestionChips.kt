@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import worbus.composeapp.generated.resources.Res
 import worbus.composeapp.generated.resources.notice_login_suggestion
 import org.jetbrains.compose.resources.stringResource
+import app.worbus.domain.manager.InstanceUrlResult
+import app.worbus.domain.manager.normalizeInstanceUrl
 
 @Composable
 fun LoginScreenSuggestionChips(
@@ -81,9 +83,16 @@ fun LoginScreenSuggestionChips(
 	}
 }
 
-/** The "Did you mean…" addresses for what is typed, first offered first. */
+/**
+ * The "Did you mean…" addresses for what is typed, first offered first (B-307): the scheme the
+ * login's own rule gives it ([normalizeInstanceUrl]: http for a loopback, private or single-label
+ * host, https otherwise) first, the other second. One rule: the chips used to offer https first
+ * for every address, a private one included.
+ */
 internal fun loginSuggestions(typed: String): List<String> {
-	val bare = typed.replace("https://", "").replace("http://", "")
-	return listOf("https://$bare", "http://$bare")
+	val bare = typed.trim().replace(Regex("^https?://", RegexOption.IGNORE_CASE), "")
+	val first = (normalizeInstanceUrl(bare) as? InstanceUrlResult.Ok)?.url?.substringBefore("://") ?: "https"
+	val second = if (first == "http") "https" else "http"
+	return listOf("$first://$bare", "$second://$bare")
 }
 

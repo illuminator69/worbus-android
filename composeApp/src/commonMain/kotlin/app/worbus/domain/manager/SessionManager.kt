@@ -183,16 +183,11 @@ class SessionManager(
 	) {
 		val client = createClient(instanceUrl, username, password, observed = false)
 
-		try {
-			client.ping()
-			fetchCurrentUser(username, client)
-		} catch (e: Exception) {
-			// TODO: custom exception instead of the generic "Exception"
-			throw Exception(
-				"Failed to connect to the instance. Please check your credentials and try again.",
-				e
-			)
-		}
+		// B-307: the failure is rethrown as it is. It used to be wrapped in "Failed to connect to the
+		// instance. Please check your credentials", which the login page's details then showed to
+		// someone whose server never answered; the page words it from the kind (loginFailureKind).
+		client.ping()
+		fetchCurrentUser(username, client)
 
 		settings["instanceUrl"] = instanceUrl
 		settings["username"] = username
