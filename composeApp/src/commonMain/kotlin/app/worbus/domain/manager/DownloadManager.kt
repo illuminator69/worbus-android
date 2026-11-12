@@ -78,6 +78,16 @@ class DownloadManager(
 ) {
 	private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 	private val client = sessionManager.api.httpClient
+	/** [StorageManager] as [fetchVerified]'s [DownloadFiles]. Above `init`, whose coroutines may download at once. */
+	private val files = object : DownloadFiles {
+		override suspend fun save(path: String, channel: io.ktor.utils.io.ByteReadChannel) = storageManager.saveFile(path, channel)
+		override fun size(path: String): Long = storageManager.getFileSize(path)
+		override fun replace(tempPath: String, path: String): Boolean = storageManager.replaceFile(tempPath, path)
+		override fun delete(path: String) {
+			storageManager.deleteFile(path)
+		}
+	}
+
 	private val activeDownloadsMutex = Mutex()
 	private val activeDownloads = mutableMapOf<String, Job>()
 	// Max simultaneous transfers = the user's max-concurrency setting (capped at [MAX_CONCURRENCY]).
@@ -840,62 +850,12 @@ class DownloadManager(
 		format: String? = null,
 		source: String = DownloadSource.MANUAL
 	) {
-		var lastProgress = 0f
-
-		val request = client.prepareRequest(sessionManager.api.getStreamUrl(song.id, bitrate, format)) {
-			method = HttpMethod.Get
-			// No total-request cap for a file transfer. The shared client's 120 s one ends a body
-			// that is still arriving as a CLEAN end-of-stream, not an error, so a download slower
-			// than two minutes was cut off and saved as complete (measured: a steady 80 KB/s read
-			// stopped at 12.2 of 15.8 MB, at exactly 120 s). The socket timeout still catches a
-			// transfer that has actually stalled.
-			timeout { requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS }
-			onDownload { bytesSentTotal, contentLength ->
-				if (contentLength != null && contentLength > 0L) {
-					val fraction = (bytesSentTotal.toDouble() / contentLength).toFloat()
-					if (fraction - lastProgress >= 0.01f || fraction == 1f) {
-						lastProgress = fraction
-						progress.update { it + (song.id to fraction) }
-					}
-				}
-			}
-		}
-
 		val path = storageManager.getDownloadPath(song.id, song.fileExtension.orEmpty())
 		val tempPath = storageManager.getTempDownloadPath(song.id, song.fileExtension.orEmpty())
 
 		try {
-			// The length the server promised, when it promised one and the body is not re-encoded on
-			// the way. An uncached transcode carries none, and nothing can be checked against it.
-			var expectedLength: Long? = null
-			request.execute { response ->
-				// Whatever arrives is not automatically a song. Subsonic reports its errors as
-				// HTTP 200 with a JSON or XML envelope, and a proxy answers a dead upstream with
-				// an HTML page; saved under an audio name either one read as a finished download.
-				if (!response.status.isSuccess()) {
-					throw IllegalStateException("Server answered ${response.status.value}")
-				}
-				val type = response.contentType()
-				if (type != null && NOT_AUDIO.any { type.match(it) }) {
-					throw IllegalStateException("Server sent an error instead of audio")
-				}
-				if (response.headers[HttpHeaders.ContentEncoding] == null) {
-					expectedLength = response.contentLength()?.takeIf { it > 0L }
-				}
-				// Stream to a `.part` file. Until the transfer completes, the REAL path either
-				// doesn't exist or still holds the previous good copy — so a cancel or a crash
-				// can never leave a truncated file that the player treats as a full download.
-				storageManager.saveFile(tempPath, response.bodyAsChannel())
-			}
-
-			// A body can end early as a clean end-of-stream (a timeout, a reset upstream of a
-			// proxy), which copies without an error and used to be saved as the whole song.
-			val written = storageManager.getFileSize(tempPath)
-			if (written <= 0L) throw IllegalStateException("Server sent an empty file")
-			expectedLength?.let { expected ->
-				if (written != expected) {
-					throw IllegalStateException("Incomplete download ($written of $expected bytes)")
-				}
+			fetchVerified(client, sessionManager.api.getStreamUrl(song.id, bitrate, format), tempPath, files) { fraction ->
+				progress.update { it + (song.id to fraction) }
 			}
 
 			if (!storageManager.finalizeFile(tempPath, path)) {
@@ -938,14 +898,6 @@ class DownloadManager(
 		downloadDao.getDownloadsByStatus(DownloadStatus.FAILED).associate { it.songId to it.retryCount }
 
 	companion object {
-		/** Content types that are an error answer, never a song. */
-		private val NOT_AUDIO = listOf(
-			ContentType.Application.Json,
-			ContentType.Application.Xml,
-			ContentType.Text.Xml,
-			ContentType.Text.Html
-		)
-
 		/** Hard ceiling on the user-configurable max-concurrency setting. */
 		const val MAX_CONCURRENCY = 10
 
@@ -966,6 +918,79 @@ class DownloadManager(
 		 * left alone until the user retries it by hand. A manual retry is never blocked by this.
 		 */
 		const val MAX_DOWNLOAD_RETRIES = 3
+	}
+}
+
+/** Content types that are an error answer, never a song. */
+private val NOT_AUDIO = listOf(
+	ContentType.Application.Json,
+	ContentType.Application.Xml,
+	ContentType.Text.Xml,
+	ContentType.Text.Html
+)
+
+/**
+ * Stream [url] into [tempPath] and check it is a whole song; throws when it is not. Shared by a first
+ * download and a re-fetch over a changed one (Q-165), so both go through the same checks. The real
+ * path is never touched here: a cancel, a crash or a short body leaves only the scratch file, which
+ * the caller removes.
+ */
+internal suspend fun fetchVerified(
+	client: HttpClient,
+	url: String,
+	tempPath: String,
+	files: DownloadFiles,
+	onProgress: (Float) -> Unit = {}
+) {
+	var lastProgress = 0f
+	val request = client.prepareRequest(url) {
+		method = HttpMethod.Get
+		// No total-request cap for a file transfer. The shared client's 120 s one ends a body
+		// that is still arriving as a CLEAN end-of-stream, not an error, so a download slower
+		// than two minutes was cut off and saved as complete (measured: a steady 80 KB/s read
+		// stopped at 12.2 of 15.8 MB, at exactly 120 s). The socket timeout still catches a
+		// transfer that has actually stalled.
+		timeout { requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS }
+		onDownload { bytesSentTotal, contentLength ->
+			if (contentLength != null && contentLength > 0L) {
+				val fraction = (bytesSentTotal.toDouble() / contentLength).toFloat()
+				if (fraction - lastProgress >= 0.01f || fraction == 1f) {
+					lastProgress = fraction
+					onProgress(fraction)
+				}
+			}
+		}
+	}
+	// The length the server promised, when it promised one and the body is not re-encoded on
+	// the way. An uncached transcode carries none, and nothing can be checked against it.
+	var expectedLength: Long? = null
+	request.execute { response ->
+		// Whatever arrives is not automatically a song. Subsonic reports its errors as
+		// HTTP 200 with a JSON or XML envelope, and a proxy answers a dead upstream with
+		// an HTML page; saved under an audio name either one read as a finished download.
+		if (!response.status.isSuccess()) {
+			throw IllegalStateException("Server answered ${response.status.value}")
+		}
+		val type = response.contentType()
+		if (type != null && NOT_AUDIO.any { type.match(it) }) {
+			throw IllegalStateException("Server sent an error instead of audio")
+		}
+		if (response.headers[HttpHeaders.ContentEncoding] == null) {
+			expectedLength = response.contentLength()?.takeIf { it > 0L }
+		}
+		// Stream to a `.part` file. Until the transfer completes, the REAL path either
+		// doesn't exist or still holds the previous good copy — so a cancel or a crash
+		// can never leave a truncated file that the player treats as a full download.
+		files.save(tempPath, response.bodyAsChannel())
+	}
+	// A body can end early as a clean end-of-stream (a timeout, a reset upstream of a
+	// proxy), which copies without an error and used to be saved as the whole song.
+	val written = files.size(tempPath)
+	if (written <= 0L) throw IllegalStateException("Server sent an empty file")
+	expectedLength?.let { expected ->
+		if (written != expected) {
+			throw IllegalStateException("Incomplete download ($written of $expected bytes)")
+		}
 	}
 }
 

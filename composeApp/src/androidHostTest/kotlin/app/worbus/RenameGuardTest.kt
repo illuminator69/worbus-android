@@ -81,7 +81,7 @@ class RenameGuardTest {
 		val recorded = mapOf(
 			"CacheDatabase" to ((1..8) + (12..13) + (15..24)).toSet(),
 			"DownloadDatabase" to setOf(1, 3, 4, 5),
-			"WriteQueueDatabase" to setOf(1),
+			"WriteQueueDatabase" to setOf(1, 2),
 		)
 		val sources = kotlinUnder("src/commonMain")
 		for ((name, history) in recorded) {

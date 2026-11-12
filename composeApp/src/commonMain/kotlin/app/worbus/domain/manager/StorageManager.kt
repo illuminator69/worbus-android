@@ -17,6 +17,13 @@ expect class StorageManager {
 	/** Atomically move a finished temp file onto its real path. False if the move failed. */
 	fun finalizeFile(tempPath: String, path: String): Boolean
 
+	/**
+	 * Q-165: put a finished temp file over [path] in ONE rename, which replaces a file already there
+	 * atomically (a reader holding the old one keeps reading it). False, with [tempPath] removed, when
+	 * the rename fails: never a copy over the old file, which could leave half a file there.
+	 */
+	fun replaceFile(tempPath: String, path: String): Boolean
+
 	fun deleteFile(path: String): Boolean
 	fun getFileSize(path: String): Long
 	suspend fun saveFile(path: String, channel: ByteReadChannel)

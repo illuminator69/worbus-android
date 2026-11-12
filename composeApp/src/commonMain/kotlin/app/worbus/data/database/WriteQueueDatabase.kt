@@ -5,7 +5,11 @@ import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import androidx.room3.migration.Migration
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
+import app.worbus.data.database.dao.DownloadOriginDao
 import app.worbus.data.database.dao.PendingWriteDao
+import app.worbus.data.database.entities.DownloadOriginEntity
 import app.worbus.data.database.entities.MovedLegacyWrite
 import app.worbus.data.database.entities.PendingWriteEntity
 
@@ -25,15 +29,20 @@ import app.worbus.data.database.entities.PendingWriteEntity
  * aside whole by the first-open check (`writes.db.newer-<ms>`), kept for that build, never opened
  * and never dropped; a corrupt file is moved aside the same way.
  */
-const val WRITES_DB_VERSION = 1
+const val WRITES_DB_VERSION = 2
 
+/*
+ * Version 2 (Q-165, 2026-11-12): `DownloadOrigin` ([DownloadOriginEntity]), what each download was
+ * made from. The device's own record like the queue, so it shares the file and its policy.
+ */
 @Database(
 	version = WRITES_DB_VERSION,
-	entities = [PendingWriteEntity::class, MovedLegacyWrite::class]
+	entities = [PendingWriteEntity::class, MovedLegacyWrite::class, DownloadOriginEntity::class]
 )
 @ConstructedBy(WriteQueueDatabaseConstructor::class)
 abstract class WriteQueueDatabase : RoomDatabase() {
 	abstract fun pendingWriteDao(): PendingWriteDao
+	abstract fun downloadOriginDao(): DownloadOriginDao
 }
 
 @Suppress("KotlinNoActualForExpect")
@@ -41,5 +50,15 @@ expect object WriteQueueDatabaseConstructor : RoomDatabaseConstructor<WriteQueue
 	override fun initialize(): WriteQueueDatabase
 }
 
-/** Every `writes.db` migration, oldest first: a chain from 1 to [WRITES_DB_VERSION] with no gap. None yet. */
-val WRITES_MIGRATIONS: Array<Migration> = emptyArray()
+/** 1 → 2 (Q-165): the `DownloadOrigin` table, empty; nothing else moves. Its SQL is held to `2.json`. */
+val MIGRATION_WRITES_1_2 = object : Migration(1, 2) {
+	override suspend fun migrate(connection: SQLiteConnection) {
+		connection.execSQL(
+			"CREATE TABLE IF NOT EXISTS `DownloadOrigin` (`songId` TEXT NOT NULL, `origin` TEXT NOT NULL, " +
+				"`recordedAt` INTEGER NOT NULL, `goneSeenAt` INTEGER NOT NULL, PRIMARY KEY(`songId`))"
+		)
+	}
+}
+
+/** Every `writes.db` migration, oldest first: a chain from 1 to [WRITES_DB_VERSION] with no gap. */
+val WRITES_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_WRITES_1_2)

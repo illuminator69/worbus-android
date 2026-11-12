@@ -45,6 +45,8 @@ actual class StorageManager(
 		}
 	}
 
+	actual fun replaceFile(tempPath: String, path: String): Boolean = replaceAtomically(File(tempPath), File(path))
+
 	actual fun deleteFile(path: String): Boolean {
 		return File(path).delete()
 	}
@@ -71,4 +73,16 @@ actual class StorageManager(
 			dir.listFiles()?.forEach { it.deleteRecursively() }
 		}
 	}
+}
+
+/**
+ * Q-165: [temp] over [target] by one `rename(2)`, which on Android's filesystems replaces an existing
+ * target atomically: the target is the old file or the new one, never neither and never half. (Not
+ * `java.nio.file.Files.move`: minSdk is 24.) A failed rename removes [temp] and leaves [target] alone.
+ */
+internal fun replaceAtomically(temp: File, target: File): Boolean {
+	if (!temp.exists()) return false
+	if (temp.renameTo(target)) return true
+	temp.delete()
+	return false
 }

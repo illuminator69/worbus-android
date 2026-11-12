@@ -22,4 +22,6 @@ val databaseModule = module {
 	// B-373: the offline write queue lives in writes.db, its own file, never dropped (review major 3:
 	// not downloads.db, which 0.7.0 would wipe on a rollback if its version moved).
 	single { get<WriteQueueDatabase>().pendingWriteDao() }
+	// Q-165: what each download was made from, beside the queue in writes.db (version 2).
+	single { get<WriteQueueDatabase>().downloadOriginDao() }
 }

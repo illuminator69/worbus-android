@@ -6,7 +6,11 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -79,6 +83,13 @@ class SyncManager(
 
 	private val _syncState = MutableStateFlow(SyncState())
 	val syncState = _syncState.asStateFlow()
+
+	/**
+	 * Q-165: each library pull that finished, for [DownloadUpkeep]: a full pull (with the song ids it
+	 * listed when it was complete and stable) and a changed-albums sweep. Seam: nothing emits yet.
+	 */
+	private val _pulls = MutableSharedFlow<PullSeen>(extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+	val pulls: SharedFlow<PullSeen> = _pulls.asSharedFlow()
 
 	/**
 	 * Pull a landed album into Room the moment Navidrome has it.
