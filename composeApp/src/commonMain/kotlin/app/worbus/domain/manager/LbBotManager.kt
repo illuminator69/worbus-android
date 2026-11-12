@@ -3407,11 +3407,11 @@ class LbBotManager(
 				}
 				// The frame is a summary; the poll carries the tracks. Re-read now.
 				KIND_GAP -> {
-					val watched = key.isNotBlank() && watchLock.withLock {
+					val watch = if (key.isBlank()) null else watchLock.withLock {
 						val watches = loadWatches()
-						watches[key]?.let { saveWatches(watches + (key to it.copy(nextPollAt = 0L))) } != null
+						watches[key]?.also { saveWatches(watches + (key to it.copy(nextPollAt = 0L))) }
 					}
-					when (gapFrameAction(watched = watched, held = key in _gaps.value)) {
+					when (gapFrameAction(watched = gapFramePolls(watch), held = key in _gaps.value)) {
 						GapFrameAction.POLL -> kickPoll()
 						// B-376: a box open on this group follows what another device did to it.
 						GapFrameAction.REREAD -> rereadGapOnFrame(key)
@@ -5843,6 +5843,9 @@ enum class GapFrameAction {
 	/** Neither: nothing here shows it. */
 	NONE
 }
+
+/** Whether the poll will read [watch]'s group on its next tick. */
+internal fun gapFramePolls(watch: LbWatch?): Boolean = watch != null
 
 /** [watched]: this device's ledger watches the group; [held]: its record has been read here (a box showed it). */
 fun gapFrameAction(watched: Boolean, held: Boolean): GapFrameAction = when {
