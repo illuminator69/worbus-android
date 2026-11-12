@@ -68,7 +68,7 @@ class CurrentUserSessionTest {
 		val src = app.worbus.sourceFile("src/commonMain/kotlin/app/worbus/domain/manager/SessionManager.kt").readText()
 		val fetch = src.substringAfter("private suspend fun fetchCurrentUser(").substringBefore("\n\t}\n")
 		val logout = src.substringAfter("fun logout() {").substringBefore("\n\t}\n")
-		val guarded = Regex("""synchronized\(userLock\)\s*\{[^}]*userGeneration[^}]*currentUser\s*=""")
+		val guarded = Regex("""synchronized\(userLock\)\s*\{[^}]*userGeneration[^\n]*\n?[^\n]*currentUser\s*=""")
 		kotlin.test.assertTrue(guarded.containsMatchIn(fetch), "fetchCurrentUser checks and sets under userLock:\n$fetch")
 		kotlin.test.assertTrue(guarded.containsMatchIn(logout), "logout moves the generation and clears the user under userLock:\n$logout")
 	}

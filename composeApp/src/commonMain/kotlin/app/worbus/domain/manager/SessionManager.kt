@@ -36,6 +36,7 @@ import okio.ByteString.Companion.encodeUtf8
 import kotlin.random.Random
 import app.worbus.di.navidromeHeadersSource
 import app.worbus.di.navidromeHeaders
+import app.worbus.di.synchronized
 import kotlinx.coroutines.flow.update
 
 class SessionManager(
@@ -66,6 +67,12 @@ class SessionManager(
 	 * login) does not set its user over this session's.
 	 */
 	private val userGeneration = MutableStateFlow(0L)
+
+	/**
+	 * Review of fix round 2, nit 2: the generation's check and the user's assignment are one step
+	 * against logout's move and clear. Held for a few instructions only, never across a request.
+	 */
+	private val userLock = Any()
 	private val mutex = Mutex()
 	private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -202,7 +209,7 @@ class SessionManager(
 		password: String
 	) {
 		val client = createClient(instanceUrl, username, password, observed = false)
-		userGeneration.update { it + 1 }
+		synchronized(userLock) { userGeneration.value = userGeneration.value + 1 }
 
 		// B-307: the failure is rethrown as it is. It used to be wrapped in "Failed to connect to the
 		// instance. Please check your credentials", which the login page's details then showed to
@@ -231,8 +238,10 @@ class SessionManager(
 		// direct AudioMuse, not the Worbus Server, and stays.
 		secrets.navidromePassword = ""
 		_isLoggedIn.value = false
-		userGeneration.update { it + 1 }
-		currentUser = null
+		synchronized(userLock) {
+			userGeneration.value = userGeneration.value + 1
+			currentUser = null
+		}
 		reachability.probe = null
 		reachability.reset()
 	}
@@ -598,9 +607,10 @@ class SessionManager(
 			if (username.isNotBlank()) {
 				val user = client.getUser(username)
 				// A logout or another login since this fetch started: not this session's user.
-				if (userGeneration.value != generation) return null
-				currentUser = user
-				return user
+				val current = synchronized(userLock) {
+					(userGeneration.value == generation).also { if (it) currentUser = user }
+				}
+				return if (current) user else null
 			}
 		}
 
