@@ -19,6 +19,8 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.time.Clock
 import app.worbus.util.Logger
 import androidx.compose.runtime.LaunchedEffect
@@ -426,11 +428,29 @@ private val fingerprintJson = Json { ignoreUnknownKeys = true; isLenient = true;
 private fun fingerprintIds(body: String): FingerprintAnswer.Ids =
 	FingerprintAnswer.Ids(fingerprintJson.decodeFromString<List<FingerprintItem>>(body).map { it.itemId })
 
+private fun jsonObjectOrNull(body: String): JsonObject? =
+	runCatching { fingerprintJson.parseToJsonElement(body) as? JsonObject }.getOrNull()
+
+private fun JsonObject.text(key: String): String =
+	(this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+
+/**
+ * The hub's `_audiomuse_refused_post`, verbatim: AudioMuse will not take the POST at all when it
+ * answers 405 (Flask's method check), or a 400/415 whose body is not a JSON object (Flask's own
+ * page, not an error of AudioMuse's route code, which answers JSON).
+ */
+internal fun audioMuseRefusedPost(status: Int, body: String): Boolean = when (status) {
+	405 -> true
+	400, 415 -> jsonObjectOrNull(body) == null
+	else -> false
+}
+
 /**
  * The direct fingerprint route (B-359): the account in a POST body, never the URL. An AudioMuse that
- * answers the POST with 405 (no POST on that route: only 3.7.1 was read to take one, and no minimum
- * version is documented) is asked again by GET with the count alone, so AudioMuse answers for its own
- * configured account: the session's listening is lost for that server, its password never goes in a URL.
+ * refuses the POST ([audioMuseRefusedPost]) is too old for the listening fingerprint, as the hub
+ * says it (PROTOCOL §14), and is NEVER asked again by GET: without the account in the query a GET
+ * answers for AudioMuse's own configured account, someone else's listening shown as this user's
+ * mix, and with it the password is in a URL (review of the fix round, major 2).
  */
 internal suspend fun directFingerprint(
 	client: HttpClient,
@@ -445,18 +465,31 @@ internal suspend fun directFingerprint(
 		contentType(ContentType.Application.Json)
 		setBody(fingerprintBody(count, user, password))
 	}
-	if (posted.status.value != 405) return fingerprintIds(posted.bodyAsText())
-	return fingerprintIds(client.get(url) {
-		header("Authorization", "Bearer $token")
-		parameter("n", count.toString())
-	}.bodyAsText())
+	val status = posted.status.value
+	val body = posted.bodyAsText()
+	return when {
+		status in 200..299 -> fingerprintIds(body)
+		audioMuseRefusedPost(status, body) -> FingerprintAnswer.AudioMuseTooOld()
+		else -> FingerprintAnswer.Refused(status, jsonObjectOrNull(body)?.text("code").orEmpty())
+	}
 }
 
-/** The hub's `GET /sonic/fingerprint?n=`: the hub adds the account server-side (PROTOCOL §14). */
+/**
+ * The hub's `GET /sonic/fingerprint?n=`: the hub adds the account server-side (PROTOCOL §14). Its
+ * `503 {"code":"audiomuse_too_old","need":…}` is [FingerprintAnswer.AudioMuseTooOld]; any other
+ * refusal (`400 bad_request`, `403 primary_only`, `503 busy`) is [FingerprintAnswer.Refused].
+ */
 internal suspend fun hubFingerprint(client: HttpClient, url: String, bearer: String, count: Int): FingerprintAnswer {
 	val answer = client.get(url) {
 		header("Authorization", "Bearer $bearer")
 		fingerprintQuery(viaHub = true, count).forEach { (name, value) -> parameter(name, value) }
 	}
-	return fingerprintIds(answer.bodyAsText())
+	val status = answer.status.value
+	val body = answer.bodyAsText()
+	if (status in 200..299) return fingerprintIds(body)
+	val refusal = jsonObjectOrNull(body)
+	val code = refusal?.text("code").orEmpty()
+	return if (code == "audiomuse_too_old") {
+		FingerprintAnswer.AudioMuseTooOld(refusal?.text("need").orEmpty().ifBlank { FINGERPRINT_MIN_AUDIOMUSE })
+	} else FingerprintAnswer.Refused(status, code)
 }
