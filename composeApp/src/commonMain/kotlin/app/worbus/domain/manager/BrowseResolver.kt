@@ -165,9 +165,9 @@ class BrowseResolver(
  * "Pink" the same as "Pink Floyd" (containment is not agreement). The split is Worbus for desktop's
  * `album-match.ts` rule verbatim, with its vectors (`SameArtistTest`).
  *
- * The normaliser is NOT the desktop's: this one keeps letters and digits in any script, the
- * desktop's only ASCII ones (so a non-Latin credit never matches there). Which is right is the
- * owner's open decision (B-313); the split does not depend on it.
+ * The normaliser is the desktop's too since the owner's ruling (2026-11-12): a letter in any script
+ * counts, on both clients. The shared vectors are `ArtistNameVectorsTest`. A credit with no act (all
+ * punctuation, emoji, empty) matches nothing, itself included.
  */
 internal fun sameArtist(a: String, b: String): Boolean {
 	val x = creditActs(a)
@@ -181,22 +181,25 @@ internal fun sameArtist(a: String, b: String): Boolean {
  * unspaced hyphen (AC/DC, Jay-Z, Run-DMC are one act each). Worbus for desktop's `CREDIT_SEPARATORS`.
  */
 internal val CREDIT_SEPARATORS = Regex(
-	"""\s+-\s+|\s*(?:&|\+|,|;|•|\bfeat\.?\b|\bfeaturing\b|\bwith\b|\bvs\.?\b|\bx\b)\s*""",
+	// B-313: the keywords are whole words in any script, by explicit lookarounds (a letter, mark,
+	// decimal digit or connector beside one keeps it inside a word): `\b` read "Iannis Xénakis" as
+	// "Iannis" + "énakis" wherever it is ASCII (the JVM's host tests; JavaScript). `[\s\p{Z}]` is
+	// JavaScript's `\s` (Unicode spaces), which the JVM's ASCII `\s` is not.
+	"""[\s\p{Z}]+-[\s\p{Z}]+|[\s\p{Z}]*(?:&|\+|,|;|•|(?<![\p{L}\p{M}\p{Nd}\p{Pc}])(?:feat\.?|featuring|with|vs\.?|x)(?![\p{L}\p{M}\p{Nd}\p{Pc}]))[\s\p{Z}]*""",
 	RegexOption.IGNORE_CASE
 )
 
-/** The acts a credit names, each normalised; a credit that is nothing but separators is one act, itself. */
+/** The acts a credit names, each normalised; empty when it names none (B-313: an empty key is no act). */
 internal fun creditActs(credit: String): Set<String> {
-	val acts = credit.split(CREDIT_SEPARATORS).map(::creditKey).filter { it.isNotBlank() }.toSet()
-	return acts.ifEmpty { setOf(creditKey(credit)) }
+	val acts = credit.split(CREDIT_SEPARATORS).map(::creditKey).filter { it.isNotEmpty() }.toSet()
+	return acts.ifEmpty { setOfNotNull(creditKey(credit).ifEmpty { null }) }
 }
 
-/** Lower-cased, punctuation-free, single-spaced. */
-internal fun creditKey(value: String): String = value
-	.lowercase()
-	.map { if (it.isLetterOrDigit() || it.isWhitespace()) it else ' ' }
-	.joinToString("")
-	.split(" ")
-	.filter { it.isNotBlank() }
-	.joinToString(" ")
+/**
+ * B-313's shared key: lower-cased (language-neutral), every run of code points that are not a letter
+ * (`\p{L}`) or a decimal digit (`\p{Nd}`) one space, ends trimmed. Java's regex reads code points, so
+ * a letter outside the BMP counts, and every space that is not a letter (NBSP, U+3000, tab) separates.
+ */
+internal fun creditKey(value: String): String = value.lowercase().replace(NOT_A_LETTER_OR_DIGIT, " ").trim()
 
+private val NOT_A_LETTER_OR_DIGIT = Regex("""[^\p{L}\p{Nd}]+""")
