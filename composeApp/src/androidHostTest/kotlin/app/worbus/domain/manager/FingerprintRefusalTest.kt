@@ -108,4 +108,16 @@ class FingerprintRefusalTest {
 		assertEquals(MixPageState.Refused("bad_request"), mixPageState(fingerprintFailure(FingerprintAnswer.Refused(400, "bad_request"))!!))
 		assertEquals(null, fingerprintFailure(FingerprintAnswer.Ids(emptyList())))
 	}
+
+	/**
+	 * Review of fix round 2, minor 1: a user who is not the server's primary user gets `403
+	 * primary_only` for a fingerprint mix; "the server refused it. Pull to try again." can never come
+	 * true for them. It is the server owner's listening, and the page says so.
+	 */
+	@Test
+	fun aNonPrimaryUsersFingerprintMixIsNotATryAgain() {
+		val owners = mixPageState(fingerprintFailure(FingerprintAnswer.Refused(403, "primary_only"))!!)
+		kotlin.test.assertNotEquals<MixPageState>(MixPageState.Refused("primary_only"), owners, "not the retry sentence")
+		kotlin.test.assertIs<MixPageState.Refused>(mixPageState(fingerprintFailure(FingerprintAnswer.Refused(503, "busy"))!!))
+	}
 }
