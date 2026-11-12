@@ -50,6 +50,8 @@ import app.worbus.data.database.entities.DownloadEntity
 import app.worbus.data.database.entities.DownloadSource
 import app.worbus.data.database.entities.DownloadStatus
 import app.worbus.data.database.entities.LyricEntity
+import app.worbus.data.database.entities.SongEntity
+import app.worbus.data.database.mappers.toEntity
 import app.worbus.data.database.mappers.toDomainModel
 import app.worbus.domain.models.DomainSong
 import app.worbus.domain.models.DomainSongCollection
@@ -74,8 +76,10 @@ class DownloadManager(
 	private val preferenceManager: PreferenceManager,
 	private val connectivityManager: ConnectivityManager,
 	private val notificationManager: NotificationManager,
-	private val foregroundController: DownloadForegroundController
-) {
+	private val foregroundController: DownloadForegroundController,
+	/** Q-165: what each download was made from, recorded when its file lands. */
+	private val origins: DownloadOrigins
+) : UpkeepDownloads {
 	private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 	private val client = sessionManager.api.httpClient
 	/** [StorageManager] as [fetchVerified]'s [DownloadFiles]. Above `init`, whose coroutines may download at once. */
@@ -880,11 +884,81 @@ class DownloadManager(
 				)
 			)
 			Logger.i("DownloadManager", "wrote download for ${song.id}")
+			// Q-165: what this file was made from, so a later change on the server is seen.
+			try {
+				origins.recordFetched(song.id, song.toEntity())
+			} catch (e: Exception) {
+				if (e is CancellationException) throw e
+				Logger.w("DownloadManager", "could not record what ${song.id} was fetched from; the next pull records it", e)
+			}
 		} catch (e: Throwable) {
 			// Cancellation included: never leave the scratch file behind to rot.
 			storageManager.deleteFile(tempPath)
 			throw e
 		}
+	}
+
+	// ---- Q-165: DownloadUpkeep's hands ------------------------------------------ //
+
+	override suspend fun downloaded(): List<DownloadEntity> =
+		downloadDao.getDownloadsByStatus(DownloadStatus.DOWNLOADED).filter { it.filePath != null }
+
+	/**
+	 * Fetch a song that changed on the server again over its download, in the background
+	 * ([refetchOver]): the row stays DOWNLOADED on the old file, which plays until the new one is whole
+	 * and takes its place in one rename. Held by Wi-Fi only / charging only like any download, and by a
+	 * permit; not counted in the progress notification (nothing is missing meanwhile). A cut or failed
+	 * transfer leaves the old copy; the next pull's upkeep asks again. At the quality it was first
+	 * fetched at.
+	 */
+	override fun refetch(song: SongEntity, row: DownloadEntity) {
+		scope.launch(Dispatchers.IO) {
+			val claimed = activeDownloadsMutex.withLock {
+				if (activeDownloads.containsKey(song.songId)) false
+				else {
+					activeDownloads[song.songId] = coroutineContext[Job]!!
+					true
+				}
+			}
+			if (!claimed) return@launch
+			try {
+				awaitDownloadConstraints()
+				if (!connectivityManager.isOnline.value) return@launch
+				downloadSemaphore.withPermit {
+					val extension = song.fileExtension.orEmpty()
+					val url = sessionManager.api.getStreamUrl(song.songId, row.maxBitRate, row.format)
+					val swapped = refetchOver(
+						row = row,
+						newPath = storageManager.getDownloadPath(song.songId, extension),
+						tempPath = storageManager.getTempDownloadPath(song.songId, extension),
+						files = files,
+						transfer = { tempPath -> fetchVerified(client, url, tempPath, files) },
+						currentRow = { downloadDao.getDownloadById(song.songId) },
+						writeRow = { downloadDao.insertDownload(it) },
+						now = now()
+					)
+					if (swapped) {
+						origins.recordFetched(song.songId, song)
+						Logger.i("DownloadManager", "re-fetched ${song.songId}, changed on the server")
+					} else {
+						Logger.w("DownloadManager", "re-fetch of ${song.songId} did not finish; the old copy stays")
+					}
+				}
+			} catch (e: Exception) {
+				if (e is CancellationException) throw e
+				Logger.w("DownloadManager", "re-fetch of ${song.songId} failed; the old copy stays", e)
+			} finally {
+				activeDownloadsMutex.withLock { activeDownloads.remove(song.songId) }
+			}
+		}
+	}
+
+	/** A download whose song is gone from the server: its file and its row. */
+	override suspend fun remove(songId: String) {
+		activeDownloadsMutex.withLock { activeDownloads.remove(songId) }?.cancel()
+		downloadDao.getDownloadById(songId)?.filePath?.let { storageManager.deleteFile(it) }
+		downloadDao.deleteDownload(songId)
+		Logger.i("DownloadManager", "removed $songId: gone from the server")
 	}
 
 	private fun now(): Long = Clock.System.now().toEpochMilliseconds()

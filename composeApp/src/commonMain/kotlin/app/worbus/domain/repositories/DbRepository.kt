@@ -111,9 +111,14 @@ class DbRepository(
 		Logger.i("DbRepository", "Database wiped completely.")
 	}
 
+	/**
+	 * The whole library. The answer (Q-165) is the song ids the pull listed when it was COMPLETE and
+	 * stable (the same condition the prune needs, B-037), else null: what `DownloadUpkeep` may judge
+	 * a download gone against.
+	 */
 	suspend fun syncEverything(
 		onProgress: (Float, StringResource) -> Unit = { _, _ -> }
-	): Result<Unit> = runDbOp {
+	): Result<Set<String>?> = runDbOp {
 		// Deliberately not logged. This fires once per album, tens of times a second on a full
 		// pull, and each line was a bare float plus a StringResource's toString — no diagnostic
 		// value, and enough volume to bury every other tag in logcat. The per-section
@@ -211,6 +216,8 @@ class DbRepository(
 				}
 
 				progressCallback(1.0f, Res.string.info_syncing_finished)
+				val listed = if (libraryResult.complete) validSongIds.toSet() else null
+				listed
 			} finally {
 				notificationManager.cancelNotification(NotificationIds.SYNC_LIBRARY)
 			}

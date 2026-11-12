@@ -9,7 +9,12 @@ import org.koin.dsl.module
 import app.worbus.domain.manager.AudioMuseManager
 import app.worbus.domain.manager.CastScrobbler
 import app.worbus.domain.manager.AlbumModeSmartPlaylists
+import app.worbus.domain.manager.ConnectivityManager
 import app.worbus.domain.manager.DownloadManager
+import app.worbus.domain.manager.DownloadOrigins
+import app.worbus.domain.manager.DownloadUpkeep
+import app.worbus.domain.manager.songAnswerOf
+import app.worbus.data.database.dao.SongDao
 import app.worbus.domain.manager.EqualiserManager
 import app.worbus.domain.manager.HubAuth
 import app.worbus.domain.manager.HubFinder
@@ -70,6 +75,18 @@ val managerModule = module {
 		}
 	}
 	singleOf(::DownloadManager)
+	// Q-165: what each download was made from (writes.db 2), and the upkeep after every pull: a song
+	// changed on the server is fetched again, one gone from it removed (DownloadUpkeep's four rules).
+	singleOf(::DownloadOrigins)
+	single(createdAtStart = true) {
+		DownloadUpkeep(
+			store = get<DownloadOrigins>(),
+			downloads = get<DownloadManager>(),
+			songsById = { ids -> get<SongDao>().getSongsByIds(ids) },
+			askSong = { id -> songAnswerOf(runCatching { get<SessionManager>().api.getSong(id) }.exceptionOrNull()) },
+			isOnline = { get<ConnectivityManager>().isOnline.value }
+		).apply { follow(get<SyncManager>().pulls) }
+	}
 	singleOf(::AlbumModeSmartPlaylists)
 	singleOf(::SessionManager)
 	// Q-165: whether the session's Navidrome answers; read by ConnectivityManager, fed by SessionManager's clients.

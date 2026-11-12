@@ -86,7 +86,7 @@ class SyncManager(
 
 	/**
 	 * Q-165: each library pull that finished, for [DownloadUpkeep]: a full pull (with the song ids it
-	 * listed when it was complete and stable) and a changed-albums sweep. Seam: nothing emits yet.
+	 * listed when it was complete and stable) and a changed-albums sweep that moved something.
 	 */
 	private val _pulls = MutableSharedFlow<PullSeen>(extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 	val pulls: SharedFlow<PullSeen> = _pulls.asSharedFlow()
@@ -180,6 +180,8 @@ class SyncManager(
 					if (count > 0) {
 						Logger.i("SyncManager", "$why: synced $count changed album(s)")
 						lbBotManager.onLocalLibrarySynced()
+						// Q-165: songs may have changed; no list, so nothing is judged gone from it.
+						_pulls.tryEmit(PullSeen(listed = null))
 					}
 				}
 				.onFailure { Logger.w("SyncManager", "$why: changed-album sync failed", it) }
@@ -369,13 +371,15 @@ class SyncManager(
 		if (result.isSuccess) {
 			preferenceManager.lastFullSyncTime = startedAt.toEpochMilliseconds()
 			Logger.i("SyncManager", "Full library sync complete.")
+			// Q-165: what the pull listed when it was complete and stable, else null.
+			_pulls.tryEmit(PullSeen(result.getOrNull()))
 		} else {
 			// With the cause. Without it the log said a sync failed and nothing about why.
 			Logger.e("SyncManager", "Full library sync failed; keeping cached library.", result.exceptionOrNull())
 		}
 
 		_syncState.update { it.fullPullEnded(result.isSuccess) }
-		return result
+		return result.map { }
 	}
 
 	private suspend fun processQueue() {
