@@ -159,6 +159,8 @@ internal class CastDeviceBridge(
 	/** `group`, `tv` or `speaker` for the picker's icon, or null (`castKind`). Said at each `hello`. */
 	@Volatile var kind: String?,
 	host: String,
+	/** B-115: the port the device advertises (a speaker group's is its own, not 8009). */
+	port: Int,
 	/**
 	 * Worbus P3 (design §6.3): the address the device's main socket is on, read at each dial, so a
 	 * bridge follows the main socket's choice (home or away) and never dials an address that has not
@@ -245,6 +247,9 @@ internal class CastDeviceBridge(
 
 	@Volatile
 	private var host: String = host
+
+	@Volatile
+	private var port: Int = port
 
 	private var ws: DefaultClientWebSocketSession? = null
 	private val sendMutex = Mutex()
@@ -336,10 +341,12 @@ internal class CastDeviceBridge(
 		connectJob = scope.launch { runLoop() }
 	}
 
-	fun updateHost(newHost: String) {
-		if (newHost == host) return
-		Logger.i(TAG, "$friendlyName: address changed ${host} → $newHost")
+	/** B-115: a new port at the same host is a new address too (a group re-elected its leader). */
+	fun updateAddress(newHost: String, newPort: Int) {
+		if (newHost == host && newPort == port) return
+		Logger.i(TAG, "$friendlyName: address changed $host:$port → $newHost:$newPort")
 		host = newHost
+		port = newPort
 		// Drop the channel rather than repointing it — a socket to the old address is dead by
 		// definition, and rebuilding is the recovery path we already trust everywhere else.
 		scope.launch { teardownCast() }
@@ -357,7 +364,7 @@ internal class CastDeviceBridge(
 	 */
 	suspend fun speakerReachable(): Boolean = withContext(Dispatchers.IO) {
 		runCatching {
-			Socket().use { it.connect(InetSocketAddress(host, CastProtocol.CAST_PORT), REACHABILITY_TIMEOUT_MS) }
+			Socket().use { it.connect(InetSocketAddress(host, port), REACHABILITY_TIMEOUT_MS) }
 			true
 		}.getOrDefault(false)
 	}
@@ -759,7 +766,7 @@ internal class CastDeviceBridge(
 				discovery.requery()
 				delay(ADDRESS_REFRESH_WAIT)
 			}
-			val candidate = CastChannel(host)
+			val candidate = CastChannel(host, port)
 			// One budget for the whole sequence, not one per stage. While a do:load is waiting
 			// this is the hub's remaining deadline split across the attempts still to come; with
 			// nothing waiting it is the plain SESSION_SETUP_TIMEOUT insurance.

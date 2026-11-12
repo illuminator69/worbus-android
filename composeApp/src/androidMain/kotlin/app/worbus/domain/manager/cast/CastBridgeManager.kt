@@ -303,7 +303,7 @@ class CastBridgeManager(
 				if (existing != null) {
 					// Keep the address current: a speaker that took a new DHCP lease keeps its
 					// id, and pinning the first-seen host is how a bridge dials a dead IP forever.
-					existing.updateHost(device.host)
+					existing.updateAddress(device.host, device.port)
 					existing.friendlyName = device.name
 					existing.kind = device.kind
 					// CLAIMING until the hub says welcome. A bridge object that exists proves only
@@ -430,6 +430,7 @@ class CastBridgeManager(
 				friendlyName = device.name,
 				kind = device.kind,
 				host = device.host,
+				port = device.port,
 				hubAddress = { hubManager.activeAddress.value },
 				awaitHubAddress = { hubManager.activeAddress.first { it != null } },
 				credential = { hubAuth.helloCredential() },
