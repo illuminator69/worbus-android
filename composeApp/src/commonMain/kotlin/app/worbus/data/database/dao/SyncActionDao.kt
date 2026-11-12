@@ -9,7 +9,7 @@ import app.worbus.data.database.entities.SyncActionEntity
 
 /**
  * The offline write queue's OLD home, the cache database (B-373). Nothing is queued here any more:
- * `RoomWriteQueueStore.moveLegacy` moves what an upgraded install still holds into `downloads.db`
+ * `RoomWriteQueueStore.moveLegacy` moves what an upgraded install still holds into `writes.db`
  * (`PendingWriteDao`) on the queue's first use. Kept so that move can read it.
  */
 @Dao

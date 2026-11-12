@@ -18,6 +18,9 @@ import app.worbus.data.database.MIGRATION_CACHE_23_24
 import app.worbus.data.database.AdoptDownloadsOnCreate
 import app.worbus.data.database.DOWNLOAD_DB_VERSION
 import app.worbus.data.database.DOWNLOAD_MIGRATIONS
+import app.worbus.data.database.WriteQueueDatabase
+import app.worbus.data.database.WRITES_DB_VERSION
+import app.worbus.data.database.WRITES_MIGRATIONS
 import app.worbus.data.database.checkDbAtOpen
 import app.worbus.data.database.checkCacheDbAtOpen
 import app.worbus.domain.manager.AndroidHubLocalDevice
@@ -104,6 +107,25 @@ actual val platformModule = module {
 			)
 			.addMigrations(*DOWNLOAD_MIGRATIONS)
 			.addCallback(AdoptDownloadsOnCreate({ File(app.filesDir, "downloads") }))
+			.build()
+	}
+
+	single<WriteQueueDatabase> {
+		val dbPath = androidApplication().getDatabasePath("writes.db").absolutePath
+		// B-373 / review major 3: the offline write queue, in a file of its own. Its rows exist
+		// nowhere else (the server has not had them), so the policy is downloads.db's: no destructive
+		// fallback, a migration for every bump (WritesDbPolicyTest), and a corrupt file or one a
+		// newer build wrote is moved aside whole (`writes.db.newer-<ms>`) before Room's first open.
+		// Not downloads.db: 0.7.0 builds that at 5 with a destructive fallback, so moving its
+		// version would cost every download record on a rollback.
+		Room
+			.databaseBuilder<WriteQueueDatabase>(get(), dbPath)
+			.setDriver(
+				CheckedFirstOpenDriver(BundledSQLiteDriver()) {
+					checkDbAtOpen(File(dbPath), "WritesDb", newestVersion = WRITES_DB_VERSION)
+				}
+			)
+			.addMigrations(*WRITES_MIGRATIONS)
 			.build()
 	}
 

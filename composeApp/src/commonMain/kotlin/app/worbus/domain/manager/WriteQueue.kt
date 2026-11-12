@@ -22,7 +22,7 @@ import kotlin.time.Instant
 /*
  * The offline write queue (B-373). Its rules are shared with the desktop (I-070) and written out in
  * navi-connect/RESULTS-phase-b-android-2026-11-10.md, "The write-queue rules":
- *  1. kept outside any cache: `downloads.db`, never dropped; "Rebuild database" does not touch it;
+ *  1. kept outside any cache: `writes.db`, its own file, never dropped; "Rebuild database" does not touch it;
  *  2. sent in the order it was made;
  *  3. a later star/unstar of one item replaces the earlier one, a later rating the earlier rating;
  *  4. a scrobble is never merged and is sent with the time it was played;
@@ -161,7 +161,7 @@ class PendingOverlay(writes: List<QueuedWrite>) {
 	}
 }
 
-/** The queue in `downloads.db`, and the one-time move of what the cache database held before (B-373). */
+/** The queue in `writes.db`, and the one-time move of what the cache database held before (B-373). */
 class RoomWriteQueueStore(
 	private val dao: PendingWriteDao,
 	private val legacy: SyncActionDao?
@@ -182,14 +182,19 @@ class RoomWriteQueueStore(
 	/**
 	 * Every row the cache's `SyncActionEntity` still holds, in its order and with its time, then
 	 * those rows removed there. Not merged (a merge is for a new write): a star and an unstar both
-	 * moved are both sent, in order, which ends where the user left it. A move cut short between
-	 * the two steps is finished by the next one: [PendingWriteEntity.legacyId] is unique.
+	 * moved are both sent, in order, which ends where the user left it.
+	 *
+	 * Two databases, so two steps and no transaction across them: the insert into `writes.db` (one
+	 * transaction there, which records each row as moved, [MovedLegacyWrite]), then the deletes in
+	 * `cache.db`. A move cut short between them, or whose deletes the cache database refuses, is
+	 * finished by the next one without queueing anything twice, even after a drain has sent and
+	 * removed a moved row meanwhile (review minor 5): the record of the move outlives the row.
 	 */
 	override suspend fun moveLegacy(): Int {
 		val dao = legacy ?: return 0
 		val rows = dao.getPendingActions()
 		if (rows.isEmpty()) return 0
-		this.dao.insertMoved(rows.map {
+		val queued = this.dao.insertMoved(rows.map {
 			PendingWriteEntity(
 				actionType = it.actionType.name,
 				itemId = it.itemId,
@@ -198,7 +203,7 @@ class RoomWriteQueueStore(
 			)
 		})
 		rows.forEach { dao.removeAction(it.id) }
-		return rows.size
+		return queued
 	}
 
 	override fun observe(): Flow<List<QueuedWrite>> = dao.observePending().map { rows -> rows.mapNotNull { it.toQueued() } }

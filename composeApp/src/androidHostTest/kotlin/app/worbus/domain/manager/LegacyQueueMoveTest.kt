@@ -2,6 +2,7 @@ package app.worbus.domain.manager
 
 import app.worbus.data.database.dao.PendingWriteDao
 import app.worbus.data.database.dao.SyncActionDao
+import app.worbus.data.database.entities.MovedLegacyWrite
 import app.worbus.data.database.entities.PendingWriteEntity
 import app.worbus.data.database.entities.SyncActionEntity
 import app.worbus.data.database.entities.SyncActionType
@@ -14,7 +15,7 @@ import kotlin.time.Instant
 
 /*
  * B-373: an upgrade finds the writes still in the cache database's SyncActionEntity table. They
- * are moved to downloads.db on the queue's first use, in their order and with their times, and a
+ * are moved to writes.db on the queue's first use, in their order and with their times, and a
  * move cut short between "inserted here" and "removed there" never queues one twice. The fakes keep
  * what the real tables enforce: autoincrement ids, oldest first, the unique `legacyId` with IGNORE.
  */
@@ -42,9 +43,17 @@ class LegacyQueueMoveTest {
 			rows += row.copy(id = id)
 			return id
 		}
-		override suspend fun insertMoved(rows: List<PendingWriteEntity>) {
-			for (row in rows) if (row.legacyId == null || this.rows.none { it.legacyId == row.legacyId }) insert(row)
+		/** `writes.db`'s MovedLegacyWrite table: the move's record, never deleted. */
+		val moved = mutableSetOf<MovedLegacyWrite>()
+		override suspend fun insertMovedRow(row: PendingWriteEntity) {
+			if (row.legacyId == null || rows.none { it.legacyId == row.legacyId }) insert(row)
 		}
+		override suspend fun movedBefore(legacyId: Long, actionType: String, itemId: String, timeMs: Long): Int =
+			if (MovedLegacyWrite(legacyId, actionType, itemId, timeMs) in moved) 1 else 0
+		override suspend fun recordMoved(moved: MovedLegacyWrite) {
+			this.moved += moved
+		}
+		// insertMoved is the DAO's own (a default method): the test runs the real move logic.
 		override suspend fun removeFor(itemId: String, actionTypes: List<String>) {
 			rows.removeAll { it.itemId == itemId && it.actionType in actionTypes }
 		}
@@ -112,5 +121,17 @@ class LegacyQueueMoveTest {
 		WriteQueue(RoomWriteQueueStore(writes, legacy), log = { _, _ -> }).drain { sent += "${it.type}:${it.itemId}" } // the next launch
 		assertEquals(listOf("SCROBBLE:s-1"), sent, "one listen, sent once")
 		assertEquals(emptyList(), legacy.rows, "and the move is finished")
+	}
+
+	/** A cache database rebuilt by an older build numbers its rows from 1 again: a new write there is not taken for one moved before. */
+	@Test
+	fun aReusedLegacyIdWithOtherContentIsStillMoved() = runBlocking {
+		val writes = WriteDao()
+		val sent = mutableListOf<String>()
+		WriteQueue(RoomWriteQueueStore(writes, LegacyDao(listOf(SyncActionEntity(1, SyncActionType.SCROBBLE, "s-1", t1)))), log = { _, _ -> })
+			.drain { sent += it.itemId }
+		WriteQueue(RoomWriteQueueStore(writes, LegacyDao(listOf(SyncActionEntity(1, SyncActionType.SCROBBLE, "s-2", t2)))), log = { _, _ -> })
+			.drain { sent += it.itemId }
+		assertEquals(listOf("s-1", "s-2"), sent)
 	}
 }

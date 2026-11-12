@@ -3,6 +3,7 @@ package app.worbus.di
 import org.koin.dsl.module
 import app.worbus.data.database.CacheDatabase
 import app.worbus.data.database.DownloadDatabase
+import app.worbus.data.database.WriteQueueDatabase
 
 val databaseModule = module {
 	// CacheDatabase is initialised inside PlatformModule since we need Context on android
@@ -18,6 +19,7 @@ val databaseModule = module {
 	single { get<CacheDatabase>().savedQueueDao() }
 	single { get<CacheDatabase>().lbIndexDao() }
 	single { get<DownloadDatabase>().downloadDao() }
-	// B-373: the offline write queue lives in downloads.db, which is never dropped.
-	single { get<DownloadDatabase>().pendingWriteDao() }
+	// B-373: the offline write queue lives in writes.db, its own file, never dropped (review major 3:
+	// not downloads.db, which 0.7.0 would wipe on a rollback if its version moved).
+	single { get<WriteQueueDatabase>().pendingWriteDao() }
 }

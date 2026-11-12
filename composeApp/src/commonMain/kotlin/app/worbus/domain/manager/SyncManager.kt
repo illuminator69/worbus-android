@@ -41,7 +41,7 @@ data class SyncState(
 
 class SyncManager(
 	private val repository: DbRepository,
-	/** B-373: the offline write queue, in `downloads.db` (see WriteQueue.kt for its rules). */
+	/** B-373: the offline write queue, in `writes.db` (see WriteQueue.kt for its rules). */
 	private val writeQueue: WriteQueue,
 	private val albumDao: AlbumDao,
 	private val connectivityManager: ConnectivityManager,

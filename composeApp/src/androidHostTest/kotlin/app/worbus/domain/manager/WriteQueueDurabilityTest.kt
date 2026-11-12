@@ -26,10 +26,10 @@ class WriteQueueDurabilityTest {
 
 	@Test
 	fun theQueueIsKeptInTheDatabaseThatIsNeverDropped() {
-		val downloads = sourceFile("src/commonMain/kotlin/app/worbus/data/database/DownloadDatabase.kt").readText()
-		assertTrue("PendingWriteEntity::class" in downloads, "the queue's table is in downloads.db")
+		val writes = sourceFile("src/commonMain/kotlin/app/worbus/data/database/WriteQueueDatabase.kt").readText()
+		assertTrue("PendingWriteEntity::class" in writes, "the queue's table is in writes.db")
 		val module = sourceFile("src/commonMain/kotlin/app/worbus/di/DatabaseModule.kt").readText()
-		assertTrue("get<DownloadDatabase>().pendingWriteDao()" in module, "and its DAO is read from there")
+		assertTrue("get<WriteQueueDatabase>().pendingWriteDao()" in module, "and its DAO is read from there")
 	}
 
 	@Test

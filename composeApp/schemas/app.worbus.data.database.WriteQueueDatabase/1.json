@@ -1,0 +1,124 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "eabc8e865d260fb820f894968b94127e",
+    "entities": [
+      {
+        "tableName": "PendingWriteEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `actionType` TEXT NOT NULL, `itemId` TEXT NOT NULL, `timeMs` INTEGER NOT NULL, `refusals` INTEGER NOT NULL, `lastError` TEXT, `legacyId` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actionType",
+            "columnName": "actionType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "itemId",
+            "columnName": "itemId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timeMs",
+            "columnName": "timeMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "refusals",
+            "columnName": "refusals",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastError",
+            "columnName": "lastError",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "legacyId",
+            "columnName": "legacyId",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_PendingWriteEntity_itemId",
+            "unique": false,
+            "columnNames": [
+              "itemId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_PendingWriteEntity_itemId` ON `${TABLE_NAME}` (`itemId`)"
+          },
+          {
+            "name": "index_PendingWriteEntity_legacyId",
+            "unique": true,
+            "columnNames": [
+              "legacyId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_PendingWriteEntity_legacyId` ON `${TABLE_NAME}` (`legacyId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "MovedLegacyWrite",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`legacyId` INTEGER NOT NULL, `actionType` TEXT NOT NULL, `itemId` TEXT NOT NULL, `timeMs` INTEGER NOT NULL, PRIMARY KEY(`legacyId`, `actionType`, `itemId`, `timeMs`))",
+        "fields": [
+          {
+            "fieldPath": "legacyId",
+            "columnName": "legacyId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actionType",
+            "columnName": "actionType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "itemId",
+            "columnName": "itemId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timeMs",
+            "columnName": "timeMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "legacyId",
+            "actionType",
+            "itemId",
+            "timeMs"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'eabc8e865d260fb820f894968b94127e')"
+    ]
+  }
+}

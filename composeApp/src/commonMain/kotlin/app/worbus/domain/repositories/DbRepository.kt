@@ -103,7 +103,7 @@ class DbRepository(
 		radioDao.clearAllRadios()
 		lyricDao.clearAllLyrics()
 		// Not the offline write queue (B-373): it is not cache, the server does not have it yet, and it
-		// lives in downloads.db. A logout clears it (LoginManager.logout).
+		// lives in writes.db. A logout clears it (LoginManager.logout).
 		// The lb-bot index mirror and response cache: lb-bot data about THIS user's library, so
 		// it goes with it. The next sync starts a fresh mirror from seq 0 under whatever epoch
 		// lb-bot answers.

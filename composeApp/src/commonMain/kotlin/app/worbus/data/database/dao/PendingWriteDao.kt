@@ -6,9 +6,10 @@ import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Transaction
 import kotlinx.coroutines.flow.Flow
+import app.worbus.data.database.entities.MovedLegacyWrite
 import app.worbus.data.database.entities.PendingWriteEntity
 
-/** The offline write queue (B-373), in `downloads.db`. Oldest first everywhere: the order is the rule. */
+/** The offline write queue (B-373), in `writes.db`. Oldest first everywhere: the order is the rule. */
 @Dao
 interface PendingWriteDao {
 	@Query("SELECT * FROM PendingWriteEntity ORDER BY id ASC")
@@ -20,9 +21,32 @@ interface PendingWriteDao {
 	@Insert
 	suspend fun insert(row: PendingWriteEntity): Long
 
-	/** A move from the cache database: a row already moved ([PendingWriteEntity.legacyId]) is skipped. */
 	@Insert(onConflict = OnConflictStrategy.IGNORE)
-	suspend fun insertMoved(rows: List<PendingWriteEntity>)
+	suspend fun insertMovedRow(row: PendingWriteEntity)
+
+	@Query("SELECT COUNT(*) FROM MovedLegacyWrite WHERE legacyId = :legacyId AND actionType = :actionType AND itemId = :itemId AND timeMs = :timeMs")
+	suspend fun movedBefore(legacyId: Long, actionType: String, itemId: String, timeMs: Long): Int
+
+	@Insert(onConflict = OnConflictStrategy.IGNORE)
+	suspend fun recordMoved(moved: MovedLegacyWrite)
+
+	/**
+	 * A move from the cache database, in one transaction of this database: each row not moved before
+	 * ([MovedLegacyWrite]) is queued and recorded as moved; one moved before, whether it is still
+	 * pending or was sent since, is skipped. Returns how many were queued now.
+	 */
+	@Transaction
+	suspend fun insertMoved(rows: List<PendingWriteEntity>): Int {
+		var queued = 0
+		for (row in rows) {
+			val legacyId = row.legacyId ?: continue
+			if (movedBefore(legacyId, row.actionType, row.itemId, row.timeMs) > 0) continue
+			insertMovedRow(row)
+			recordMoved(MovedLegacyWrite(legacyId, row.actionType, row.itemId, row.timeMs))
+			queued++
+		}
+		return queued
+	}
 
 	@Query("DELETE FROM PendingWriteEntity WHERE itemId = :itemId AND actionType IN (:actionTypes)")
 	suspend fun removeFor(itemId: String, actionTypes: List<String>)
