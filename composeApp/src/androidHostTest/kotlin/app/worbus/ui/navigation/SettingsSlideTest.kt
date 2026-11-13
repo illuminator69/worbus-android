@@ -35,7 +35,7 @@ class CoverPageEntriesTest {
 
 	@Test
 	fun albumAndArtistEntriesAreCoverPages() {
-		for (screen in listOf("CollectionDetail", "ArtistDetail", "ExternalAlbum", "ExternalArtist")) {
+		for (screen in listOf("CollectionDetail", "ArtistDetail", "ExternalAlbum", "ExternalArtist", "MixDetail")) {
 			val line = app.lines().single { "entry<Screen.$screen>" in it }
 			assertTrue("coverPage" in line, line)
 		}

@@ -71,3 +71,26 @@ class CoverPageChangeTest {
 		assertEquals(PageChange.Slide, pageChangeOf(PageKind.Cover, PageKind.Settings), "Settings' rule first")
 	}
 }
+
+/*
+ * B-404 review m4: a mix's page draws its own cover too (mix -> album dipped to the backdrop), and on a
+ * tablet a list pane beside a cover page must not slide off with it.
+ */
+class CoverSceneTest {
+	private val cover = pageKindMetadata(PageKind.Cover)
+	private val list = mapOf<String, Any>("x" to 1)
+
+	@Test
+	fun aOnePaneCoverSceneIsACoverPage() {
+		assertEquals(PageKind.Cover, pageKindOfScene(listOf(cover)))
+		assertEquals(PageChange.Slide, pageChangeOf(pageKindOfScene(listOf(cover)), pageKindOfScene(listOf(cover))))
+	}
+
+	@Test
+	fun aListBesideACoverPageKeepsTheSlideAndFade() {
+		val twoPane = pageKindOfScene(listOf(list, cover))
+		assertEquals(PageKind.Other, twoPane)
+		assertEquals(PageChange.SharedAxis, pageChangeOf(twoPane, pageKindOfScene(listOf(cover))))
+		assertEquals(PageKind.Settings, pageKindOfScene(listOf(list, pageKindMetadata(PageKind.Settings))), "Settings' two panes still slide")
+	}
+}

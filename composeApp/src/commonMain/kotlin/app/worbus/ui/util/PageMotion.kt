@@ -112,7 +112,11 @@ enum class PageKind {
 	/** Settings and every page under it. */
 	Settings,
 
-	/** A page that wears its own cover's colours: an album's or an artist's, owned or not (B-404). */
+	/**
+	 * B-404: a page that draws its own cover's colours over the backdrop: an album's or playlist's
+	 * (`CollectionDetail`), an artist's, an unowned album's, a mix's (review m4). The unowned artist's page
+	 * wears the backdrop's (`Washed`) and is one too, as the other end of album <-> artist.
+	 */
 	Cover,
 	Other
 }
@@ -149,6 +153,16 @@ fun pageKindMetadata(kind: PageKind): Map<String, Any> = mapOf(PAGE_KIND_KEY to 
 
 /** What [metadata] says the page is; [PageKind.Other] when it says nothing. */
 fun pageKindOf(metadata: Map<String, Any>?): PageKind = metadata?.get(PAGE_KIND_KEY) as? PageKind ?: PageKind.Other
+
+/**
+ * What a scene is, from its entries' metadata, the page on top last. Review m4: a scene of more than one
+ * pane (a tablet's list beside a cover page) is not a cover page: B-404's slide would carry the list pane
+ * off with it, so such a change keeps the slide and fade.
+ */
+fun pageKindOfScene(entries: List<Map<String, Any>>): PageKind {
+	val top = pageKindOf(entries.lastOrNull())
+	return if (top == PageKind.Cover && entries.size > 1) PageKind.Other else top
+}
 
 /** The fold's time under [motion], or null for the motion scheme's springs. */
 fun foldMs(motion: PageMotion, tall: Boolean): Int? = if (tall) motion.foldTallMs else motion.foldMs

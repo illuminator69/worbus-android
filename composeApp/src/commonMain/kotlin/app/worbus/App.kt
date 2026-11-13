@@ -172,7 +172,7 @@ import app.worbus.ui.util.pageMotionOf
 import app.worbus.ui.util.PageKind
 import app.worbus.ui.util.pageChangeOf
 import app.worbus.ui.util.pageKindMetadata
-import app.worbus.ui.util.pageKindOf
+import app.worbus.ui.util.pageKindOfScene
 import androidx.navigation3.scene.Scene
 import app.worbus.ui.util.rememberLibraryTabBackground
 import app.worbus.ui.components.common.AppWash
@@ -542,7 +542,8 @@ private fun entryProvider(
 	else listPane("root") + ListPageSceneStrategy.listPage()
 	// B-403: Settings and its pages slide, going in, between them and leaving (pageChangeOf).
 	val settingsPage = pageKindMetadata(PageKind.Settings)
-	// B-404: an album's and an artist's pages (owned or not) slide between each other, no fade.
+	// B-404: the cover pages (an album's or playlist's, an artist's, owned or not, a mix's: review m4) slide
+	// between each other, no fade.
 	val coverPage = pageKindMetadata(PageKind.Cover)
 	val imageViewMetadata = transitionSpec { ContentTransform(fadeIn(), ExitTransition.None) }
 		.plus(popTransitionSpec { ContentTransform(EnterTransition.None, fadeOut()) })
@@ -686,7 +687,7 @@ private fun entryProvider(
 			Washed { CustomRadioScreen() }
 		}
 		// P5 round 2: a mix's page wears its own cover, as a playlist's does.
-		entry<Screen.MixDetail>(metadata = detailPane("root")) { key ->
+		entry<Screen.MixDetail>(metadata = detailPane("root") + coverPage) { key ->
 			MixDetailScreen(key.mixId)
 		}
 
@@ -795,4 +796,4 @@ private fun Washed(content: @Composable () -> Unit) {
 }
 
 /** What the page on top of [this] scene is, for the motion to it or from it (B-403). */
-private fun Scene<*>.pageKind() = pageKindOf(entries.lastOrNull()?.metadata)
+private fun Scene<*>.pageKind() = pageKindOfScene(entries.map { it.metadata })
