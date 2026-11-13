@@ -1,5 +1,6 @@
 package app.worbus.ui.screens.collection.components
 
+import app.worbus.ui.screens.external.components.sourceFolderName
 import app.worbus.ui.screens.collection.gapChosenSource
 import app.worbus.ui.screens.collection.gapSelectedIndex
 import app.worbus.ui.screens.collection.gapSelection
@@ -549,7 +550,7 @@ private fun ActiveContent(stage: GapStage.Active, ui: GapBoxUi, onCancel: () -> 
 			)
 			val source = ui.fetched
 			if (source != null) {
-				val folder = source.folder.substringAfterLast('\\').substringAfterLast('/').ifBlank { source.peer }
+				val folder = sourceFolderName(source.folder, source.peer)
 				Text(
 					listOfNotNull(source.format.ifBlank { null }, stringResource(Res.string.gap_from, folder)).joinToString(" · "),
 					style = MaterialTheme.typography.bodySmall,

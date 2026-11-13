@@ -49,6 +49,24 @@ import app.worbus.ui.util.Fold
 import app.worbus.ui.util.rememberFoldMotion
 
 /**
+ * B-418 (the owner's re-walk, 2026-11-13): a source card's name, the folder's own. Its last path component
+ * (lb-bot sends the whole path to an admin, the last component to anyone else); when that is only a disc or
+ * format subfolder ("CD1", "Disc 2", "FLAC", "320"), the folder above it too ("Debut (Live) / CD1"), since
+ * twenty cards named "CD1" cannot be told apart. No folder at all: the peer, as before.
+ */
+fun sourceFolderName(folder: String, peer: String): String {
+	val parts = folder.split('\\', '/').map { it.trim() }.filter { it.isNotEmpty() }
+	val last = parts.lastOrNull() ?: return peer
+	val parent = parts.getOrNull(parts.size - 2)
+	return if (parent != null && GENERIC_SUBFOLDER.matches(last)) "$parent / $last" else last
+}
+
+/** A subfolder named for a disc, a side or a format, not for the album. */
+private val GENERIC_SUBFOLDER = Regex(
+	"(?i)((cd|disc|disk|side|vol(ume)?\\.?)[ _.-]*[0-9a-d]{1,2}|flac|mp3|aac|m4a|ogg|opus|wav|alac|v0|v2|320|256|192|24[ -]?bit|16[ -]?bit|hi-?res|scans?|artwork|covers?)"
+)
+
+/**
  * The ranked candidates, as radio cards (P4; they were `MissingAlbumSheet`'s `AlbumSources`).
  *
  * Every card answers three questions in order of how badly getting them wrong hurts: is this the
@@ -146,7 +164,7 @@ private fun SourceCardBody(
 			}
 		}
 		Text(
-			source.folder.substringAfterLast('\\').substringAfterLast('/').ifBlank { source.peer },
+			sourceFolderName(source.folder, source.peer),
 			style = MaterialTheme.typography.bodyMedium,
 			fontWeight = FontWeight.Medium,
 			maxLines = 2,
