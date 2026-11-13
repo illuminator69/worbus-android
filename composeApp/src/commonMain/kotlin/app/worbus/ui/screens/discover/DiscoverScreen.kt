@@ -129,6 +129,7 @@ import app.worbus.ui.screens.discover.viewmodels.BrowseTarget
 import app.worbus.ui.screens.discover.viewmodels.DiscoverViewModel
 import app.worbus.ui.screens.mixes.MixArtwork
 import app.worbus.ui.screens.mixes.mixKindLabel
+import app.worbus.ui.util.animatedItem
 
 /**
  * Discover: one place to go, instead of six places to know about.
@@ -383,7 +384,7 @@ fun DiscoverScreen(nested: Boolean = false) {
 								index = index,
 								count = stack.size,
 								onClick = { openStackEntry(entry.target) },
-								modifier = Modifier.animateItem().arrive(gate, entry.key, index)
+								modifier = animatedItem().arrive(gate, entry.key, index)
 							)
 						}
 					}

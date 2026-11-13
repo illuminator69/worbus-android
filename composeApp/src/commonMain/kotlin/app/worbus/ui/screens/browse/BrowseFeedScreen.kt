@@ -71,6 +71,7 @@ import app.worbus.ui.util.COVER_FADE_MS
 import app.worbus.ui.util.arrive
 import app.worbus.ui.util.placeholderBrush
 import app.worbus.ui.util.rememberArrivalGate
+import app.worbus.ui.util.animatedItem
 
 private const val PLACEHOLDER_TILES = 8
 
@@ -157,7 +158,7 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 						album = album,
 						rank = if (kind == BrowseKind.CHARTS) index + 1 else null,
 						onClick = { open(album) },
-						modifier = Modifier.animateItem().arrive(gate, key, index)
+						modifier = animatedItem().arrive(gate, key, index)
 					)
 				}
 				state.loading -> items(PLACEHOLDER_TILES, span = { GridItemSpan(1) }) { index ->

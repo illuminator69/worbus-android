@@ -46,6 +46,7 @@ import app.worbus.ui.components.layouts.ArtGrid
 import app.worbus.ui.core.UiState
 import app.worbus.ui.screens.artist.ArtistListScreenGridItem
 import app.worbus.ui.util.withoutTop
+import app.worbus.ui.util.animatedItem
 
 @Composable
 fun ArtistListScreenContent(
@@ -135,7 +136,7 @@ fun ArtistListScreenContent(
 					itemsIndexed(artists, { _, it -> it.id }) { index, artist ->
 						if (selectedViewMode == ListViewMode.Grid) {
 							ArtistListScreenGridItem(
-								modifier = Modifier.animateItem(),
+								modifier = animatedItem(),
 								tab = "artists",
 								artist = artist,
 								selected = artist == selectedArtist,
@@ -149,7 +150,7 @@ fun ArtistListScreenContent(
 							)
 						} else {
 							ArtistListScreenListItem(
-								modifier = Modifier.animateItem(),
+								modifier = animatedItem(),
 								index = index,
 								count = artists.size,
 								artist = artist,
@@ -169,7 +170,7 @@ fun ArtistListScreenContent(
 				itemsIndexed(data, { _, it -> it.id }) { index, artist ->
 					if (selectedViewMode == ListViewMode.Grid) {
 						ArtistListScreenGridItem(
-							modifier = Modifier.animateItem(),
+							modifier = animatedItem(),
 							tab = "artists",
 							artist = artist,
 							selected = artist == selectedArtist,
@@ -183,7 +184,7 @@ fun ArtistListScreenContent(
 						)
 					} else {
 						ArtistListScreenListItem(
-							modifier = Modifier.animateItem(),
+							modifier = animatedItem(),
 							index = index,
 							count = data.size,
 							artist = artist,

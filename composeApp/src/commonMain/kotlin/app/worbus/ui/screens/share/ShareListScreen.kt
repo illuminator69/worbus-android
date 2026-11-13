@@ -48,6 +48,7 @@ import app.worbus.ui.core.UiState
 import app.worbus.ui.screens.share.components.ShareListScreenItem
 import app.worbus.ui.screens.share.viewmodels.ShareListViewModel
 import app.worbus.ui.util.withoutTop
+import app.worbus.ui.util.animatedItem
 
 @Composable
 fun ShareListScreen() {
@@ -100,7 +101,7 @@ fun ShareListScreen() {
 						is UiState.Success -> {
 							items(stateValue.data, { it.id }) { share ->
 								ShareListScreenItem(
-									modifier = Modifier.animateItem(fadeInSpec = null),
+									modifier = animatedItem(fadeIn = false),
 									share = share,
 									onClick = { viewModel.updateSelection(share) },
 									onSwipeToDelete = { deletionId = share.id }

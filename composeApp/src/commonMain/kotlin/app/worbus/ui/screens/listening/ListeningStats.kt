@@ -212,6 +212,7 @@ import app.worbus.ui.components.layouts.PullToRefreshBox
 import app.worbus.ui.navigation.Screen
 import app.worbus.ui.screens.listening.viewmodels.ListeningUi
 import app.worbus.ui.screens.listening.viewmodels.ListeningViewModel
+import app.worbus.ui.util.animatedItem
 
 /**
  * How often the status is read while an import runs. It is the progress readout, nothing else is
@@ -639,7 +640,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.overviewItems(
 					artistTarget(artist.ndArtistId, artist.mbid, artist.name, state.knownArtistIds),
 					open
 				),
-				modifier = Modifier.animateItem().graphicsLayer { alpha = dim() }.fullBleed(),
+				modifier = animatedItem().graphicsLayer { alpha = dim() }.fullBleed(),
 				leading = {
 					LbArtImage(
 						art,
@@ -1309,7 +1310,7 @@ private fun androidx.compose.foundation.lazy.LazyItemScope.PeriodBound(
 	dim: () -> Float,
 	content: @Composable () -> Unit
 ) {
-	Box(Modifier.animateItem().graphicsLayer { alpha = dim() }) { content() }
+	Box(animatedItem().graphicsLayer { alpha = dim() }) { content() }
 }
 
 /** A section's title, as upstream's Statistics page titles its top artists. */

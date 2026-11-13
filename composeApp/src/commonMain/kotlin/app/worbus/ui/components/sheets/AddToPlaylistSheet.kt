@@ -59,6 +59,7 @@ import app.worbus.icons.outlined.Delete
 import app.worbus.ui.components.common.CoverArt
 import app.worbus.ui.screens.playlist.dialogs.PlaylistCreateDialog
 import app.worbus.ui.util.rememberNowPlayingCoverAmbient
+import app.worbus.ui.util.animatedItem
 
 /**
  * "Save to playlist" for one [song] (P2 notes, [AddToPlaylistViewModel]): every playlist it can go
@@ -110,7 +111,7 @@ fun AddToPlaylistSheet(song: DomainSong, onDismissRequest: () -> Unit) {
 							choice = choice,
 							onAdd = { viewModel.add(choice.playlist.id) },
 							onRemove = { viewModel.remove(choice.playlist.id) },
-							modifier = Modifier.animateItem()
+							modifier = animatedItem()
 						)
 					}
 				}

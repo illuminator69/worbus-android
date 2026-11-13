@@ -23,6 +23,7 @@ import app.worbus.ui.screens.search.BrowseTile
 import app.worbus.ui.screens.search.PlacedTile
 import app.worbus.ui.util.ArrivalGate
 import app.worbus.ui.util.arrive
+import app.worbus.ui.util.animatedItem
 
 private fun BrowseTile.words(): Pair<StringResource, StringResource> = when (this) {
 	BrowseTile.GENRES -> Res.string.title_genres to Res.string.search_tile_genres_line
@@ -45,7 +46,7 @@ fun LazyGridScope.browseSection(
 	item(span = { GridItemSpan(maxLineSpan) }, key = "browse-header", contentType = "header") {
 		SearchSectionHeader(
 			title = stringResource(Res.string.search_browse),
-			modifier = Modifier.animateItem()
+			modifier = animatedItem()
 		)
 	}
 	var column = 0
@@ -63,8 +64,7 @@ fun LazyGridScope.browseSection(
 				title = stringResource(title),
 				line = stringResource(line),
 				onClick = { onOpen(placed.tile) },
-				modifier = Modifier
-					.animateItem()
+				modifier = animatedItem()
 					.padding(start = if (left) 16.dp else 6.dp, end = if (right) 16.dp else 6.dp, top = 6.dp, bottom = 6.dp)
 					.arrive(gate, "browse-${placed.tile.name}", index)
 			)

@@ -101,6 +101,7 @@ import app.worbus.ui.screens.savedqueues.components.SavedQueuePreviewSheet
 import app.worbus.ui.screens.savedqueues.viewmodels.SavedQueueMessage
 import app.worbus.ui.screens.savedqueues.viewmodels.SavedQueuesViewModel
 import kotlinx.coroutines.isActive
+import app.worbus.ui.util.animatedItem
 
 /**
  * The Symfonium-style "select media queue" list: every queue Worbus has auto-captured (rolling cache
@@ -282,7 +283,7 @@ fun SavedQueuesScreen() {
 							backStack.remove(Screen.SavedQueues)
 						},
 						onMenu = { sheetTarget = queue },
-						modifier = Modifier.animateItem()
+						modifier = animatedItem()
 					)
 				}
 			}

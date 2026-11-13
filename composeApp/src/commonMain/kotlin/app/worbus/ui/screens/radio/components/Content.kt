@@ -13,6 +13,7 @@ import app.worbus.icons.outlined.Radio
 import app.worbus.ui.components.common.ContentUnavailable
 import app.worbus.ui.components.common.SegmentedListItemDefaults.segmentedShapes
 import app.worbus.ui.core.UiState
+import app.worbus.ui.util.animatedItem
 
 fun LazyGridScope.radioListScreenContent(
 	state: UiState<List<DomainRadio>>,
@@ -24,7 +25,7 @@ fun LazyGridScope.radioListScreenContent(
 	if (data.isNotEmpty()) {
 		itemsIndexed(data, key = { _, it -> it.id }) { index, radio ->
 			RadioRow(
-				modifier = Modifier.animateItem(),
+				modifier = animatedItem(),
 				radio = radio,
 				shapes = segmentedShapes(index, data.size),
 				onPlay = { onRadioClick(radio) },

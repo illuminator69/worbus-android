@@ -108,6 +108,7 @@ import app.worbus.ui.components.common.PillTone
 import app.worbus.ui.components.common.Pill
 import app.worbus.ui.components.sheets.lbUnavailableRes
 import app.worbus.ui.components.sheets.rememberLbTooOld
+import app.worbus.ui.util.animatedItem
 
 /**
  * Source history (P6; it was the Downloads page's Fills and Wishlist chips, "Activity" in the avatar
@@ -242,7 +243,7 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 										notice,
 										style = MaterialTheme.typography.bodyMedium,
 										color = MaterialTheme.colorScheme.onSurfaceVariant,
-										modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp).animateItem()
+										modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp).then(animatedItem())
 									)
 								}
 							}
@@ -265,7 +266,7 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 							if (groups.needYou.isEmpty()) {
 								item(key = "need-you-empty") {
 									ContentUnavailable(
-										modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp).animateItem(),
+										modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp).then(animatedItem()),
 										icon = Icons.Outlined.Check,
 										label = stringResource(Res.string.source_history_need_you_empty)
 									)
@@ -312,7 +313,7 @@ private fun LazyListScope.historyGroup(
 ) {
 	if (rows.isEmpty()) return
 	item(key = "header-$key") {
-		GroupHeader(stringResource(title), count = rows.size, modifier = Modifier.animateItem())
+		GroupHeader(stringResource(title), count = rows.size, modifier = animatedItem())
 	}
 	itemsIndexed(rows, key = { _, row -> "request:${row.key}" }) { index, row ->
 		// Review M1: drawn as its state is (lb-bot's later state wins), and with this device's buttons only
@@ -339,7 +340,7 @@ private fun LazyListScope.historyGroup(
 					FillButton.OPEN_ALBUM -> onOpenAlbum(row)
 				}
 			},
-			modifier = Modifier.animateItem()
+			modifier = animatedItem()
 		)
 	}
 }
@@ -363,7 +364,7 @@ private fun LazyListScope.transferRows(transfers: List<ActivityTransfer>) {
 	itemsIndexed(transfers, key = { _, t -> "transfer:${t.id}" }) { index, t ->
 		SegmentedListItem(
 			onClick = {},
-			modifier = Modifier.animateItem(),
+			modifier = animatedItem(),
 			shapes = segmentedShapes(index = index, count = transfers.size),
 			colors = fillRowColors(),
 			contentPadding = SongRowDefaults.ContentPadding,

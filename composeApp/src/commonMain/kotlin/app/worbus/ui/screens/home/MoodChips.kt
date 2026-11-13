@@ -23,6 +23,7 @@ import org.jetbrains.compose.resources.stringResource
 import app.worbus.domain.manager.MoodEntry
 import app.worbus.icons.Icons
 import app.worbus.icons.outlined.Close
+import app.worbus.ui.util.animatedItem
 
 /**
  * Home's mood chips (P7, board HomeMood): the hub's ten Home moods in its order, one row that scrolls
@@ -52,7 +53,7 @@ fun MoodChipRow(
 		if (selected != null) {
 			item(key = "clear") {
 				FilterChip(
-					modifier = Modifier.animateItem(),
+					modifier = animatedItem(),
 					selected = false,
 					onClick = onClear,
 					label = {
@@ -68,7 +69,7 @@ fun MoodChipRow(
 		}
 		items(moods, key = { it.id }) { mood ->
 			FilterChip(
-				modifier = Modifier.animateItem(),
+				modifier = animatedItem(),
 				selected = mood.id == selected,
 				onClick = { onTap(mood.id) },
 				label = { Text(mood.label, maxLines = 1) },

@@ -76,6 +76,7 @@ import app.worbus.ui.components.common.CoverArt
 import app.worbus.ui.components.common.LocalCoverAmbientBottom
 import app.worbus.ui.util.arrive
 import app.worbus.ui.util.rememberArrivalGate
+import app.worbus.ui.util.animatedItem
 
 /**
  * Pick (board RadioPick): the library's artists, the most played first, three to a row, a local
@@ -173,7 +174,7 @@ internal fun PickArtistsStep(
 						picked = isPicked,
 						dimmed = full && !isPicked,
 						onClick = { viewModel.toggle(artist) },
-						modifier = Modifier.arrive(gate, artist.id, index).animateItem()
+						modifier = Modifier.arrive(gate, artist.id, index).then(animatedItem())
 					)
 				}
 			}

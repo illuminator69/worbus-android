@@ -146,6 +146,7 @@ import app.worbus.ui.util.Fold
 import app.worbus.ui.util.withoutTop
 import app.worbus.ui.components.sheets.lbUnavailableRes
 import app.worbus.ui.components.sheets.rememberLbTooOld
+import app.worbus.ui.util.animatedItem
 
 /**
  * The **To fix** section of Library Matches (B-406, the owner's ruling of 2026-11-13). It was the page
@@ -284,13 +285,13 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 		}
 		is AttentionPage.Rows -> {
 			item(key = "fix:head") {
-				AttentionHead(p, Modifier.animateItem())
+				AttentionHead(p, animatedItem())
 			}
 			// Re-walk NM2: only of a list lb-bot answered; a failed read says its one notice alone.
 			if (attentionEmptyShown(p)) {
 				item(key = "fix:empty") {
 					ContentUnavailable(
-						modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp).animateItem(),
+						modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp).then(animatedItem()),
 						icon = Icons.Outlined.Check,
 						label = stringResource(Res.string.attention_empty)
 					)
@@ -302,7 +303,7 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 			val albumRows: LazyListScope.(String, StringResource, List<AttentionRow>) -> Unit = { key, title, rows ->
 				if (rows.isNotEmpty()) {
 					item(key = "fix:$key-header") {
-						GroupHeader(stringResource(title), count = rows.size, modifier = Modifier.animateItem())
+						GroupHeader(stringResource(title), count = rows.size, modifier = animatedItem())
 					}
 					if (uncountedNote) {
 						item(key = "fix:$key-uncounted") {
@@ -310,7 +311,7 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 								stringResource(Res.string.attention_not_counted),
 								style = MaterialTheme.typography.bodySmall,
 								color = MaterialTheme.colorScheme.onSurfaceVariant,
-								modifier = Modifier.padding(start = 4.dp, bottom = 8.dp).animateItem()
+								modifier = Modifier.padding(start = 4.dp, bottom = 8.dp).then(animatedItem())
 							)
 						}
 					}
@@ -327,7 +328,7 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 							onOpenAlbum = { ui.onOpenAlbum(row) },
 							modifier = Modifier
 								.padding(bottom = SegmentedListItemDefaults.SegmentedGap)
-								.animateItem()
+								.then(animatedItem())
 						)
 					}
 				}
@@ -343,7 +344,7 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 						stringResource(Res.string.attention_section_to_file),
 						// B-406: what the rows stand for (lb-bot's imports and folders), not the rows.
 						count = toFixSectionCount(p),
-						modifier = Modifier.animateItem()
+						modifier = animatedItem()
 					)
 				}
 				if (imports != null) {
@@ -354,7 +355,7 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 							onOpen = ui.onOpenUri,
 							modifier = Modifier
 								.padding(bottom = SegmentedListItemDefaults.SegmentedGap)
-								.animateItem()
+								.then(animatedItem())
 						)
 					}
 				}
@@ -369,7 +370,7 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 						onOpenInLbBot = { openLb("place/${folder.id}") },
 						modifier = Modifier
 							.padding(bottom = SegmentedListItemDefaults.SegmentedGap)
-							.animateItem()
+							.then(animatedItem())
 					)
 				}
 			}
@@ -379,7 +380,7 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 				item(key = "fix:open-lb") {
 					TextButton(
 						onClick = { openLb("needs/fix") },
-						modifier = Modifier.padding(top = 8.dp).animateItem()
+						modifier = Modifier.padding(top = 8.dp).then(animatedItem())
 					) {
 						Icon(Icons.Outlined.Link, contentDescription = null, modifier = Modifier.size(18.dp))
 						Text(stringResource(Res.string.action_open_in_lbbot), modifier = Modifier.padding(start = 8.dp))

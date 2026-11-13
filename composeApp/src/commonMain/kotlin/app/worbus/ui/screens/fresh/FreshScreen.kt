@@ -100,6 +100,7 @@ import app.worbus.ui.screens.fresh.viewmodels.FreshSort
 import app.worbus.ui.screens.fresh.viewmodels.FreshType
 import app.worbus.ui.screens.fresh.viewmodels.FreshViewModel
 import app.worbus.ui.screens.fresh.viewmodels.freshKey
+import app.worbus.ui.util.animatedItem
 
 private val WINDOWS = listOf(7, 30, 90)
 
@@ -240,7 +241,7 @@ fun FreshScreen(nested: Boolean = false) {
 							GroupHeader(
 								title = bucketLabel(bucket),
 								count = group.items.size,
-								modifier = Modifier.animateItem()
+								modifier = animatedItem()
 							)
 						}
 					}
@@ -252,7 +253,7 @@ fun FreshScreen(nested: Boolean = false) {
 							release = release,
 							onClick = { open(openKey, release) },
 							onArtistClick = openArtist(backStack, release),
-							modifier = Modifier.animateItem()
+							modifier = animatedItem()
 						)
 					}
 				}

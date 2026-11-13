@@ -103,6 +103,7 @@ import app.worbus.domain.manager.homeMoods
 import app.worbus.domain.manager.queuesFromMood
 import app.worbus.ui.util.Fold
 import app.worbus.ui.viewmodel.RootViewModel
+import app.worbus.ui.util.animatedItem
 
 /** How many tinted boxes a shelf shows while its first read is out. */
 private const val RECENT_PLACEHOLDERS = 5
@@ -296,7 +297,7 @@ fun HomeScreen() {
 			if (chipsVisible) {
 				item(key = "moods") {
 					MoodChipRow(
-						modifier = Modifier.animateItem(),
+						modifier = animatedItem(),
 						moods = homeMoods,
 						selected = selectedMood?.id,
 						onTap = { viewModel.tapMood(it) },
@@ -310,7 +311,7 @@ fun HomeScreen() {
 			// it, and the whole list slid off the bottom of the screen and back (seen on the VM AVD). The pixel is the
 			// Box's: a Fold that is fully hidden lays nothing out, its modifier included.
 			item(key = "mood-body") {
-				Box(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).heightIn(min = onePixel)) {
+				Box(animatedItem(fadeIn = false, fadeOut = false).heightIn(min = onePixel)) {
 				Fold(visible = selectedMood != null, tall = true) {
 					shownMood?.let { mood ->
 						MoodBody(
@@ -337,7 +338,7 @@ fun HomeScreen() {
 
 			if (HomeSection.ContinueListening in sections) {
 				item(key = "continue") {
-					Fold(visible = shelves, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					ContinueListeningPill(
 						modifier = Modifier,
 						queues = continueQueues,
@@ -360,7 +361,7 @@ fun HomeScreen() {
 			// card then pushes the page down there, and further down it unfolds out of sight as before. The
 			// pixel is the Box's: a Fold that is fully hidden lays nothing out, its modifier included.
 			item(key = "index") {
-				Box(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).heightIn(min = onePixel)) {
+				Box(animatedItem(fadeIn = false, fadeOut = false).heightIn(min = onePixel)) {
 					Fold(visible = shelves && HomeSection.IndexProgress in sections) {
 						shownBar?.let { IndexProgressCard(it) }
 					}
@@ -369,7 +370,7 @@ fun HomeScreen() {
 
 			if (showRecent) {
 				item(key = "recent") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, tall = true, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					if (recentAlbums.isNotEmpty()) {
 						albumShelf(
 							Modifier, recentTitle, recentAlbums, RECENT_TAB, 0,
@@ -389,7 +390,7 @@ fun HomeScreen() {
 
 			if (showFresh) {
 				item(key = "fresh") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, tall = true, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					if (fresh.isNotEmpty()) {
 						HomeShelf(
 							modifier = Modifier,
@@ -421,7 +422,7 @@ fun HomeScreen() {
 
 			if (HomeSection.RecentlyPlayed in sections) {
 				item(key = "played") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, tall = true, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					albumShelf(
 						Modifier, playedTitle, played, PLAYED_TAB, laterShelfIndex,
 						Screen.AlbumList(nested = true, listType = DomainAlbumListType.Recent)
@@ -432,7 +433,7 @@ fun HomeScreen() {
 
 			if (HomeSection.FrequentlyPlayed in sections) {
 				item(key = "frequent") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, tall = true, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					albumShelf(
 						Modifier, frequentTitle, frequent, FREQUENT_TAB, laterShelfIndex,
 						Screen.AlbumList(nested = true, listType = DomainAlbumListType.Frequent)
@@ -443,7 +444,7 @@ fun HomeScreen() {
 
 			if (HomeSection.YourMixes in sections) {
 				item(key = "mixes") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, tall = true, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					YourMixesShelf(
 						modifier = Modifier,
 						title = yourMixesTitle,

@@ -99,6 +99,7 @@ import app.worbus.ui.components.layouts.RootBottomBar
 import app.worbus.ui.components.layouts.RootTopBar
 import app.worbus.ui.screens.mixes.viewmodels.MixListViewModel
 import app.worbus.ui.screens.mixes.viewmodels.MixMessage
+import app.worbus.ui.util.animatedItem
 
 /**
  * Mixed for You: the user's saved recipes.
@@ -277,7 +278,7 @@ fun MixListBody(
 					),
 					// Opened, not started (P5 round 2): its page builds it and plays from there.
 					onClick = dropUnlessResumed { backStack.add(Screen.MixDetail(YOUR_MIX_ID)) },
-					modifier = Modifier.animateItem()
+					modifier = animatedItem()
 				)
 			}
 		}
@@ -297,7 +298,7 @@ fun MixListBody(
 				shapes = segmentedShapes(index = index, count = mixes.size),
 				onClick = dropUnlessResumed { backStack.add(Screen.MixDetail(mix.id)) },
 				onMenu = { sheetTarget = mix },
-				modifier = Modifier.animateItem()
+				modifier = animatedItem()
 			)
 		}
 	}

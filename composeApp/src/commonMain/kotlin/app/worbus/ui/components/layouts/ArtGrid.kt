@@ -51,6 +51,7 @@ import app.worbus.ui.components.common.ErrorBox
 import app.worbus.ui.core.UiState
 import app.worbus.ui.util.rememberCoverBoundsTransform
 import app.worbus.ui.util.shimmerLoading
+import app.worbus.ui.util.animatedItem
 
 @Composable
 fun ArtGrid(
@@ -301,7 +302,7 @@ fun <T> LazyGridScope.artGridError(
 ) {
 	item(span = { GridItemSpan(maxLineSpan) }) {
 		ErrorBox(
-			modifier = Modifier.animateItem(fadeInSpec = null),
+			modifier = animatedItem(fadeIn = false),
 			error = state
 		)
 	}

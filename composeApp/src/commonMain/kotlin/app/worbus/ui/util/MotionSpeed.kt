@@ -29,8 +29,10 @@ import app.worbus.domain.manager.PreferenceManager
  * - **Not scaled**, on purpose: what runs for as long as something lasts rather than as a transition (the
  *   marquee, the playing waveform, the loading shimmer, the login progress, the mini player's ring rotation);
  *   the staged queue layer's settle after a drag (it continues the finger) and the play button's 100 ms press
- *   bounce; and the lazy lists' own `animateItem()` springs, which are Compose's defaults and not the motion
- *   scheme's. The system's animator scale still applies on top of all of it, as before.
+ *   bounce. The system's animator scale still applies on top of all of it, as before.
+ * - **The lazy lists' item motion** (`animateItem`: placement and the fades of an item added or removed) is
+ *   Compose's own springs, not the scheme's; since the follow-up of 2026-11-14 every site goes through
+ *   `animatedItem` (`ItemMotion.kt`), the same springs scaled the same way.
  */
 
 /** A fixed time at [speed]: [ms] divided by the speed (on the slider's stops); 1× is [ms] itself. */

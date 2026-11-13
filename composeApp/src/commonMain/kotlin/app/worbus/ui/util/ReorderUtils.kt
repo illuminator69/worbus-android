@@ -324,7 +324,7 @@ inline fun <T> LazyListScope.draggableItemsIndexed(
 			.zIndex(1f)
 			.graphicsLayer { translationY = state.previousItemOffset.value }
 	} else {
-		Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+		animatedItem(fadeIn = false, fadeOut = false)
 	}
 	Box(modifier = draggingModifier) {
 		itemContent(index, item, isDragging)

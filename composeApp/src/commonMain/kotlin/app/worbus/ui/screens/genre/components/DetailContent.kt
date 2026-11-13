@@ -35,6 +35,7 @@ import app.worbus.ui.navigation.Screen
 import app.worbus.ui.screens.album.components.AlbumListScreenGridItem
 import app.worbus.ui.screens.album.components.selectedOr
 import app.worbus.ui.util.withoutTop
+import app.worbus.ui.util.animatedItem
 
 @Composable
 fun GenreDetailScreenContent(
@@ -138,7 +139,7 @@ fun GenreDetailScreenContent(
 			seeAll = true
 		) { album ->
 			AlbumListScreenGridItem(
-				modifier = Modifier.animateItem().width(150.dp),
+				modifier = animatedItem().width(150.dp),
 				tab = "genre",
 				album = album.selectedOr(selectedAlbum),
 				selected = album.id == selectedAlbum?.id,

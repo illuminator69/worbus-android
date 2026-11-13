@@ -97,6 +97,7 @@ import app.worbus.ui.screens.downloads.viewmodels.DownloadCenterItem
 import app.worbus.ui.screens.downloads.viewmodels.DownloadCenterState
 import app.worbus.ui.screens.downloads.viewmodels.DownloadCenterViewModel
 import app.worbus.ui.util.withoutTop
+import app.worbus.ui.util.animatedItem
 
 /**
  * The Downloads page's chips, as they were (I-039). Since P6 the page is this device's downloads
@@ -231,7 +232,7 @@ private fun LazyListScope.deviceSection(
 	// stalled) groups below, with the way to the settings that hold them.
 	if (constrained) {
 		item(key = "constrained") {
-			ConstrainedBanner(onOpenSettings, Modifier.animateItem())
+			ConstrainedBanner(onOpenSettings, animatedItem())
 		}
 	}
 
@@ -367,7 +368,7 @@ private fun LazyListScope.downloadGroup(
 		GroupHeader(
 			title = stringResource(title),
 			count = items.size,
-			modifier = Modifier.animateItem(),
+			modifier = animatedItem(),
 			// The group's size sits with its actions, not in the title: "Downloaded · 77 MB 2"
 			// put the count after the size, and at a large font cut the title short.
 			actions = {
@@ -386,7 +387,7 @@ private fun LazyListScope.downloadGroup(
 	// Keyed by the song: a download that finishes moves from its group to "Downloaded" as the
 	// same row, rather than one vanishing while another appears.
 	itemsIndexed(items, key = { _, item -> item.download.songId }) { index, item ->
-		Box(Modifier.animateItem()) {
+		Box(animatedItem()) {
 			row(item, segmentedShapes(index = index, count = items.size))
 		}
 	}

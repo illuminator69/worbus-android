@@ -177,6 +177,7 @@ import app.worbus.ui.screens.nowPlaying.viewmodels.NowPlayingViewModel
 import app.worbus.ui.util.DraggableListState
 import app.worbus.ui.util.Fold
 import app.worbus.ui.util.rememberDraggableListState
+import app.worbus.ui.util.animatedItem
 
 /** A queue slot with a stable id so reorders animate (see [QueueScreen]). */
 private data class QueueEntry(val uid: Long, val song: DomainSong)
@@ -1225,7 +1226,7 @@ private fun RelatedTab(
 			itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
 				val download = downloadsBySong[song.id]
 				RelatedSongItem(
-					modifier = Modifier.animateItem(),
+					modifier = animatedItem(),
 					index = index,
 					count = songs.size,
 					song = song,

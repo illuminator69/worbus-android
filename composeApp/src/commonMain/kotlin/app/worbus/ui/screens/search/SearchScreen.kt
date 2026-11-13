@@ -140,6 +140,7 @@ import app.worbus.ui.util.Fold
 import app.worbus.ui.util.arrive
 import app.worbus.ui.util.rememberArrivalGate
 import app.worbus.ui.viewmodel.RootViewModel
+import app.worbus.ui.util.animatedItem
 
 /**
  * Search (P3): the one place to find music. With the field empty: recent searches and the browse
@@ -432,7 +433,7 @@ fun SearchScreen(
 						item(span = { GridItemSpan(maxLineSpan) }, key = "offline-outside", contentType = "note") {
 							InfoCard(
 								text = stringResource(Res.string.search_offline_outside),
-								modifier = Modifier.animateItem()
+								modifier = animatedItem()
 							)
 						}
 					}
@@ -445,7 +446,7 @@ fun SearchScreen(
 							checkedBeyond = ui.lbConfigured && externalLookupWanted(ui.query),
 							offerLink = lbBot.isConfigured && lbBot.supportsResolveLink,
 							onAddFromLink = { shell.openAddFromLink() },
-							modifier = Modifier.animateItem()
+							modifier = animatedItem()
 						)
 					}
 					moodRow(clapState, ui.query, onSearch = startMoodSearch, onReprobe = reprobeClap)
@@ -458,7 +459,7 @@ fun SearchScreen(
 							stringResource(Res.string.search_offline_none),
 							style = MaterialTheme.typography.titleMedium,
 							textAlign = TextAlign.Center,
-							modifier = Modifier.animateItem().fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp)
+							modifier = animatedItem().fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp)
 						)
 					}
 				}
@@ -584,13 +585,13 @@ private fun LazyGridScope.historySection(
 	item(span = { GridItemSpan(maxLineSpan) }, key = "history-header", contentType = "header") {
 		SearchSectionHeader(
 			title = stringResource(Res.string.action_search_history),
-			modifier = Modifier.animateItem()
+			modifier = animatedItem()
 		)
 	}
 	history.forEachIndexed { index, historyItem ->
 		item(span = { GridItemSpan(maxLineSpan) }, key = "history:$historyItem", contentType = "history") {
 			SegmentedListItem(
-				modifier = Modifier.animateItem().padding(horizontal = 16.dp, vertical = 1.5.dp),
+				modifier = animatedItem().padding(horizontal = 16.dp, vertical = 1.5.dp),
 				onClick = { onPick(historyItem) },
 				shapes = segmentedShapes(index, history.size),
 				leadingContent = { Icon(Icons.Outlined.History, contentDescription = null) },
@@ -634,7 +635,7 @@ private fun LazyGridScope.librarySection(
 	val count = hits.artists.size + hits.albums.size + hits.songs.size + hits.playlists.size
 	if (count == 0) return
 	item(span = { GridItemSpan(maxLineSpan) }, key = "l-header", contentType = "header") {
-		SearchSectionHeader(title = stringResource(title), modifier = Modifier.animateItem())
+		SearchSectionHeader(title = stringResource(title), modifier = animatedItem())
 	}
 	var index = 0
 	hits.artists.forEach { artist ->
@@ -645,7 +646,7 @@ private fun LazyGridScope.librarySection(
 				artist = artist, index = i, count = count,
 				onClick = dropUnlessResumed { onArtist(artist) },
 				onLongClick = { onArtistMenu(artist) },
-				modifier = Modifier.animateItem().arrive(gate, key, i)
+				modifier = animatedItem().arrive(gate, key, i)
 			)
 		}
 	}
@@ -657,7 +658,7 @@ private fun LazyGridScope.librarySection(
 				album = album, index = i, count = count,
 				onClick = dropUnlessResumed { onAlbum(album) },
 				onLongClick = { onAlbumMenu(album) },
-				modifier = Modifier.animateItem().arrive(gate, key, i)
+				modifier = animatedItem().arrive(gate, key, i)
 			)
 		}
 	}
@@ -674,8 +675,7 @@ private fun LazyGridScope.librarySection(
 			}
 			val shapes = segmentedShapes(i, count, dismissDirection = dismissState.dismissDirection)
 			SwipeToDismissBox(
-				modifier = Modifier
-					.animateItem()
+				modifier = animatedItem()
 					.arrive(gate, key, i)
 					.padding(horizontal = 16.dp, vertical = 1.5.dp),
 				state = dismissState,
@@ -720,7 +720,7 @@ private fun LazyGridScope.librarySection(
 				playlist = playlist, index = i, count = count,
 				onClick = dropUnlessResumed { onPlaylist(playlist) },
 				onLongClick = { onPlaylistMenu(playlist) },
-				modifier = Modifier.animateItem().arrive(gate, key, i)
+				modifier = animatedItem().arrive(gate, key, i)
 			)
 		}
 	}
@@ -740,7 +740,7 @@ private fun LazyGridScope.moodRow(
 	if (clapState == ClapAvailability.NOT_CONFIGURED) return
 	item(span = { GridItemSpan(maxLineSpan) }, key = "mood", contentType = "mood") {
 		SegmentedListItem(
-			modifier = Modifier.animateItem().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 1.5.dp),
+			modifier = animatedItem().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 1.5.dp),
 			onClick = { if (clapState.usable) onSearch(query) else onReprobe() },
 			shapes = segmentedShapes(0, 1),
 			leadingContent = {
@@ -775,8 +775,7 @@ private fun LazyGridScope.moodRow(
 private fun LazyGridScope.offlineBanner() {
 	item(span = { GridItemSpan(maxLineSpan) }, key = "offline-banner", contentType = "note") {
 		Row(
-			modifier = Modifier
-				.animateItem()
+			modifier = animatedItem()
 				.fillMaxWidth()
 				.padding(horizontal = 16.dp, vertical = 8.dp)
 				.clip(MaterialTheme.shapes.medium)
