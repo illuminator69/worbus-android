@@ -62,4 +62,18 @@ class HomeAnimateItemPlacementTest {
 			assertTrue("animateItem(" !in body, "$item: animateItem below the root is inert")
 		}
 	}
+
+	/*
+	 * B-410 (the owner's walk, 2026-11-13; reproduced on the VM AVD): Home with no Worbus Server has no mood
+	 * chips, so the folded mood body is the list's FIRST item, and folded shut it was 0 px tall. A hard fling
+	 * up then ran past it: the whole list slid off the bottom of the screen and came back (38 frames of an
+	 * empty page). Every item that can be first is a root Box at least one pixel tall, as the index card's.
+	 */
+	@Test
+	fun theFirstItemWithoutMoodChipsIsNeverZeroPixelsTall() {
+		val m = Regex("""item\(key = "mood-body"\) \{\s*Box\(""").find(text)
+		assertTrue(m != null, "the mood body's item is not a root Box")
+		val args = span(m.range.last)
+		assertTrue("heightIn(min = onePixel)" in args, "the mood body's item can be 0 px tall: $args")
+	}
 }

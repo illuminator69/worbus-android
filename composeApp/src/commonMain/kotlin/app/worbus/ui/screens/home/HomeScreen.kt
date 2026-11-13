@@ -303,8 +303,13 @@ fun HomeScreen() {
 				}
 			}
 
+			// B-410: never 0 px tall, for the "index" item's reason below. With no mood chips (no Worbus Server) this
+			// is the list's first item, and folded shut it laid out nothing: a hard fling up to the top then ran past
+			// it, and the whole list slid off the bottom of the screen and back (seen on the VM AVD). The pixel is the
+			// Box's: a Fold that is fully hidden lays nothing out, its modifier included.
 			item(key = "mood-body") {
-				Fold(visible = selectedMood != null, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+				Box(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).heightIn(min = onePixel)) {
+				Fold(visible = selectedMood != null, tall = true) {
 					shownMood?.let { mood ->
 						MoodBody(
 							mood = mood,
@@ -324,6 +329,7 @@ fun HomeScreen() {
 							onMenu = { menuQueue = it }
 						)
 					}
+				}
 				}
 			}
 
