@@ -1,5 +1,6 @@
 package app.worbus.ui.components.common
 
+import app.worbus.ui.util.motionMs
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -111,7 +112,7 @@ fun AlphabeticalScroller(
 			shown = false
 		}
 	}
-	val alpha by animateFloatAsState(if (shown) 1f else 0f, tween(if (shown) 120 else 300), label = "scrollerAlpha")
+	val alpha by animateFloatAsState(if (shown) 1f else 0f, tween(motionMs(if (shown) 120 else 300)), label = "scrollerAlpha")
 	// A list that fits on screen has nothing to scroll through.
 	if (total == 0 || (!state.canScrollForward && !state.canScrollBackward)) return
 

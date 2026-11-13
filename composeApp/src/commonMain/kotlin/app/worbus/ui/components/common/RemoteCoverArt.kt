@@ -1,5 +1,6 @@
 package app.worbus.ui.components.common
 
+import app.worbus.ui.util.motionMs
 import app.worbus.ui.util.COVER_FADE_MS
 import app.worbus.ui.util.crossfadeMsFor
 import app.worbus.ui.util.rememberReducedMotion
@@ -58,7 +59,7 @@ fun RemoteCoverArt(
 	val resolvedShape = shape ?: preferenceManager.coverArtShape.shape
 	val coilPlatformContext = LocalCoilPlatformContext.current
 
-	val fadeMs = crossfadeMsFor(rememberReducedMotion(), crossfadeMs)
+	val fadeMs = crossfadeMsFor(rememberReducedMotion(), motionMs(crossfadeMs))
 	val model = remember(url, fadeMs) {
 		ImageRequest.Builder(coilPlatformContext)
 			.data(url)

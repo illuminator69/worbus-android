@@ -117,14 +117,17 @@ fun Modifier.arrive(gate: ArrivalGate, key: Any, index: Int): Modifier {
 		gate.claim(key) && scope.coroutineContext[MotionDurationScale]?.scaleFactor != 0f
 	}
 	val progress = remember(gate, key) { Animatable(if (plays) 0f else 1f) }
+	// I-075 review L4: the arrival and its stagger follow the animation speed, as a page's times do.
+	val arrivalMs = motionMs(ARRIVAL_MS)
+	val delayMs = motionMs(arrivalDelayMs(index))
 	if (plays) {
 		LaunchedEffect(gate, key) {
 			val scale = coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f
 			if (scale == 0f) {
 				progress.snapTo(1f)
 			} else {
-				delay((arrivalDelayMs(index) * scale).roundToLong())
-				progress.animateTo(1f, tween(ARRIVAL_MS, easing = ArrivalEasing))
+				delay((delayMs * scale).roundToLong())
+				progress.animateTo(1f, tween(arrivalMs, easing = ArrivalEasing))
 			}
 		}
 	}

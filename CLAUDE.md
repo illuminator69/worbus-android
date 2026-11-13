@@ -445,7 +445,7 @@ rest; the phone's complaints were about what happens between states. These read 
   f.bin` gives raw RGB frames, one per screen change, each after a 20-byte header (`<IIIII`: ?,
   width, height, stride, bytes per pixel). In-between frames prove an animation; a single odd frame
   is a glitch. Follow an element by matching its own pixels from frame to frame.
-- **Transitions on debug:** the first frame of a pushed page outlasts the 450 ms SharedXAxis, so no
+- **Transitions on debug:** the first frame of a pushed page outlasts the page change (500 ms under Expressive), so no
   in-between frame is drawn in either orientation. Record with `settings put global
   animator_duration_scale 10`, then set it back to 1.
 - **Audio:** loop `dumpsys media.audio_flinger` on the device and read the app's active track: id,
@@ -2305,16 +2305,22 @@ true of invented *album art*, and not of an icon naming the kind.
   locks the order). Every duration is a field of `PageMotion` (`ui/util/PageMotion.kt`, no Compose
   imports), and every site reads it through `PreferenceManager.pageMotion()`: the style's table at the
   **animation speed** (`motionSpeed`, 0.5× to 2× by quarters, Appearance › Motion; `atSpeed` scales every
-  time and delay, never a distance or a curve; a spring stays a spring). I-075 (the owner, 2026-11-13):
+  time and delay, never a distance or a curve). Since review L4 the speed reaches the rest of the motion too
+  (`ui/util/MotionSpeed.kt`): fixed times (tile arrival and its stagger, the colour washes, cover fades, the Library
+  chips' cross-fade) through `motionMs`, and the motion scheme's springs (every component, every fold under Expressive
+  and Standard) through `MotionScheme.atSpeed`, stiffness × speed², the same shape in 1 / speed of the time; what is
+  not scaled is listed at the top of that file. The slider is read as "1×" (`stateDescription`), its ends say Slower
+  and Faster (2× is faster, unlike Android's developer animation scale). I-075 (the owner, 2026-11-13):
   `QuickPageMotion` is the page motion Expressive had at `4b592a4e` (B-378/B-403/B-404's numbers) with
-  Quick's own sheets and folds; `DefaultPageMotion` (Expressive and Standard) is back to `bd39384d`'s speed
+  Quick's own sheets and folds, and its slide and fade at 300 ms (review M2, the owner's "make it 300": fades 0-105
+  out, 105-300 in); `DefaultPageMotion` (Expressive and Standard) is back to `bd39384d`'s speed
   (every slide 500 ms on Emphasized, a tab ~330 ms) with those rounds' structure kept: staggered fades,
   one back animation, no fade into or out of a cover page, Settings' slide.
   Components keep `MotionScheme.expressive()` under Quick (`Theme.kt`; `standard()` is the
-  one-line alternative).
+  one-line alternative), at the animation speed.
   Page pushes and pops: `NavDisplay`'s `transitionSpec` / `popTransitionSpec` in `App.kt` read
   the style inside the lambda and build `Material3Transitions.enter` / `exit` / `popEnter` /
-  `popExit(motion)`; the old `SharedXAxis*` vals are the same specs at the default timing.
+  `popExit(motion)` (the old fixed-timing `SharedXAxis*` vals were unused and are gone).
   The cover's shared-element flight: the three sites (`ArtGrid`, the collection heading, the
   image viewer) take `rememberCoverBoundsTransform()`, so the cover lands with the page. A new
   shared-element cover goes through it too, never a hard-coded `tween(500)`.

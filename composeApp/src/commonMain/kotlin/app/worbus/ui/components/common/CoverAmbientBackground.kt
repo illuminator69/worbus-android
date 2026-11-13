@@ -1,5 +1,6 @@
 package app.worbus.ui.components.common
 
+import app.worbus.ui.util.motionMs
 import androidx.compose.runtime.LaunchedEffect
 import app.worbus.ui.util.AmbientColorHolder
 import app.worbus.ui.util.WASH_MS
@@ -70,7 +71,7 @@ fun CoverAmbientBackground(
 	 */
 	artworkScrim: Brush? = null
 ) {
-	val animatedSeed = animateColorAsState(seed, animationSpec = tween(WASH_MS))
+	val animatedSeed = animateColorAsState(seed, animationSpec = tween(motionMs(WASH_MS)))
 	val tuning = washTuning(isDark)
 	val scrim = remember(isDark, artworkScrim) {
 		artworkScrim.takeIf { isDark } ?: SolidColor(tuning.artScrimColor.copy(alpha = tuning.artScrimAlpha))

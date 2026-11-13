@@ -1,5 +1,6 @@
 package app.worbus.ui.components.common
 
+import app.worbus.ui.util.motionMs
 import app.worbus.ui.util.COVER_FADE_MS
 import app.worbus.ui.util.crossfadeMsFor
 import app.worbus.ui.util.rememberReducedMotion
@@ -111,7 +112,7 @@ fun CoverArt(
 	}
 
 	// Coil times its cross-fade on the wall clock: under reduced motion the cover is just there (L1-03).
-	val fadeMs = crossfadeMsFor(rememberReducedMotion(), crossfadeMs)
+	val fadeMs = crossfadeMsFor(rememberReducedMotion(), motionMs(crossfadeMs))
 	// No headers here (B-363): the loader's one client adds the user's custom headers to every request
 	// toward Navidrome (`imageHttpClient`), this one and MiniPlayer's, the washes' and the notification's.
 	val model = remember(coverArtId, fadeMs) {

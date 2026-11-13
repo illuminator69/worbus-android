@@ -24,7 +24,9 @@ import app.worbus.domain.manager.PreferenceManager
  *
  * Its motion follows the animation style (I-042), as the rest of the app does: the springs of the
  * motion scheme `NavicTheme` sets for the style (Expressive's, Standard's) and, under Quick, the short
- * times of `PageMotion.foldMs`. It was a fixed 300 ms tween while the pill sat among components that
+ * times of `PageMotion.foldMs`. Both follow the animation speed (I-075 review L4): Quick's times divided by
+ * it, the scheme's springs stiffened by its square (`MotionSpeed.kt`), so a fold is twice as quick at 2×
+ * under every preset. It was a fixed 300 ms tween while the pill sat among components that
  * follow the style, which is what made it look as if it did not belong.
  */
 
@@ -43,7 +45,11 @@ class FoldMotion internal constructor(private val ms: Int?, private val scheme: 
 /** [tall]: a block that holds a list, which moves further than a few lines do. */
 @Composable
 fun rememberFoldMotion(tall: Boolean = false): FoldMotion {
-	val ms = foldMs(koinInject<PreferenceManager>().pageMotion(), tall)
+	// Review L8: the table is built once per style and speed, not on every composition of every row's fold.
+	val prefs = koinInject<PreferenceManager>()
+	val style = prefs.animationStyle
+	val speed = prefs.motionSpeed
+	val ms = remember(style, speed, tall) { foldMs(pageMotionOf(style, speed), tall) }
 	val scheme = MaterialTheme.motionScheme
 	return remember(ms, scheme) { FoldMotion(ms, scheme) }
 }

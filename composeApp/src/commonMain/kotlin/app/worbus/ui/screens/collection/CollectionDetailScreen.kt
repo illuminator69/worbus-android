@@ -1,5 +1,6 @@
 package app.worbus.ui.screens.collection
 
+import app.worbus.ui.util.motionMs
 import app.worbus.data.database.entities.bySongId
 import app.worbus.ui.util.WASH_MS
 import app.worbus.ui.screens.collection.components.GapBox
@@ -245,7 +246,7 @@ fun CollectionDetailScreen(
 	val onAmbient = onAmbientColor(stableTop, coverColors.scheme)
 	// The BACKGROUND wash eases between songs; kept as a State and read in the draw phase
 	// (drawWithCache, below), so per-frame updates never recompose the content tree.
-	val animatedSeed = animateColorAsState(coverColors.seed, animationSpec = tween(WASH_MS))
+	val animatedSeed = animateColorAsState(coverColors.seed, animationSpec = tween(motionMs(WASH_MS)))
 		// Status-bar icons follow the (cover-driven) page brightness.
 		ForceSystemBars(coverColors.isDark)
 

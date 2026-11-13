@@ -1,5 +1,6 @@
 package app.worbus.ui.screens.library
 
+import app.worbus.ui.util.motionMs
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -211,9 +212,11 @@ fun LibraryScreen() {
 			}
 		) { inner ->
 			val connection = scrollBehavior.nestedScrollConnection
+			// I-075 review L4: at the animation speed.
+			val chipFadeMs = motionMs(CHIP_FADE_MS)
 			AnimatedContent(
 				targetState = chip,
-				transitionSpec = { fadeIn(tween(CHIP_FADE_MS)) togetherWith fadeOut(tween(CHIP_FADE_MS)) },
+				transitionSpec = { fadeIn(tween(chipFadeMs)) togetherWith fadeOut(tween(chipFadeMs)) },
 				label = "libraryChip"
 			) { shown ->
 				when (shown) {

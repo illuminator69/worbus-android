@@ -182,7 +182,9 @@
 	<string name="option_animation_style_standard">Standard</string>
 	<string name="option_animation_style_quick">Quick</string>
 	<string name="option_animation_speed">Animation speed</string>
-	<string name="subtitle_animation_speed">Pages, tabs and sheets, faster or slower than the style</string>
+	<string name="subtitle_animation_speed">How fast every animation runs in the style: 2× is twice as fast, 0.5× half as fast</string>
+	<string name="animation_speed_slower">Slower</string>
+	<string name="animation_speed_faster">Faster</string>
 	<string name="option_quality_low">Low</string>
 	<string name="option_quality_medium">Medium</string>
 	<string name="option_quality_high">High</string>

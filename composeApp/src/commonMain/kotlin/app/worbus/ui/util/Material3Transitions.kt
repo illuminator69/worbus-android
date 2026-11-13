@@ -135,14 +135,6 @@ object Material3Transitions {
 		)
 	}
 
-	val SharedXAxisEnterTransition: (Density) -> EnterTransition = enter(DefaultPageMotion)
-
-	val SharedXAxisPopEnterTransition: (Density) -> EnterTransition = popEnter(DefaultPageMotion)
-
-	val SharedXAxisExitTransition: (Density) -> ExitTransition = exit(DefaultPageMotion)
-
-	val SharedXAxisPopExitTransition: (Density) -> ExitTransition = popExit(DefaultPageMotion)
-
 	private fun pageEnter(motion: PageMotion, density: Density, sign: Int): EnterTransition {
 		val easing = motion.enterEasing.curve()
 		// B-378: the fade waits for the outgoing page's to end (pageFadeWindows); the slide does not.

@@ -15,6 +15,7 @@ import com.kyant.capsule.ContinuousRoundedRectangle
 import org.koin.compose.koinInject
 import app.worbus.domain.manager.PreferenceManager
 import app.worbus.domain.models.settings.AnimationStyle
+import app.worbus.ui.util.atSpeed
 
 /**
  * Built once, not per composition.
@@ -46,14 +47,16 @@ fun NavicTheme(
 	val preferenceManager = koinInject<PreferenceManager>()
 	val chosenTheme = preferenceManager.theme
 	val chosenScheme = chosenTheme.colorScheme()
-	val motionScheme = remember(preferenceManager.animationStyle) {
+	// I-075 review L4: the components' springs follow the animation speed too (`MotionSpeed.kt`: stiffness
+	// times the speed squared, so the same shape in 1 / speed of the time).
+	val motionScheme = remember(preferenceManager.animationStyle, preferenceManager.motionSpeed) {
 		when (preferenceManager.animationStyle) {
 			AnimationStyle.Expressive -> MotionScheme.expressive()
 			AnimationStyle.Standard -> MotionScheme.standard()
 			// navi-connect I-042: Quick changes page, cover and sheet timing only (PageMotion.kt);
 			// components keep the Expressive springs. `standard()` here if they read as bouncy.
 			AnimationStyle.Quick -> MotionScheme.expressive()
-		}
+		}.atSpeed(preferenceManager.motionSpeed)
 	}
 	// When a cover scheme is supplied, also drive the default content colour from
 	// it. MaterialExpressiveTheme only sets the colorScheme, not LocalContentColor,

@@ -31,6 +31,8 @@ import worbus.composeapp.generated.resources.option_alphabetical_scroll
 import worbus.composeapp.generated.resources.option_animation_style
 import worbus.composeapp.generated.resources.option_animation_speed
 import worbus.composeapp.generated.resources.subtitle_animation_speed
+import worbus.composeapp.generated.resources.animation_speed_slower
+import worbus.composeapp.generated.resources.animation_speed_faster
 import app.worbus.ui.util.MOTION_SPEED_MAX
 import app.worbus.ui.util.MOTION_SPEED_MIN
 import app.worbus.ui.util.MOTION_SPEED_STEPS
@@ -275,13 +277,18 @@ fun SettingsAppearanceScreen() {
 						label = { stringResource(it.displayName) },
 						shapes = SegmentedListItemDefaults.segmentedShapes(index = 0, count = 3)
 					)
-					// I-075 (the owner, 2026-11-13): the style's page, tab and sheet times at a speed, 0.5× to 2×.
+					// I-075 (the owner, 2026-11-13): every animation of the style at a speed, 0.5× to 2× (review L4).
+					// Review L5: said as "1×", its ends named, and 2× is faster (unlike Android's developer
+					// "Animation scale", where 2× is slower), which the subtitle says too.
 					SettingsSliderItem(
 						value = motionSpeedOf(preferenceManager.motionSpeed),
 						valueRange = MOTION_SPEED_MIN..MOTION_SPEED_MAX,
 						steps = MOTION_SPEED_STEPS,
 						onValueChange = { preferenceManager.motionSpeed = motionSpeedOf(it) },
 						trailingContent = { Text(motionSpeedLabel(preferenceManager.motionSpeed)) },
+						stateDescription = motionSpeedLabel(preferenceManager.motionSpeed),
+						startLabel = stringResource(Res.string.animation_speed_slower),
+						endLabel = stringResource(Res.string.animation_speed_faster),
 						content = {
 							Column {
 								Text(stringResource(Res.string.option_animation_speed))

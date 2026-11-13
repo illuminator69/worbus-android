@@ -1,5 +1,6 @@
 package app.worbus.ui.components.layouts
 
+import app.worbus.ui.util.motionMs
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -63,7 +64,7 @@ fun RootBottomBar(
 	// already deferred correctly into its `graphicsLayer` lambdas; this was the one that leaked.
 	val shadowFadeProgress = animateFloatAsState(
 		targetValue = if (scrolled || !shadows) 0f else 1f,
-		animationSpec = tween(durationMillis = 600)
+		animationSpec = tween(durationMillis = motionMs(600))
 	)
 	// The page's own bottom colour when there is a cover ambient (see [LocalCoverAmbientBottom]);
 	// `surface` only as the last resort, for screens that paint themselves plainly.
