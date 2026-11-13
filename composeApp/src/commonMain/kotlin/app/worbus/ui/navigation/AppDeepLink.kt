@@ -26,7 +26,8 @@ object AppDeepLink {
 	 * otherwise have to pull in navigation3 just to spell the destination.
 	 */
 	fun requestAlbum(albumId: String) {
-		_pending.value = Screen.CollectionDetail(albumId, "")
+		// B-404 review M2: no cover from outside the app; `App` reads Room's before it opens the page.
+		_pending.value = Screen.CollectionDetail(albumId, "", coverArtId = null)
 	}
 
 	fun consume() {

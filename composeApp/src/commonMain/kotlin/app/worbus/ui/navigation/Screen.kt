@@ -131,6 +131,12 @@ sealed interface Screen : NavKey {
 		 * B-404: the cover of the tile or row that opened the page, when the opener knew it. The page
 		 * wears its colours from its first frame (the seed store is read in composition) instead of
 		 * waiting for Room to give it the album, which slid the page in neutral and recoloured it after.
+		 *
+		 * Review M2: every construction names it (`AlbumKeysCarryTheCoverTest`): the row's cover, a song's
+		 * (its file's art, which is the album's image except on an album with art per track), or Room's
+		 * through `AlbumPageOpener` for an opener that holds only the id. Null is "no cover known", and the
+		 * page then takes no bridge from the page it was opened from. The default is for saved back
+		 * stacks of the old shape only.
 		 */
 		val coverArtId: String? = null
 	) : Screen
@@ -219,7 +225,17 @@ sealed interface Screen : NavKey {
 	data object Wishlist : Screen
 	@Immutable
 	@Serializable
-	data class ArtistDetail(val artist: String) : Screen
+	data class ArtistDetail(
+		val artist: String,
+		/**
+		 * B-404 review L7: the artist's image when the opener holds the artist (a list, search, similar
+		 * artists, Library Matches): the page wears its colours from the first frame, and an artist with
+		 * no photo (Navidrome's generic avatar) is the plain page from the first frame instead of the
+		 * colour it was opened from. Null: the opener does not know it (a song's or an album's artist id).
+		 * A default, so a saved back stack of the old shape still decodes.
+		 */
+		val coverArtId: String? = null
+	) : Screen
 
 	/**
 	 * The custom radio (P5): pick artists, tune the feel, Done saves it under Mixes and starts it.

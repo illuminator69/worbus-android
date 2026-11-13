@@ -180,7 +180,8 @@ fun LibraryMatchesScreen(
 
 	val openArtist: (String) -> (() -> Unit)? = { id ->
 		// Only a link when Room has the artist: an id is not a page that exists.
-		if (heldInLibrary(id, artistArt)) ({ backStack.add(Screen.ArtistDetail(id)) }) else null
+		// B-404 review L7: with the image Room holds for it.
+		if (heldInLibrary(id, artistArt)) ({ backStack.add(Screen.ArtistDetail(id, coverArtId = artistArt[id])) }) else null
 	}
 
 	val preferenceManager = koinInject<PreferenceManager>()
@@ -337,7 +338,7 @@ fun LibraryMatchesScreen(
 							title = albumRowTitle(row),
 							// A state this build has never heard of is not put into words: no line.
 							lines = listOf(row.releaseMbid, albumRowDetail(row)) + albumRowProblems(row),
-							onOpen = if (held) ({ backStack.add(Screen.CollectionDetail(row.albumId, "library")) }) else null,
+							onOpen = if (held) ({ backStack.add(Screen.CollectionDetail(row.albumId, "library", coverArtId = albumArt[row.albumId])) }) else null,
 							actions = {
 								OutlinedButton(
 									// At rest, nothing of this page's out, and no job the manager

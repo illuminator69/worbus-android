@@ -103,6 +103,8 @@ import app.worbus.ui.components.layouts.ArtCarouselItem
 import app.worbus.ui.components.layouts.RootBottomBar
 import app.worbus.ui.theme.NavicTheme
 import app.worbus.ui.util.AmbientColorHolder
+import app.worbus.ui.util.publishedSeed
+import app.worbus.ui.util.pageCoverArtId
 import app.worbus.di.ForceSystemBars
 import app.worbus.ui.util.coverAmbientGradient
 import app.worbus.ui.util.onAmbientColor
@@ -135,7 +137,9 @@ internal fun artistSheetOffersFillGaps(hasGap: Boolean, downloads: LbDownloads):
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ArtistDetailScreen(
-	artistId: String
+	artistId: String,
+	/** B-404 review L7: the artist's image when the opener held it ([Screen.ArtistDetail.coverArtId]). */
+	openedCoverArtId: String? = null
 ) {
 	val preferenceManager = koinInject<PreferenceManager>()
 
@@ -243,15 +247,18 @@ fun ArtistDetailScreen(
 	val initialSeed = remember { ambientHolder.last }
 	val initialDark = remember { ambientHolder.lastDark }
 	// B-404: until Room has given the artist, the page wears the colours of the page it came from, not
-	// the neutral surface it then recoloured from.
+	// the neutral surface it then recoloured from. Review L7: unless the opener held the artist and named
+	// its image: then that is the page's from the first frame (the seed store answers in composition), and
+	// Navidrome's generic avatar is the plain page from the first frame (rule 3), with no bridge.
+	val artistRead = artistState.data != null || artistState !is UiState.Loading
 	val coverColors = rememberCoverColorScheme(
-		artistState.data?.artist?.coverArtId,
+		pageCoverArtId(artistRead, artistState.data?.artist?.coverArtId, openedCoverArtId),
 		isDark = appIsDark,
 		initialSeed = initialSeed,
-		coverPending = artistState is UiState.Loading && artistState.data == null,
+		coverPending = !artistRead && openedCoverArtId == null,
 		initialDark = initialDark
 	)
-	LaunchedEffect(coverColors.seed, coverColors.isDark) { ambientHolder.publish(coverColors.seed, coverColors.isDark) }
+	LaunchedEffect(coverColors.seed, coverColors.isDark, coverColors.wears) { ambientHolder.publish(coverColors.publishedSeed(), coverColors.isDark) }
 	// STABLE (per-artist) ambient colours drive the theme, the containers and the text colour —
 	// so the crossfade below never re-derives the scheme or flips LocalContentColor per frame.
 	// Same split as CollectionDetailScreen.
@@ -587,7 +594,7 @@ fun ArtistDetailScreen(
 									),
 									contentDescription = null,
 									onClick = dropUnlessResumed {
-										backStack.add(Screen.ArtistDetail(artist.id))
+										backStack.add(Screen.ArtistDetail(artist.id, coverArtId = artist.coverArtId))
 									}
 								)
 							}

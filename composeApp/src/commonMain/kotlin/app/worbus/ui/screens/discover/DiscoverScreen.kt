@@ -218,7 +218,7 @@ fun DiscoverScreen(nested: Boolean = false) {
 			// scanned however much of them the user owns.
 			when (val target = viewModel.resolveBrowseAlbum(album)) {
 				is BrowseTarget.Library ->
-					backStack.add(Screen.CollectionDetail(target.albumId, "discover"))
+					backStack.add(Screen.CollectionDetail(target.albumId, "discover", coverArtId = target.coverArtId))
 
 				is BrowseTarget.External -> backStack.add(
 					Screen.ExternalAlbum(
@@ -449,7 +449,7 @@ fun DiscoverScreen(nested: Boolean = false) {
 								onSelect = { viewModel.openPlaylistSheet(playlist.playlistId) },
 								onClick = {
 									backStack.add(
-										Screen.CollectionDetail(playlist.playlistId, "discover")
+										Screen.CollectionDetail(playlist.playlistId, "discover", coverArtId = playlist.coverArtId)
 									)
 								}
 							)
@@ -477,7 +477,7 @@ fun DiscoverScreen(nested: Boolean = false) {
 								onSelect = { viewModel.openPlaylistSheet(playlist.playlistId) },
 								onClick = {
 									backStack.add(
-										Screen.CollectionDetail(playlist.playlistId, "discover")
+										Screen.CollectionDetail(playlist.playlistId, "discover", coverArtId = playlist.coverArtId)
 									)
 								}
 							)

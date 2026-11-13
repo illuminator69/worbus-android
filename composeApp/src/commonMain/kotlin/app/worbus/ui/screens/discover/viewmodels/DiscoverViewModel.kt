@@ -83,8 +83,8 @@ data class DiscoverArtist(
  * an owned album came to open a download page.
  */
 sealed interface BrowseTarget {
-	/** The library's own album. */
-	data class Library(val albumId: String) : BrowseTarget
+	/** The library's own album, with its cover as Room holds it (B-404 review M2). */
+	data class Library(val albumId: String, val coverArtId: String? = null) : BrowseTarget
 
 	/** A release-group the library does not hold. */
 	data class External(val rgid: String) : BrowseTarget

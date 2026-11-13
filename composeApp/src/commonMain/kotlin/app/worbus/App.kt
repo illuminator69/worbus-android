@@ -348,10 +348,22 @@ fun App() {
 	// there is a signed-in session to show it in — a cold start from the widget composes this
 	// before the session restores, and pushing the album over the login screen would strand it.
 	val deepLink by AppDeepLink.pending.collectAsStateWithLifecycle()
+	val deepLinkOpener = koinInject<app.worbus.ui.navigation.AlbumPageOpener>()
+	val deepLinkAmbient = koinInject<app.worbus.ui.util.AmbientColorHolder>()
 	LaunchedEffect(deepLink, isLoggedIn) {
-		val target = deepLink ?: return@LaunchedEffect
+		val asked = deepLink ?: return@LaunchedEffect
 		if (!isLoggedIn) return@LaunchedEffect
-		if (backStack.lastOrNull() != target) backStack.add(target)
+		// B-404 review M2: the album's cover as Room holds it (the widget names the album only). A link
+		// comes from outside the app, so the page under it is not a page it was opened from: no bridge
+		// from it. With no cover known the album is the plain page until its record names one.
+		val target = (asked as? Screen.CollectionDetail)
+			?.let { it.copy(coverArtId = it.coverArtId ?: deepLinkOpener.coverFor(it.collectionId)) }
+			?: asked
+		deepLinkAmbient.publish(null, null)
+		val top = backStack.lastOrNull()
+		val alreadyThere = top == target ||
+			(top is Screen.CollectionDetail && target is Screen.CollectionDetail && top.collectionId == target.collectionId)
+		if (!alreadyThere) backStack.add(target)
 		AppDeepLink.consume()
 	}
 
@@ -681,7 +693,7 @@ private fun entryProvider(
 			Washed { SavedQueuesScreen() }
 		}
 		entry<Screen.ArtistDetail>(metadata = coverPage) { key ->
-			ArtistDetailScreen(key.artist)
+			ArtistDetailScreen(key.artist, key.coverArtId)
 		}
 
 		// P5: the custom radio's two steps, washed like the pages it is opened over.

@@ -115,7 +115,9 @@ fun NowPlayingInfoRow(
 							val isSameAlbum = lastScreen is Screen.CollectionDetail &&
 								lastScreen.collectionId == albumId
 
-							if (!isSameAlbum) backStack.add(Screen.CollectionDetail(albumId, ""))
+							// B-404 review M2: the song's cover, which the player wears now: the album opens
+							// in its colours, not the page under the player's.
+							if (!isSameAlbum) backStack.add(Screen.CollectionDetail(albumId, "", coverArtId = song.coverArtId))
 						}
 					}),
 					style = MaterialTheme.typography.bodyLarge

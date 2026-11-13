@@ -198,7 +198,8 @@ fun SongRow(
 					backStack.add(
 						Screen.CollectionDetail(
 							collectionId = albumId,
-							tab = "library"
+							tab = "library",
+							coverArtId = song.coverArtId
 						)
 					)
 				}

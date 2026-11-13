@@ -831,7 +831,7 @@ internal fun QueueContent(layout: QueueLayout) {
 			}?.let { now -> { radioManager.startJourney(now.id, selected.id) } },
 			onTrackInfo = dropUnlessResumed { leaveQueueFor(Screen.SongDetailSheet(selected.id)) },
 			onViewAlbum = selected.albumId?.let { albumId ->
-				dropUnlessResumed { leaveQueueFor(Screen.CollectionDetail(albumId, "library")) }
+				dropUnlessResumed { leaveQueueFor(Screen.CollectionDetail(albumId, "library", coverArtId = selected.coverArtId)) }
 			},
 			onViewArtist = dropUnlessResumed {
 				leaveQueueFor(Screen.ArtistDetail(selected.artistId))

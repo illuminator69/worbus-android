@@ -101,6 +101,7 @@ import app.worbus.ui.theme.NavicTheme
 import app.worbus.di.ForceSystemBars
 import app.worbus.di.isLandscape
 import app.worbus.ui.util.AmbientColorHolder
+import app.worbus.ui.util.publishedSeed
 import app.worbus.ui.util.coverAmbientGradient
 import app.worbus.ui.util.onAmbientColor
 import app.worbus.ui.util.rememberCoverColorScheme
@@ -217,15 +218,19 @@ fun CollectionDetailScreen(
 	// the opener knew stands until then (the seed store answers it in composition), and while neither is
 	// known the page wears the colours of the page it came from: it used to slide in on the neutral
 	// surface and recolour once the album was read, "a flash of the background before the album's colour".
+	//
+	// Review M2: every opener names the cover now (the row's, a song's, or Room's through
+	// `AlbumPageOpener`), so a key with none means none is known: the page is the plain surface until its
+	// record names one, never the colour of the page it was opened from (it slid in wearing that colour
+	// and recoloured, the same flash in another colour). The bridge stays for a cover being fetched.
 	val recordRead = collection != null || collectionState !is UiState.Loading
 	val coverColors = rememberCoverColorScheme(
 		pageCoverArtId(recordRead, collection?.coverArtId, openedCoverArtId),
 		isDark = appIsDark,
 		initialSeed = initialSeed,
-		coverPending = !recordRead,
 		initialDark = initialDark
 	)
-	LaunchedEffect(coverColors.seed, coverColors.isDark) { ambientHolder.publish(coverColors.seed, coverColors.isDark) }
+	LaunchedEffect(coverColors.seed, coverColors.isDark, coverColors.wears) { ambientHolder.publish(coverColors.publishedSeed(), coverColors.isDark) }
 	// The seed is always valid (neutral surface until extraction completes), so
 	// easing toward the real cover colour gives a smooth Apple-Music-style bleed-in
 	// with no late colour pop — background + hero fade ease together off `animatedSeed`.
@@ -262,6 +267,7 @@ fun CollectionDetailScreen(
 	val snackBarManager = koinInject<SnackBarManager>()
 	val scope = rememberCoroutineScope()
 	val backStack = LocalNavStack.current
+	val albumOpener = koinInject<app.worbus.ui.navigation.AlbumPageOpener>()
 	var hasRules by remember(collection?.id) { mutableStateOf(false) }
 	// An album-mode playlist is an ordinary playlist on the server, so Navidrome
 	// correctly answers that it has no rules — its recipe is stored locally. Checked
@@ -364,8 +370,11 @@ fun CollectionDetailScreen(
 			AlbumLeave.Stay -> Unit
 			AlbumLeave.Reread -> viewModel.refreshCollection(true)
 			// Room holds the album under its new id: the manager pulled it before saying so.
-			is AlbumLeave.ToAlbum ->
-				if (index >= 0) backStack[index] = Screen.CollectionDetail(leave.albumId, tab)
+			// B-404 review M2: with its cover under the new id, from the same Room.
+			is AlbumLeave.ToAlbum -> {
+				val cover = albumOpener.coverFor(leave.albumId)
+				if (index >= 0) backStack[index] = Screen.CollectionDetail(leave.albumId, tab, coverArtId = cover)
+			}
 			is AlbumLeave.ToArtist -> if (index >= 0) {
 				// Opened from the artist's own page: leaving this one is already there.
 				val beneath = (backStack.getOrNull(index - 1) as? Screen.ArtistDetail)?.artist

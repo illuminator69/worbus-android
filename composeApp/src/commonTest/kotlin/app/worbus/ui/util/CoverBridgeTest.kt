@@ -55,4 +55,40 @@ class CoverBridgeTest {
 		assertNull(h.last)
 		assertNull(h.lastDark, "a plain page: no colour, and no brightness to bridge")
 	}
+
+	/*
+	 * B-404 review M1: the bridge held for good on a page whose cover fetch had FAILED (a Cover Art Archive
+	 * 404, a page opened offline): `coverToFetch` stayed true, so an unowned album with no front image wore
+	 * the colour of the page it was opened from, and published it as its own.
+	 */
+	@Test
+	fun aCoverWhoseFetchFailedIsNothingOnItsWay() {
+		assertFalse(
+			coverBridgeHolds(true, false, true, coverToFetch = true, coverPending = false, fetchFailed = true),
+			"the fetch failed: the plain page, not the page it came from"
+		)
+		assertFalse(coverBridgeHolds(true, false, true, coverToFetch = true, coverPending = true, fetchFailed = true))
+		assertTrue(coverBridgeHolds(true, false, true, coverToFetch = true, coverPending = false, fetchFailed = false), "still fetching: the bridge")
+	}
+
+	/*
+	 * B-404 review L5: the cover pages published their seed whether or not they wore it, and an unresolved
+	 * page's seed is the app's surface: the next page bridged from a tinted near-white (rule 1).
+	 */
+	@Test
+	fun aPagePublishesOnlyAColourItWears() {
+		fun colors(resolved: Boolean, wears: Boolean, themed: Boolean = true) = CoverColors(
+			scheme = androidx.compose.material3.lightColorScheme(),
+			seed = androidx.compose.ui.graphics.Color.Red,
+			dominant = androidx.compose.ui.graphics.Color.Red,
+			isDark = false,
+			resolved = resolved,
+			wears = wears,
+			themed = themed
+		)
+		assertEquals(androidx.compose.ui.graphics.Color.Red, colors(resolved = true, wears = true).publishedSeed())
+		assertEquals(androidx.compose.ui.graphics.Color.Red, colors(resolved = false, wears = true).publishedSeed(), "the bridge it shows")
+		assertNull(colors(resolved = false, wears = false).publishedSeed(), "unresolved, no bridge: the surface is no colour")
+		assertNull(colors(resolved = true, wears = true, themed = false).publishedSeed(), "theming off")
+	}
 }

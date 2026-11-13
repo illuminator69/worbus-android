@@ -196,15 +196,16 @@ fun rememberToFixUi(snackbar: SnackbarHostState): ToFixUi {
 	LaunchedEffect(Unit) { actions.actionMessages.collect { snackbar.showSnackbar(it) } }
 	LaunchedEffect(Unit) { viewModel.refresh() }
 
+	// B-404 review M2: lb-bot's rows name the album, not its cover: Room's, read by the opener.
+	val openLibraryAlbum = app.worbus.ui.navigation.rememberAlbumPageOpener()
 	val openAlbum: (AttentionRow) -> Unit = { row ->
 		val a = row.album
 		when {
 			// A gap is an album the library partly has: its own page, with the gaps box open.
-			a.kind == "gap" && a.albumId.isNotBlank() ->
-				backStack.add(Screen.CollectionDetail(a.albumId, "attention", openGaps = true))
+			a.kind == "gap" && a.albumId.isNotBlank() -> openLibraryAlbum(a.albumId, "attention", true)
 			a.rgid.isNotBlank() ->
 				backStack.add(Screen.ExternalAlbum(rgid = a.rgid, artistName = a.artist, title = a.album))
-			a.albumId.isNotBlank() -> backStack.add(Screen.CollectionDetail(a.albumId, "attention"))
+			a.albumId.isNotBlank() -> openLibraryAlbum(a.albumId, "attention", false)
 			else -> Unit
 		}
 	}

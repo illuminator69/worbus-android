@@ -1611,7 +1611,11 @@ Nine rules, each of which is a bug that shipped:
    glyph otherwise answers "this artist is grey" for every artist without a picture. Likewise
    `AmbientColorHolder`'s `initialSeed` is honoured only while a fetch is actually pending — with
    no art to fetch, nothing ever replaces it and the artist page kept the colour of whatever album
-   you arrived from.
+   you arrived from. A fetch that has failed is not pending either (`coverBridgeHolds`' `fetchFailed`,
+   B-404 review M1: an unowned album with no Cover Art Archive image wore the page it was opened from
+   for good), and a page publishes for the next one only a colour it wears (`publishedSeed`, L5).
+   Every album key names its cover (`AlbumKeysCarryTheCoverTest`; an id alone goes through
+   `AlbumPageOpener`, which reads Room's), so an album key with none is "no cover known": no bridge.
 4. **A genuinely achromatic image gives an achromatic page, on purpose.** A white-silhouette artist
    photo resolving `dominant #f0f0f0, vivid null` is the artwork, not a fault; the greyscale-family
    rule in `dominantByColorFamily` is what keeps a black-and-white *sleeve* neutral.

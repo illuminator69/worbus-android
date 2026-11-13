@@ -30,7 +30,7 @@ class BrowseResolver(
 	suspend fun resolve(album: LbBrowseAlbum): BrowseTarget? {
 		// 1. lb-bot already knows. Cheapest and most authoritative.
 		if (album.releaseOwned && album.releaseAlbumId.isNotBlank()) {
-			return BrowseTarget.Library(album.releaseAlbumId)
+			return library(album.releaseAlbumId)
 		}
 
 		// 2. THE LOCAL LIBRARY, before anything on the network.
@@ -42,7 +42,7 @@ class BrowseResolver(
 		// whole library and can answer "do I have this" exactly, for free, offline.
 		// This is why a Deezer tile for an album sitting on disk opened a download
 		// page captioned "Not in your library".
-		localAlbumFor(album.artist, album.title)?.let { return BrowseTarget.Library(it) }
+		localAlbumFor(album.artist, album.title)?.let { return library(it) }
 
 		// 3. lb-bot resolved the row by name against its index.
 		if (album.rgid.isNotBlank()) return BrowseTarget.External(album.rgid)
@@ -78,10 +78,14 @@ class BrowseResolver(
 
 		val best = bestBrowseCandidate(candidates, artist, title) ?: return null
 		if (best.releaseOwned && best.releaseAlbumId.isNotBlank()) {
-			return BrowseTarget.Library(best.releaseAlbumId)
+			return library(best.releaseAlbumId)
 		}
 		return best.rgid.ifBlank { null }?.let { BrowseTarget.External(it) }
 	}
+
+	/** B-404 review M2: the library's album, with its cover from Room so its page opens in its colours. */
+	private suspend fun library(albumId: String): BrowseTarget.Library =
+		BrowseTarget.Library(albumId, runCatching { albumDao.getAlbumCoverArtId(albumId) }.getOrNull())
 
 	/**
 	 * The library's own album id for an artist + title, or null.

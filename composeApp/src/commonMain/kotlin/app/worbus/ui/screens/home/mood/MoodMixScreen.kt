@@ -247,7 +247,7 @@ fun MoodMixScreen(moodId: String, variantId: String) {
 			onAddToQueue = { player.addToQueueSingle(song) },
 			onTrackInfo = dropUnlessResumed { backStack.add(Screen.SongDetailScreen(song.id, song.coverArtId)) },
 			onViewAlbum = song.albumId?.let { albumId ->
-				dropUnlessResumed { backStack.add(Screen.CollectionDetail(albumId, "mood")) }
+				dropUnlessResumed { backStack.add(Screen.CollectionDetail(albumId, "mood", coverArtId = song.coverArtId)) }
 			},
 			onAddToPlaylist = { addingToPlaylist = song },
 		)

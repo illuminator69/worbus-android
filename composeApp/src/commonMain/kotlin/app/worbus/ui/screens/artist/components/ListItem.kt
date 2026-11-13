@@ -60,7 +60,7 @@ fun ArtistListScreenListItem(
 			art = { LibraryRowCover(artist.coverArtId, artist.name, artist = true) },
 			onClick = dropUnlessResumed {
 				scope.launch {
-					backStack.add(Screen.ArtistDetail(artist.id))
+					backStack.add(Screen.ArtistDetail(artist.id, coverArtId = artist.coverArtId))
 				}
 			},
 			onLongClick = onSelect

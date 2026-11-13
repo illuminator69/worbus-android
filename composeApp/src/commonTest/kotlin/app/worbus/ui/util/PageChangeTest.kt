@@ -99,12 +99,21 @@ class CoverSceneTest {
 		assertEquals(PageChange.CoverSlide, pageChangeOf(pageKindOfScene(listOf(cover)), pageKindOfScene(listOf(cover))))
 	}
 
+	/*
+	 * B-404 review L6: in landscape (two panes on a phone too) the album beside its list -> the artist page ran
+	 * the 500 ms slide and fade while artist -> album ran the album slide: the fade-through between album and
+	 * artist the owner had ruled out. To and from a one-pane page it is the album slide, as in portrait; two
+	 * two-pane scenes keep the slide and fade (the list pane is a list on both sides).
+	 */
 	@Test
-	fun aListBesideACoverPageKeepsTheSlideAndFade() {
+	fun aListBesideACoverPageTakesTheAlbumSlideToAndFromAOnePanePage() {
 		val twoPane = pageKindOfScene(listOf(list, cover))
 		assertEquals(PageKind.Panes, twoPane)
-		assertEquals(PageChange.SharedAxis, pageChangeOf(twoPane, pageKindOfScene(listOf(cover))))
-		assertEquals(PageChange.SharedAxis, pageChangeOf(pageKindOfScene(listOf(list)), twoPane))
+		assertEquals(PageChange.CoverSlide, pageChangeOf(twoPane, pageKindOfScene(listOf(cover))), "album beside Home -> artist page")
+		assertEquals(PageChange.CoverSlide, pageChangeOf(pageKindOfScene(listOf(cover)), twoPane), "and Back")
+		assertEquals(PageChange.CoverSlide, pageChangeOf(twoPane, pageKindOfScene(listOf(list))), "album beside Home -> a list page")
+		assertEquals(PageChange.SharedAxis, pageChangeOf(twoPane, twoPane), "two two-pane scenes")
+		assertEquals(PageChange.Slide, pageChangeOf(twoPane, PageKind.Settings), "Settings' rule first")
 		assertEquals(PageKind.Settings, pageKindOfScene(listOf(list, pageKindMetadata(PageKind.Settings))), "Settings' two panes still slide")
 	}
 }

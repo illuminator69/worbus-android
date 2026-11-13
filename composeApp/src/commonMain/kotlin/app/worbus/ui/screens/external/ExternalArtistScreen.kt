@@ -103,6 +103,7 @@ fun ExternalArtistScreen(artistMbid: String, name: String) {
 		parameters = { parametersOf(artistMbid, name) }
 	)
 	val backStack = LocalNavStack.current
+	val openKey = app.worbus.ui.navigation.rememberKeyOpener()
 	val discography by viewModel.discography.collectAsStateWithLifecycle()
 	val artistName by viewModel.name.collectAsStateWithLifecycle()
 	val loading by viewModel.loading.collectAsStateWithLifecycle()
@@ -215,9 +216,10 @@ fun ExternalArtistScreen(artistMbid: String, name: String) {
 								// the shape a completed fill leaves behind once lb-bot has
 								// resolved the album ids its placement path could not write.
 								val ownedAlbumId = release.navidromeAlbumIds.firstOrNull()
-								backStack.add(
+								openKey(
 									if (!ownedAlbumId.isNullOrBlank()) {
-										Screen.CollectionDetail(ownedAlbumId, "artist")
+										// B-404 review M2: Room's cover, read by the opener.
+										Screen.CollectionDetail(ownedAlbumId, "artist", coverArtId = null)
 									} else {
 										Screen.ExternalAlbum(
 											rgid = release.rgid,

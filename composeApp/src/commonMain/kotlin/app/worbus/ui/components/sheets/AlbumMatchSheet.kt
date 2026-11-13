@@ -217,6 +217,7 @@ fun AlbumMatchSheet(
 	val artistName = target.artistName
 	val coverArtId = target.coverArtId
 	val backStack = LocalNavStack.current
+	val openKey = app.worbus.ui.navigation.rememberKeyOpener()
 	val lbBot = koinInject<LbBotManager>()
 	val scope = rememberCoroutineScope()
 	val title = stringResource(Res.string.action_fix_album_match)
@@ -492,7 +493,8 @@ fun AlbumMatchSheet(
 	fun openAlbum(newAlbumId: String) {
 		onDismissRequest()
 		val onTop = (backStack.lastOrNull() as? Screen.CollectionDetail)?.collectionId
-		if (onTop != newAlbumId) backStack.add(Screen.CollectionDetail(newAlbumId, "library"))
+		// B-404 review M2: Room's cover for the new id, read by the opener.
+		if (onTop != newAlbumId) openKey(Screen.CollectionDetail(newAlbumId, "library", coverArtId = null))
 	}
 
 	ModalBottomSheet(

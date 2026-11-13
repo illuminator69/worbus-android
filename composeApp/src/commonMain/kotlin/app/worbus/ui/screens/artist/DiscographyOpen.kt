@@ -21,6 +21,8 @@ import app.worbus.ui.screens.artist.viewmodels.DiscographySection
 @Composable
 fun rememberDiscographyOpener(viewModel: ArtistDetailViewModel, artistId: String): (DiscographyEntry) -> Unit {
 	val backStack = LocalNavStack.current
+	// B-404 review M2: a pending-sync row names an album id only; its cover is Room's.
+	val openLibraryAlbum = app.worbus.ui.navigation.rememberAlbumPageOpener()
 	val artistMbid by viewModel.artistMbid.collectAsStateWithLifecycle()
 	val artistState by viewModel.artistState.collectAsStateWithLifecycle()
 	val openRelease: (DiscographyEntry) -> Unit = { entry ->
@@ -41,7 +43,7 @@ fun rememberDiscographyOpener(viewModel: ArtistDetailViewModel, artistId: String
 			entry.album != null -> backStack.add(Screen.CollectionDetail(entry.album.id, "artist", coverArtId = entry.album.coverArtId))
 			entry.pendingSync -> {
 				val albumId = viewModel.openPendingSync(entry)
-				if (albumId != null) backStack.add(Screen.CollectionDetail(albumId, "artist"))
+				if (albumId != null) openLibraryAlbum(albumId, "artist", false)
 				else openRelease(entry)
 			}
 			entry.release != null -> openRelease(entry)

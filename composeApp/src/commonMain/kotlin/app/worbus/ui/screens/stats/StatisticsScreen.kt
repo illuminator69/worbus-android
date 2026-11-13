@@ -259,7 +259,7 @@ fun StatisticsScreen(
 					TopArtistItem(
 						stats = stats,
 						ratio = stats.playCount / maxPlays,
-						onClick = { backStack.add(Screen.ArtistDetail(stats.artist.id)) },
+						onClick = { backStack.add(Screen.ArtistDetail(stats.artist.id, coverArtId = stats.artist.coverArtId)) },
 						onLongClick = { selectedArtist = stats.artist }
 					)
 				}

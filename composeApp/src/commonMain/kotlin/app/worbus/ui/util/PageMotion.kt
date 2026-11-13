@@ -117,8 +117,10 @@ enum class PageKind {
 	Cover,
 
 	/**
-	 * Review m4: a scene of more than one pane with a cover page on top (a tablet's list beside an album).
-	 * Never the album slide: it would carry the list pane off with the album.
+	 * Review m4: a scene of more than one pane with a cover page on top (a tablet's or a landscape phone's
+	 * list beside an album). Between two such scenes the slide and fade, since a whole-width slide would
+	 * carry a list pane off that is the list on both sides; into or out of a one-pane page it is the album
+	 * slide (B-404 review L6), as in portrait.
 	 */
 	Panes,
 	Other
@@ -150,13 +152,21 @@ enum class PageChange {
  * left neither page drawn for a moment. The owner: "inconsistent behavior which should never happen";
  * everywhere the album slide runs it takes the artist page's speed and the discography's easing. So every
  * change into or out of a cover page, whatever the other page is, is one motion, [PageChange.CoverSlide]:
- * no fade, so no backdrop between the two pages. Settings keeps its own slide (B-403 passed), and a
- * tablet's two panes keep the slide and fade (review m4).
+ * no fade, so no backdrop between the two pages. Settings keeps its own slide (B-403 passed).
+ *
+ * B-404 review L6: in landscape (a phone gets two panes too, CLAUDE.md §7) the album beside its list
+ * ([PageKind.Panes]) going to an artist page ran the 500 ms slide and fade, while the artist page going to
+ * an album ran the album slide: the fade-through between album and artist the owner had ruled out. A
+ * change between a two-pane cover scene and a one-pane page is the album slide too: the whole scene leaves
+ * either way, list pane included, as Home does in portrait. Two two-pane scenes keep the slide and fade
+ * (review m4: the list pane is a list on both sides). Opening an album BESIDE its list is no page change
+ * at all: one scene, whose detail pane takes the list-detail scaffold's own pane motion while the list
+ * stays where it is, which a whole-width slide of both pages cannot do.
  */
 fun pageChangeOf(from: PageKind, to: PageKind): PageChange = when {
 	from == PageKind.Settings || to == PageKind.Settings -> PageChange.Slide
-	from == PageKind.Panes || to == PageKind.Panes -> PageChange.SharedAxis
-	from == PageKind.Cover || to == PageKind.Cover -> PageChange.CoverSlide
+	from == PageKind.Panes && to == PageKind.Panes -> PageChange.SharedAxis
+	from == PageKind.Cover || to == PageKind.Cover || from == PageKind.Panes || to == PageKind.Panes -> PageChange.CoverSlide
 	else -> PageChange.SharedAxis
 }
 

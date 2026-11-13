@@ -139,6 +139,8 @@ fun HomeScreen() {
 	}
 
 	val backStack = LocalNavStack.current
+	// B-404 review M2: a library album lb-bot names opens with Room's cover.
+	val openKey = app.worbus.ui.navigation.rememberKeyOpener()
 	val player = koinInject<MediaPlayerViewModel>()
 	val gate = rememberArrivalGate()
 
@@ -402,7 +404,7 @@ fun HomeScreen() {
 							HomeFreshTile(
 								tile = tile,
 								modifier = arrival,
-								onClick = dropUnlessResumed { freshTarget(tile)?.let { backStack.add(it) } }
+								onClick = dropUnlessResumed { freshTarget(tile)?.let(openKey) }
 							)
 						}
 					} else {

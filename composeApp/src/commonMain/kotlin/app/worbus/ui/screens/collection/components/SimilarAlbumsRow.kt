@@ -93,7 +93,7 @@ fun LazyListScope.collectionDetailScreenSimilarAlbumsRow(
 				onClick = dropUnlessResumed {
 					backStack.add(
 						if (row.albumId.isNotBlank()) {
-							Screen.CollectionDetail(row.albumId, "similar")
+							Screen.CollectionDetail(row.albumId, "similar", coverArtId = album?.coverArtId)
 						} else {
 							Screen.ExternalAlbum(
 								rgid = row.rgid,

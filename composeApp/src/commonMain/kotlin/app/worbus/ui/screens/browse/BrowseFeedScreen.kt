@@ -97,7 +97,7 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 	val open: (LbBrowseAlbum) -> Unit = { album ->
 		scope.launch {
 			when (val target = viewModel.resolve(album)) {
-				is BrowseTarget.Library -> backStack.add(Screen.CollectionDetail(target.albumId, "browse"))
+				is BrowseTarget.Library -> backStack.add(Screen.CollectionDetail(target.albumId, "browse", coverArtId = target.coverArtId))
 				is BrowseTarget.External -> backStack.add(
 					Screen.ExternalAlbum(rgid = target.rgid, artistName = album.artist, title = album.title)
 				)

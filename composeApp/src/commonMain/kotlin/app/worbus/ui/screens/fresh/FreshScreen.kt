@@ -130,6 +130,8 @@ fun FreshScreen(nested: Boolean = false) {
 	val preferenceManager = koinInject<PreferenceManager>()
 	val platformContext = LocalPlatformContext.current
 	val backStack = LocalNavStack.current
+	// B-404 review M2: a library album lb-bot names opens with Room's cover.
+	val openKey = app.worbus.ui.navigation.rememberKeyOpener()
 	val state by viewModel.state.collectAsStateWithLifecycle()
 	val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 	// Every visit, not only the ViewModel's first: a root tab keeps it for the process. A Room
@@ -248,7 +250,7 @@ fun FreshScreen(nested: Boolean = false) {
 					) { release ->
 						FreshTile(
 							release = release,
-							onClick = { open(backStack, release) },
+							onClick = { open(openKey, release) },
 							onArtistClick = openArtist(backStack, release),
 							modifier = Modifier.animateItem()
 						)
@@ -285,7 +287,7 @@ fun FreshScreen(nested: Boolean = false) {
  * artist the library *does* have, because owning the artist says nothing about
  * owning this album, and that is the whole set this screen exists for.
  */
-private fun open(backStack: MutableList<NavKey>, release: LbFreshRelease) {
+private fun open(push: (NavKey) -> Unit, release: LbFreshRelease) {
 	// The rule is `freshAlbumTarget`'s, shared with Home's Fresh shelf.
 	freshAlbumTarget(
 		albumId = release.releaseAlbumId,
@@ -294,7 +296,7 @@ private fun open(backStack: MutableList<NavKey>, release: LbFreshRelease) {
 		artistName = release.artist,
 		title = release.releaseName,
 		artistId = if (release.artistOwned) release.artistId else ""
-	)?.let { backStack.add(it) }
+	)?.let(push)
 }
 
 /**

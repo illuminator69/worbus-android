@@ -25,7 +25,9 @@ internal fun freshAlbumTarget(
 	title: String,
 	artistId: String
 ): NavKey? {
-	if (albumId.isNotBlank()) return Screen.CollectionDetail(albumId, "")
+	// B-404 review M2: lb-bot names no Navidrome cover; the callers open it through `rememberKeyOpener`,
+	// which reads the album's cover from Room first.
+	if (albumId.isNotBlank()) return Screen.CollectionDetail(albumId, "", coverArtId = null)
 	if (rgid.isBlank()) return null
 	return Screen.ExternalAlbum(
 		rgid = rgid,

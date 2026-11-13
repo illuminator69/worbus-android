@@ -123,6 +123,7 @@ import app.worbus.ui.util.onAmbientColor
 import app.worbus.ui.util.rememberAppIsDark
 import app.worbus.ui.util.rememberCoverColorScheme
 import app.worbus.ui.util.AmbientColorHolder
+import app.worbus.ui.util.publishedSeed
 
 /**
  * A release the library does not have: its tracklist, and the way to get it.
@@ -184,6 +185,9 @@ fun ExternalAlbumScreen(
 	val scope = rememberCoroutineScope()
 	// The fills this device knows of; the box reads its own row out of them by release-group.
 	val ledger by lbBot.ledger.collectAsState()
+	// B-404 review M2: the library album this release turned out to be opens with Room's cover.
+	val albumOpener = koinInject<app.worbus.ui.navigation.AlbumPageOpener>()
+	val openAlbum = app.worbus.ui.navigation.rememberAlbumPageOpener()
 	val downloads by lbBot.downloads.collectAsState()
 	val downloadsAccess by lbBot.downloadsAccess.collectAsState()
 
@@ -195,7 +199,9 @@ fun ExternalAlbumScreen(
 	LaunchedEffect(state.ownedAlbumId) {
 		state.ownedAlbumId?.let { albumId ->
 			val index = backStack.indexOfLast { (it as? Screen.ExternalAlbum)?.rgid == rgid }
-			if (index >= 0) backStack[index] = Screen.CollectionDetail(albumId, "artist")
+			// B-404 review M2: with the album's cover, as Room holds it.
+			val cover = albumOpener.coverFor(albumId)
+			if (index >= 0) backStack[index] = Screen.CollectionDetail(albumId, "artist", coverArtId = cover)
 		}
 	}
 
@@ -236,8 +242,9 @@ fun ExternalAlbumScreen(
 	//
 	// Seeded from the Cover Art Archive URL, because an unowned release has no
 	// Navidrome cover id — that is what `paletteUrl` exists for. If the art does
-	// not resolve, `themed` stays false and the page is the app's own surface: an
-	// unresolved cover is an absence, not a colour, and must never be fabricated.
+	// not resolve, `wears` is false and the page is the app's own surface: an
+	// unresolved cover is an absence, not a colour, and must never be fabricated
+	// (B-404 review M1: nor borrowed for good from the page it was opened from).
 	val appIsDark = rememberAppIsDark()
 	// B-404: while the sleeve's colours are being read, the page wears the colours of the page it came
 	// from (it drew the neutral surface and recoloured), and publishes its own for the next page.
@@ -251,15 +258,15 @@ fun ExternalAlbumScreen(
 		initialSeed = initialSeed,
 		initialDark = initialDark
 	)
-	LaunchedEffect(coverColors.seed, coverColors.isDark, coverColors.themed) {
-		ambientHolder.publish(coverColors.seed.takeIf { coverColors.themed }, coverColors.isDark)
+	LaunchedEffect(coverColors.seed, coverColors.isDark, coverColors.wears) {
+		ambientHolder.publish(coverColors.publishedSeed(), coverColors.isDark)
 	}
 	val (washTop, _) = coverAmbientGradient(coverColors.seed, coverColors.isDark)
-	val ambientTop = if (coverColors.themed) washTop else MaterialTheme.colorScheme.surface
+	val ambientTop = if (coverColors.wears) washTop else MaterialTheme.colorScheme.surface
 	ForceSystemBars(coverColors.isDark)
 	NavicTheme(coverColors.scheme, contentColor = onAmbientColor(ambientTop, coverColors.scheme)) {
 	Box(Modifier.fillMaxSize()) {
-	if (coverColors.themed) {
+	if (coverColors.wears) {
 		// `coverArtId = null`, so this is the gradient wash WITHOUT the blurred
 		// artwork layer behind it: `BlendBackground` draws through Coil from a
 		// Navidrome cover id, and this release has none. The colour is still
@@ -280,7 +287,7 @@ fun ExternalAlbumScreen(
 	val platformContext = LocalPlatformContext.current
 	val tracks = state.tracklist?.tracks.orEmpty()
 	Scaffold(
-		containerColor = if (coverColors.themed) Color.Transparent else ambientTop,
+		containerColor = if (coverColors.wears) Color.Transparent else ambientTop,
 		topBar = {
 			// The album page's bar: transparent over the cover card, the page's surface once
 			// the list has scrolled under it.
@@ -343,7 +350,7 @@ fun ExternalAlbumScreen(
 					onRequest = viewModel::request,
 					onQuality = viewModel::setQuality,
 					onAction = viewModel::fillAction,
-					onOpenAlbum = { albumId -> backStack.add(Screen.CollectionDetail(albumId, "artist")) },
+					onOpenAlbum = { albumId -> openAlbum(albumId, "artist", false) },
 					// A stage of another height (a tall source list giving way to a short request)
 					// left the box above the view with the page on the tracklist (seen on the AVD).
 					// When the box's top is scrolled off, it is brought back as it changes.

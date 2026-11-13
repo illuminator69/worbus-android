@@ -120,6 +120,7 @@ import app.worbus.ui.screens.playlist.dialogs.PlaylistUpdateDialog
 import app.worbus.ui.theme.NavicTheme
 import app.worbus.ui.theme.defaultFont
 import app.worbus.ui.util.AmbientColorHolder
+import app.worbus.ui.util.publishedSeed
 import app.worbus.ui.util.coverAmbientGradient
 import app.worbus.ui.util.onAmbientColor
 import app.worbus.ui.util.rememberCoverColorScheme
@@ -188,7 +189,7 @@ fun MixDetailScreen(mixId: String) {
 	val initialSeed = remember { ambientHolder.last }
 	val cover = mix?.coverArtId?.ifBlank { null }
 	val coverColors = rememberCoverColorScheme(cover, isDark = appIsDark, initialSeed = initialSeed)
-	LaunchedEffect(coverColors.seed, coverColors.isDark) { ambientHolder.publish(coverColors.seed, coverColors.isDark) }
+	LaunchedEffect(coverColors.seed, coverColors.isDark, coverColors.wears) { ambientHolder.publish(coverColors.publishedSeed(), coverColors.isDark) }
 	val (washTop, washBottom) = coverAmbientGradient(coverColors.seed, coverColors.isDark)
 	val themed = coverColors.themed && cover != null
 	val stableTop = if (themed) washTop else MaterialTheme.colorScheme.surface
@@ -399,7 +400,7 @@ fun MixDetailScreen(mixId: String) {
 			onAddToQueue = { player.addToQueueSingle(song) },
 			onTrackInfo = dropUnlessResumed { backStack.add(Screen.SongDetailScreen(song.id, song.coverArtId)) },
 			onViewAlbum = song.albumId?.let { albumId ->
-				dropUnlessResumed { backStack.add(Screen.CollectionDetail(albumId, "mix")) }
+				dropUnlessResumed { backStack.add(Screen.CollectionDetail(albumId, "mix", coverArtId = song.coverArtId)) }
 			},
 			onAddToPlaylist = { addingToPlaylist = song },
 		)

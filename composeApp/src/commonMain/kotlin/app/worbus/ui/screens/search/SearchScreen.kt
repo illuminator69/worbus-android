@@ -194,6 +194,8 @@ fun SearchScreen(
 	val lbBot = koinInject<LbBotManager>()
 	val shell = koinInject<ShellController>()
 	val backStack = LocalNavStack.current
+	// B-404 review M2: a library album only lb-bot names opens with Room's cover.
+	val openKey = app.worbus.ui.navigation.rememberKeyOpener()
 	val gate = rememberArrivalGate()
 
 	var selectedCategory by rememberSaveable { mutableStateOf(SearchCategory.ALL) }
@@ -374,7 +376,7 @@ fun SearchScreen(
 							song.explicitStatus == DomainExplicitStatus.Explicit &&
 								preferenceManager.explicitContentPlayback.skipsExplicit()
 						},
-						onArtist = { backStack.add(Screen.ArtistDetail(it.id)) },
+						onArtist = { backStack.add(Screen.ArtistDetail(it.id, coverArtId = it.coverArtId)) },
 						onArtistMenu = { artistListViewModel.selectArtist(it) },
 						onAlbum = { backStack.add(Screen.CollectionDetail(it.id, "search", coverArtId = it.coverArtId)) },
 						onAlbumMenu = { albumListViewModel.selectAlbum(it) },
@@ -412,9 +414,9 @@ fun SearchScreen(
 								// An owned release-group opens the LIBRARY album: the external page's
 								// redirect cannot fire for an album lb-bot filled itself until the
 								// backfill resolves its Navidrome ids.
-								backStack.add(
+								openKey(
 									if (candidate.releaseAlbumId.isNotBlank()) {
-										Screen.CollectionDetail(candidate.releaseAlbumId, "search")
+										Screen.CollectionDetail(candidate.releaseAlbumId, "search", coverArtId = null)
 									} else {
 										Screen.ExternalAlbum(
 											rgid = candidate.rgid,
@@ -493,7 +495,7 @@ fun SearchScreen(
 			},
 			onViewAlbum = song.albumId?.let { albumId ->
 				dropUnlessResumed {
-					backStack.add(Screen.CollectionDetail(collectionId = albumId, tab = "search"))
+					backStack.add(Screen.CollectionDetail(collectionId = albumId, tab = "search", coverArtId = song.coverArtId))
 				}
 			},
 			starred = selectedSongIsStarred,

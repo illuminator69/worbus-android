@@ -290,7 +290,7 @@ fun ListeningStats(
 	val syncLine by viewModel.syncLine.collectAsStateWithLifecycle()
 	val syncing by viewModel.syncing.collectAsStateWithLifecycle()
 	val backStack = LocalNavStack.current
-	val open: (ListeningTarget) -> Unit = { target -> openTarget(backStack, target) }
+	val open: (ListeningTarget) -> Unit = { target -> openTarget(backStack, target, state.albumArt) }
 
 	// Poll the status only while an import runs and only while this screen is started: the
 	// block is cancelled when another screen covers it or the app goes to the background, and
@@ -322,7 +322,7 @@ fun ListeningStats(
 			onStartRadio = { radioManager.startRadio(menu.song) },
 			onTrackInfo = { backStack.add(Screen.SongDetailSheet(menu.song.id)) },
 			onViewAlbum = menu.song.albumId?.let { albumId ->
-				{ backStack.add(Screen.CollectionDetail(albumId, "library")) }
+				{ backStack.add(Screen.CollectionDetail(albumId, "library", coverArtId = menu.song.coverArtId)) }
 			}
 		)
 		is HistoryMenuUi.Album -> CollectionSheet(
@@ -437,9 +437,11 @@ fun ListeningTabs(
 }
 
 /** Where a row leads. [ListeningTarget.None] rows are not clickable and never reach this. */
-private fun openTarget(backStack: MutableList<NavKey>, target: ListeningTarget) {
+private fun openTarget(backStack: MutableList<NavKey>, target: ListeningTarget, albumArt: Map<String, String?>) {
 	when (target) {
-		is ListeningTarget.LibraryAlbum -> backStack.add(Screen.CollectionDetail(target.albumId, ""))
+		// B-404 review M2: the page's own Room read of the rows' covers ([ListeningUi.albumArt]).
+		is ListeningTarget.LibraryAlbum ->
+			backStack.add(Screen.CollectionDetail(target.albumId, "", coverArtId = albumArt[target.albumId]))
 		is ListeningTarget.ExternalAlbum -> backStack.add(
 			Screen.ExternalAlbum(
 				rgid = target.rgid,

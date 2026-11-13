@@ -171,14 +171,28 @@ internal fun coverSeedFetchOf(derived: CoverSeeds?): CoverSeedFetch =
  * has not named its cover yet ([coverPending]). With nothing on its way nothing would ever replace the
  * bridge, and an artist with no picture sat for good in the colour of the album it was opened from
  * (rule 3 of the colour engine).
+ *
+ * B-404 review M1: a cover whose fetch has failed ([fetchFailed]: `fetchFailedFor == paletteKey`, a Cover
+ * Art Archive 404, a page opened offline) is nothing on its way either. The bridge held on such a page for
+ * as long as it lived, so an unowned album with no front image wore the colour of the page it was opened
+ * from, and passed it on as its own.
  */
 internal fun coverBridgeHolds(
 	themingOn: Boolean,
 	resolved: Boolean,
 	hasInitialSeed: Boolean,
 	coverToFetch: Boolean,
-	coverPending: Boolean
-): Boolean = themingOn && !resolved && hasInitialSeed && (coverToFetch || coverPending)
+	coverPending: Boolean,
+	fetchFailed: Boolean = false
+): Boolean = themingOn && !resolved && hasInitialSeed && !fetchFailed && (coverToFetch || coverPending)
+
+/**
+ * B-404 review L5: the colour a page tells the next page it wears ([AmbientColorHolder.publish]): its seed
+ * while it actually wears one (its own cover's, resolved, or the bridge it shows while its cover is on its
+ * way), else none. An unresolved page's seed is the app's surface, and a page that published it made the
+ * next page bridge from a tinted near-white under `PaletteStyle.Content` (rule 1's fabricated colour).
+ */
+fun CoverColors.publishedSeed(): Color? = seed.takeIf { themed && wears }
 
 /**
  * B-404: the cover a cover page wears. Its record's once that has been read, whatever it says (an album
@@ -207,6 +221,11 @@ data class CoverColors(
 	 * statement about this artwork — see the note in [rememberCoverColorScheme].
 	 */
 	val resolved: Boolean,
+	/**
+	 * B-404 review L5: the page wears a colour: its own ([resolved]) or, while its cover is on its way, the
+	 * one it was opened from (the bridge). False is the app's own scheme, and [seed] is then no colour.
+	 */
+	val wears: Boolean = resolved,
 	/**
 	 * False when the user has turned cover theming off. Everything here is then the app's own
 	 * scheme, and a caller that paints its OWN surface from [seed] (the detail screens' hero wash,
@@ -345,7 +364,10 @@ fun rememberCoverColorScheme(
 	// false), and it only earns its place while artwork is actually on its way: with nothing to
 	// fetch — no cover id, or Navidrome's generic avatar — nothing will ever replace it, and an
 	// artist with no picture sat permanently in the colour of whatever album you opened it from.
-	val bridging = coverBridgeHolds(themingOn, resolved, initialSeed != null, coverUri != null, coverPending)
+	val bridging = coverBridgeHolds(
+		themingOn, resolved, initialSeed != null, coverUri != null, coverPending,
+		fetchFailed = paletteKey != null && fetchFailedFor == paletteKey
+	)
 	val hasSeedSource = themingOn && (resolved || bridging)
 	// The most POPULOUS colour, by family (see `dominantByColorFamily` in CoverSeeds.kt — NOT `dominantSwatch`).
 	// It decides page BRIGHTNESS — a mostly-black cover has to give a dark page — and, since the
@@ -456,6 +478,7 @@ fun rememberCoverColorScheme(
 		dominant = dominant,
 		isDark = coverIsDark,
 		resolved = resolved,
+		wears = hasSeedSource,
 		themed = themingOn
 	)
 }
