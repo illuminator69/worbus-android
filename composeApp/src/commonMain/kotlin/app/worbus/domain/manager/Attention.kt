@@ -213,8 +213,12 @@ fun attentionBadge(state: AttentionState, ledger: List<LbFillEntry>, downloadsOn
  * the badge, and Source history's row stays in the menu for them ([avatarMenuItems]), as the desktop keeps
  * Activity (`sidebar-groups.ts`: "which would otherwise be unreachable").
  */
-fun sourceHistoryBadge(ledger: List<LbFillEntry>, activity: ActivityAnswer? = null): Int =
-	historyGroups(mergeHistory(activity?.requests.orEmpty(), ledger, activity?.readAt)).needYou.size
+fun sourceHistoryBadge(
+	ledger: List<LbFillEntry>,
+	activity: ActivityAnswer? = null,
+	attention: AttentionState? = null,
+	dismissed: Set<String> = emptySet()
+): Int = historyGroups(sourceHistoryRows(ledger, activity, attention, dismissed)).needYou.size
 
 /**
  * Whether the avatar's dot is drawn: something to fix, the dot not turned off, and a hub configured.

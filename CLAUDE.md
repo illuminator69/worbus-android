@@ -2136,8 +2136,13 @@ true of invented *album art*, and not of an icon naming the kind.
   Source history's badge (`sourceHistoryBadge`, desktop Activity's `attentionCount`), which is the size of Source
   history's **Need you** chip (review M1, second re-walk): every request drawn as failed or waiting on a pick, **from
   any client** (follow-up 2026-11-14, the owner's "no separation for requests between clients": a row only lb-bot
-  lists counts when it is `failed`, `needs_match` or `picking`, and offers Open album only; the desktop's Activity still
-  counts its own ledger), counted over the rows the page draws (`mergeHistory` of the manager's last `/lb/activity` answer, `activityAnswer`, and
+  lists counts when `/lb/activity` says `failed` or `needs_match`, or `/lb/attention`'s albums say a gap is `failed` or
+  `picking`, and offers Open album only. `/lb/activity` is lb-bot's FILL ledger and never says `picking`; a gap's row there
+  is the last fill of it that reached placement, so it never overrides this device's settled gap row, several of them
+  count once (`HistoryRow.identity`), and one with no `groupId` is joined by its names. A Dismiss here is remembered by
+  release or group (`LbBotManager.dismissedRequests`, persisted, pruned when lb-bot stops listing it, 48 h at most), so
+  lb-bot's own row does not bring it back. The desktop's Activity still counts its own ledger), counted over the rows
+  the page draws (`sourceHistoryRows`) (`mergeHistory` of the manager's last `/lb/activity` answer, `activityAnswer`, and
   the ledger), where lb-bot's later state wins (a ledger row that settled after lb-bot's answer was read keeps its own);
   it stays with downloading off, and Source history's menu row with it, as the desktop keeps Activity (review L3). The
   To fix headline says what its number is made of ("41 to fix: 16 imports, 25 downloaded folders to file"), the listed
