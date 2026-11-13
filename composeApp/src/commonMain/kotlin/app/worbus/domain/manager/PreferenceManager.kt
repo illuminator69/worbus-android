@@ -295,7 +295,7 @@ class PreferenceManager(
 	var lbBotWatchesSetAside by preference("{}")
 	// Follow-up 2026-11-14: requests dismissed on this device ("r:<release>" / "g:<group>" -> epoch ms), so lb-bot's
 	// own row for one (it keeps a failure 24 h) does not bring it back into Source history's Need you.
-	var lbDismissedRequests by preference("{}")
+	var lbDismissedRequests by preference("[]")
 
 	// P1: the amber dot on the header avatar when one of this device's lb-bot requests failed or
 	// waits on a choice (`needsAttentionCount`). On by default; the avatar menu has the switch. It

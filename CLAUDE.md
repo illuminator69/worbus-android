@@ -2135,14 +2135,18 @@ true of invented *album art*, and not of an icon naming the kind.
   gap fill in both, which is how the phone once said 67 against the desktop's 41); this phone's failures and picks are
   Source history's badge (`sourceHistoryBadge`, desktop Activity's `attentionCount`), which is the size of Source
   history's **Need you** chip (review M1, second re-walk): every request drawn as failed or waiting on a pick, **from
-  any client** (follow-up 2026-11-14, the owner's "no separation for requests between clients": a row only lb-bot
-  lists counts when `/lb/activity` says `failed` or `needs_match`, or `/lb/attention`'s albums say a gap is `failed` or
-  `picking`, and offers Open album only. `/lb/activity` is lb-bot's FILL ledger and never says `picking`; a gap's row there
-  is the last fill of it that reached placement, so it never overrides this device's settled gap row, several of them
-  count once (`HistoryRow.identity`), and one with no `groupId` is joined by its names. A Dismiss here is remembered by
-  release or group (`LbBotManager.dismissedRequests`, persisted, pruned when lb-bot stops listing it, 48 h at most), so
-  lb-bot's own row does not bring it back. The desktop's Activity still counts its own ledger), counted over the rows
-  the page draws (`sourceHistoryRows`) (`mergeHistory` of the manager's last `/lb/activity` answer, `activityAnswer`, and
+  any client** (follow-up 2026-11-14, the owner's "no separation for requests between clients"), by **Worbus for
+  desktop's rule, ported** (`domain/manager/NeedYou.kt`, `needYouItems`, a port of `need-you.ts`; keep the two in step,
+  `FollowupsNeedYouTest` holds the desktop harness's cases): `/lb/activity` is lb-bot's FILL ledger and never says
+  `picking` (`failed` and `needs_match` need someone); a gap's pick, or a gap that failed at search, is `/lb/attention`'s
+  `albums` (`kind: gap`); a gap's fill-ledger row is the last fill that reached placement, never its state now. Rows of
+  one request are joined (release, group, release group, and names for a gap row lb-bot holds no group for) and ONE
+  state decides each: lb-bot's (the gap's own status, unless a fill in flight is newer; else its newest row) only when
+  it is NEWER than this device's row, by timestamp. A Dismiss (or Add to wishlist) here is remembered
+  (`LbBotManager.dismissedRequests`, persisted, `dismissalOf`) and hides lb-bot's rows of that request that are not
+  newer; it is forgotten once a full answer lists nothing for it (`dismissalsStillListed`). A row only lb-bot knows
+  offers Open album only. The badge and the chip are `needYouItems`' size and items (`sourceHistoryBadge`,
+  `sourceHistoryGroups`); Requests is still lb-bot's list joined with the ledger and attention (`mergeHistory`) (`mergeHistory` of the manager's last `/lb/activity` answer, `activityAnswer`, and
   the ledger), where lb-bot's later state wins (a ledger row that settled after lb-bot's answer was read keeps its own);
   it stays with downloading off, and Source history's menu row with it, as the desktop keeps Activity (review L3). The
   To fix headline says what its number is made of ("41 to fix: 16 imports, 25 downloaded folders to file"), the listed

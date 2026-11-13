@@ -2,187 +2,310 @@ package app.worbus.domain.manager
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /*
  * Follow-up 2026-11-14, the owner's ruling on the second re-walk's question 1 ("no separation for requests between
- * clients"): Source history's Need you chip and its menu badge count every request lb-bot lists as failed or waiting
- * on a pick, from any client, plus this phone's ledger rows lb-bot does not list. One set, one number; lb-bot's later
- * state still wins. Red at `fdc5cb5e` (`Followup14RedTest`, not committed): another client's failed request was
- * listed and not counted.
+ * clients"): Need you (Source history's chip and its menu badge) is one set and one number, from any client, by
+ * Worbus for desktop's rule (`need-you.ts` at `51a62a38c`; [needYouItems] is its port). These are the desktop
+ * harness's cases (`need-you.harness.ts`), case for case where Android has the same parts, so both clients count
+ * the same set. The shapes are lb-bot's own (`_activity_view`, `_attention_view`): `/lb/activity` is the fill
+ * LEDGER and never says `picking`; a gap's pick is `/lb/attention`'s album.
  *
- * The shapes are lb-bot's own (`Lb-bot-missing/listenbrainz_bot.py`, `_activity_view` and `_attention_view`; the
- * desktop review's H1): `/lb/activity` is the FILL ledger and only ever says searching, queued, downloading,
- * placing, placed, verified, failed, cancelled or needs_match, never `picking`; a gap waiting on a pick (or one that
- * failed at search, which writes no ledger row) is `/lb/attention`'s album (`kind: "gap"`); a gap's ledger row is
- * the last fill of it that reached placement, keyed by release, and named from its labels with no groupId once the
- * review group is gone.
+ * Reds: another client's failed request (red at `fdc5cb5e`), and the desktop review's H1.3, H1.4 (twice) and M1 (red
+ * at `90e0e4ea`, `H1RedTest`), none committed.
  */
 class FollowupsNeedYouTest {
-	private fun entry(key: String, rel: String, outcome: String = LbBotManager.OUTCOME_FAILED, settled: Boolean = true, finishedAt: Long = 1_000L) =
-		LbFillEntry(
-			key = key, isGap = false, rgid = "rg-$key", groupId = "", releaseMbid = rel,
-			artist = "A", album = "B", quality = "", state = if (settled) "failed" else "downloading",
-			outcome = outcome, reason = "", percent = 0, done = 0, total = 5, mp3WouldHelp = false,
-			failureKind = "", retryable = true, attempts = 1, settled = settled, startedAt = 0L, finishedAt = finishedAt
-		)
+	private val t0 = 1_700_000_000.0 // lb-bot's clock, epoch seconds
+	private fun ms(seconds: Double) = (seconds * 1000).toLong()
 
-	/** This device's gap row, as `LbWatch.toEntry` makes it: key = group, no release. */
-	private fun gapEntry(group: String, outcome: String, finishedAt: Long = 1_000L, artist: String = "Gap Artist", album: String = "Gap Album") =
-		entry(group, "", outcome = outcome, finishedAt = finishedAt).copy(
-			isGap = true, groupId = group, rgid = "", artist = artist, album = album,
-			state = if (outcome == LbBotManager.OUTCOME_NEEDS_PICK) "picking" else "failed"
-		)
-
-	private fun req(rel: String, state: String, gap: Boolean = false, group: String = if (gap) "grp-$rel" else "", artist: String = "Other", album: String = rel) =
-		ActivityRequest(
-			releaseMbid = rel, rgid = "rg-$rel", groupId = group, artist = artist, album = album,
-			state = state, gapFill = gap, updatedAt = 2.0
-		)
-
-	private fun att(kind: String, group: String, state: String, rel: String = "rel-$group") = AttentionAlbum(
-		kind = kind, key = if (kind == "gap") group else rel, groupId = group, releaseMbid = rel, rgid = "rg-$group",
-		artist = "Other", album = group, state = state, updatedAt = 3.0
+	private fun ledgerRow(
+		key: String = "rg-1",
+		releaseMbid: String = "rel-1",
+		rgid: String = "rg-1",
+		groupId: String = "",
+		isGap: Boolean = false,
+		outcome: String = LbBotManager.OUTCOME_FAILED,
+		settled: Boolean = true,
+		state: String = "failed",
+		reason: String = "",
+		sortAt: Long = ms(t0 + 60),
+		artist: String = "Artist",
+		album: String = "Album"
+	) = LbFillEntry(
+		key = key, isGap = isGap, rgid = rgid, groupId = groupId, releaseMbid = releaseMbid, artist = artist, album = album,
+		quality = "", state = state, outcome = outcome, reason = reason, percent = 0, done = 0, total = 0,
+		mp3WouldHelp = false, failureKind = "", retryable = true, attempts = 0, settled = settled,
+		startedAt = if (settled) 0L else sortAt, finishedAt = if (settled) sortAt else 0L
 	)
 
-	private fun attention(vararg albums: AttentionAlbum, readAt: Long = 5_000L) =
-		AttentionState(last = LbAttention(version = 1, albums = albums.toList()), lastAt = readAt, readAt = readAt)
+	private fun activity(
+		releaseMbid: String = "rel-1",
+		rgid: String = "rg-1",
+		groupId: String = "",
+		state: String = "failed",
+		gapFill: Boolean = false,
+		updatedAt: Double = t0,
+		reason: String = "",
+		artist: String = "Artist",
+		album: String = "Album"
+	) = ActivityRequest(
+		releaseMbid = releaseMbid, rgid = rgid, groupId = groupId, artist = artist, album = album, state = state,
+		reason = reason, gapFill = gapFill, updatedAt = updatedAt
+	)
 
-	private fun groups(ledger: List<LbFillEntry>, activity: List<ActivityRequest>, attention: AttentionState? = null, dismissed: Set<String> = emptySet()) =
-		historyGroups(sourceHistoryRows(ledger, ActivityAnswer(activity, emptyList(), readAt = 5_000L), attention, dismissed))
+	private fun attention(
+		kind: String = "gap",
+		groupId: String = "g-1",
+		releaseMbid: String = "rel-canon",
+		rgid: String = "rg-1",
+		state: String = "picking",
+		updatedAt: Double = t0
+	) = AttentionAlbum(
+		kind = kind, key = if (kind == "gap") groupId else releaseMbid, groupId = groupId, releaseMbid = releaseMbid,
+		rgid = rgid, albumId = "nd-1", artist = "Artist", album = "Album", state = state, updatedAt = updatedAt
+	)
+
+	private fun items(
+		activity: List<ActivityRequest>? = null,
+		attention: List<AttentionAlbum>? = null,
+		dismissed: List<DismissedRequest> = emptyList(),
+		ledger: List<LbFillEntry> = emptyList()
+	) = needYouItems(activity, attention, dismissed, ledger)
+
+	private fun count(
+		activity: List<ActivityRequest>? = null,
+		attention: List<AttentionAlbum>? = null,
+		dismissed: List<DismissedRequest> = emptyList(),
+		ledger: List<LbFillEntry> = emptyList()
+	) = items(activity, attention, dismissed, ledger).size
+
+	private fun gapRow(outcome: String = LbBotManager.OUTCOME_FAILED, sortAt: Long = ms(t0 + 60), state: String = "failed") =
+		ledgerRow(key = "g-1", releaseMbid = "", rgid = "", groupId = "g-1", isGap = true, outcome = outcome, sortAt = sortAt, state = state)
+
+	// ---- H1: the vocabulary lb-bot speaks ------------------------------------------------------ //
 
 	@Test
-	fun everyClientsFailuresAndPicksAreCounted() {
-		val activity = listOf(
-			req("o-failed", "failed"),            // another client's request lb-bot gave up on
-			req("o-match", "needs_match"),        // another client's: its files are in and wait to be matched
-			req("o-gap", "failed", gap = true),   // a gap fill started from the web page that failed at placement
-			req("o-run", "downloading"),
-			req("o-done", "verified"),
-			req("o-cancel", "cancelled")
+	fun p1_thisDevicesNeedsMatchFillStillCountsWhenLbBotListsIt() {
+		val rows = listOf(ledgerRow(state = "needs_match"))
+		assertEquals(1, count(ledger = rows), "ledger only")
+		assertEquals(1, count(activity = listOf(activity(state = "needs_match")), ledger = rows))
+	}
+
+	@Test
+	fun p2_anotherClientsNeedsMatchAndFailedRequestsCount() {
+		assertEquals(1, count(activity = listOf(activity(releaseMbid = "rel-x", rgid = "rg-x", state = "needs_match"))))
+		assertEquals(1, count(activity = listOf(activity(releaseMbid = "rel-y", rgid = "rg-y"))))
+	}
+
+	@Test
+	fun p3_thisDevicesGapAtAPickIsNotHiddenByAnEarlierVerifiedFill() {
+		val rows = listOf(gapRow(LbBotManager.OUTCOME_NEEDS_PICK, sortAt = ms(t0 + 600), state = ""))
+		val verifiedEarlier = activity(gapFill = true, groupId = "g-1", releaseMbid = "rel-canon", state = "verified", updatedAt = t0)
+		assertEquals(1, count(ledger = rows), "ledger only")
+		assertEquals(1, count(activity = listOf(verifiedEarlier), ledger = rows), "lb-bot older: ours")
+		assertEquals(0, count(activity = listOf(verifiedEarlier.copy(updatedAt = t0 + 1200)), ledger = rows), "lb-bot newer: theirs")
+	}
+
+	@Test
+	fun p3b_thisDevicesFailedGapWithAnOlderVerifiedRowCounts() {
+		val rows = listOf(gapRow(sortAt = ms(t0 + 600)))
+		assertEquals(1, count(activity = listOf(activity(gapFill = true, groupId = "g-1", state = "verified")), ledger = rows))
+	}
+
+	@Test
+	fun anotherClientsGapAtAPickComesFromAttention() {
+		val picks = listOf(attention())
+		assertEquals(1, count(attention = picks))
+		val item = items(attention = picks).single()
+		assertNull(item.ledger)
+		assertEquals("picking", item.server?.state)
+		assertEquals(LbBotManager.OUTCOME_NEEDS_PICK, item.drawn().outcome)
+	}
+
+	@Test
+	fun theGapsOwnStatusIsNotOverruledByAFinishedFill() {
+		assertEquals(1, count(
+			activity = listOf(activity(gapFill = true, groupId = "g-1", state = "verified", updatedAt = t0 + 50)),
+			attention = listOf(attention(updatedAt = t0))
+		))
+		// ...but a fill of it in flight now is: nobody needs to pick while it runs.
+		assertEquals(0, count(
+			activity = listOf(activity(groupId = "g-1", state = "downloading", updatedAt = t0 + 50)),
+			attention = listOf(attention(updatedAt = t0))
+		))
+	}
+
+	@Test
+	fun aFailedRequestBothReadsListIsOneItem() {
+		assertEquals(1, count(
+			activity = listOf(activity()),
+			attention = listOf(attention(kind = "request", groupId = "", releaseMbid = "rel-1", state = "failed"))
+		))
+	}
+
+	@Test
+	fun lbBotsLiveAndFinishedRequestsAreNotCounted() {
+		val rows = listOf("verified", "downloading", "searching", "queued", "placing", "placed", "cancelled")
+			.mapIndexed { i, state -> activity(releaseMbid = "rel-$i", rgid = "rg-$i", state = state) }
+		assertEquals(0, count(activity = rows))
+	}
+
+	@Test
+	fun lbBotNewerThanOurRowWins() {
+		val rows = listOf(ledgerRow(sortAt = ms(t0)))
+		for (state in listOf("verified", "downloading", "searching", "placed", "cancelled")) {
+			assertEquals(0, count(activity = listOf(activity(state = state, updatedAt = t0 + 30)), ledger = rows), state)
+		}
+	}
+
+	@Test
+	fun ourRowThatLbBotNoLongerListsStillCounts() {
+		assertEquals(2, count(activity = listOf(activity()), ledger = listOf(ledgerRow(key = "rg-gone", releaseMbid = "rel-gone", rgid = "rg-gone"))))
+	}
+
+	@Test
+	fun noAnswerIsTheLedgersOwnSet() {
+		val rows = listOf(
+			ledgerRow(),
+			ledgerRow(key = "rg-2", releaseMbid = "rel-2", rgid = "rg-2", outcome = LbBotManager.OUTCOME_NEEDS_PICK),
+			ledgerRow(key = "rg-3", releaseMbid = "rel-3", rgid = "rg-3", outcome = LbBotManager.OUTCOME_CANCELLED),
+			ledgerRow(key = "rg-4", releaseMbid = "rel-4", rgid = "rg-4", outcome = LbBotManager.OUTCOME_RUNNING, settled = false)
 		)
-		// Another client's gap waiting on a pick, and one that failed at search: only /lb/attention says so.
-		val att = attention(att("gap", "g-pick", "picking"), att("gap", "g-search", "failed"))
-		val ledger = listOf(entry("mine", "rel-mine"))   // this phone's, lb-bot no longer lists it
-		val g = groups(ledger, activity, att)
-		assertEquals(
-			listOf("o-failed", "o-match", "o-gap", "g-pick", "g-search", "mine").sorted(),
-			g.needYou.map { it.key }.sorted()
-		)
-		assertEquals(6, sourceHistoryBadge(ledger, ActivityAnswer(activity, emptyList(), 5_000L), att), "one set, one number")
-		// Another client's row is shown and can be opened, never retried from here: no ledger entry.
-		val other = g.needYou.single { it.key == "o-failed" }
-		assertNull(other.entry)
-		assertEquals(LbBotManager.OUTCOME_FAILED, other.shown.outcome)
-		assertEquals(LbBotManager.OUTCOME_NEEDS_PICK, g.needYou.single { it.key == "g-pick" }.shown.outcome)
-		assertTrue(g.needYou.all { it in g.earlier }, "every Need you row is a row Requests lists")
-		// Running, landed and cancelled requests are nobody's to fix.
-		assertTrue(g.running.any { it.key == "o-run" })
-		assertFalse((g.running + g.earlier).single { it.key == "o-done" }.needsYou)
-		assertFalse((g.running + g.earlier).single { it.key == "o-cancel" }.needsYou)
+		assertEquals(2, count(ledger = rows))
+		assertEquals(2, sourceHistoryBadge(rows, null))
+	}
+
+	// ---- M1: Dismiss and Add to wishlist clear the item here ----------------------------------- //
+
+	private val dismissedFill = DismissedRequest("rel-1", "", "rg-1", "Artist", "Album", false, ms(t0 + 120))
+	private val dismissedGap = DismissedRequest("", "g-1", "", "Artist", "Album", true, ms(t0 + 120))
+
+	@Test
+	fun p4_aDismissedFailureStaysDismissedAgainstLbBotsRow() {
+		assertEquals(0, count(activity = listOf(activity()), dismissed = listOf(dismissedFill)))
+		assertEquals(1, count(activity = listOf(activity(updatedAt = t0 + 600)), dismissed = listOf(dismissedFill)), "a newer state is news")
 	}
 
 	@Test
-	fun thisDevicesNeedsMatchFillStillCounts() {
-		// H1.1: an album fill that ended at needs_match is the ledger's `failed`; lb-bot lists the same release as
-		// needs_match. They agree, so it stays counted (it needs sorting out in lb-bot).
-		val ledger = listOf(entry("m", "rel-m").copy(state = "needs_match"))
-		assertEquals(1, groups(ledger, listOf(req("rel-m", "needs_match"))).needYou.size)
+	fun aDismissedGapStaysDismissedAgainstItsPickAndFillRows() {
+		assertEquals(0, count(
+			activity = listOf(activity(gapFill = true, groupId = "g-1", releaseMbid = "rel-canon")),
+			attention = listOf(attention()),
+			dismissed = listOf(dismissedGap)
+		))
 	}
 
 	@Test
-	fun anOlderFillOfAGapDoesNotHideThisDevicesGap() {
-		// H1.3: the gap waits on a pick here; lb-bot's fill ledger still holds a `verified` row of an earlier fill
-		// of the same group (kept 6 h). That row is not the gap's state.
-		val ledger = listOf(gapEntry("g1", LbBotManager.OUTCOME_NEEDS_PICK))
-		val activity = listOf(req("rel-a", "verified", gap = true, group = "g1"))
-		val g = groups(ledger, activity)
-		assertEquals(listOf("g1"), g.needYou.map { it.key })
-		assertSame(g.needYou.single().entry, g.needYou.single().shown, "drawn as this device's row, with its buttons")
+	fun aDismissalIsForgottenOnceLbBotListsNothingForItNeverOnAMissingAnswer() {
+		assertEquals(listOf(dismissedFill), dismissalsStillListed(listOf(dismissedFill), listOf(activity()), emptyList()))
+		assertEquals(emptyList(), dismissalsStillListed(listOf(dismissedFill), emptyList(), emptyList()))
+		assertEquals(listOf(dismissedFill), dismissalsStillListed(listOf(dismissedFill), null, emptyList()), "activity not read")
+		assertEquals(listOf(dismissedFill), dismissalsStillListed(listOf(dismissedFill), emptyList(), null), "attention not read")
 	}
 
 	@Test
-	fun theGapsOwnLaterStateFromAttentionWins() {
-		// This device's gap failed; /lb/attention, read after that, says the gap now waits on a pick: still counted,
-		// as lb-bot's later word. And read BEFORE it settled, the device's row stands.
-		val ledger = listOf(gapEntry("g1", LbBotManager.OUTCOME_FAILED, finishedAt = 1_000L))
-		val later = groups(ledger, emptyList(), attention(att("gap", "g1", "picking"), readAt = 5_000L))
-		assertEquals(LbBotManager.OUTCOME_NEEDS_PICK, later.needYou.single().shown.outcome)
-		val earlier = groups(ledger, emptyList(), attention(att("gap", "g1", "picking"), readAt = 500L))
-		assertEquals(LbBotManager.OUTCOME_FAILED, earlier.needYou.single().shown.outcome)
-		assertEquals(1, earlier.needYou.size)
+	fun whatADismissRemembers() {
+		assertEquals(DismissedRequest("rel-1", "", "rg-1", "Artist", "Album", false, 9L), dismissalOf(ledgerRow(), 9L))
+		assertEquals(DismissedRequest("", "g-1", "", "Artist", "Album", true, 9L), dismissalOf(gapRow(), 9L))
+	}
+
+	// ---- L1: one request, one item, one key ---------------------------------------------------- //
+
+	@Test
+	fun p5_twoLbBotRowsOfOneGroupAndOurGapRowAreOneItem() {
+		assertEquals(1, items(
+			activity = listOf(
+				activity(groupId = "g-1", releaseMbid = "rel-a", updatedAt = t0 - 10),
+				activity(groupId = "g-1", releaseMbid = "rel-b", updatedAt = t0 - 20)
+			),
+			ledger = listOf(gapRow())
+		).size)
 	}
 
 	@Test
-	fun oneGapCountsOnce() {
-		// H1.4: two releases of one group (the canonical changed, an earlier fill) are two fill-ledger rows.
-		val ledger = listOf(gapEntry("g1", LbBotManager.OUTCOME_FAILED))
-		val activity = listOf(req("rel-a", "failed", gap = true, group = "g1"), req("rel-b", "failed", gap = true, group = "g1"))
-		assertEquals(1, groups(ledger, activity).needYou.size)
-		// The same two from another client: one request, counted once.
-		assertEquals(1, groups(emptyList(), activity).needYou.size)
-		// And attention naming the same gap does not add a third.
-		assertEquals(1, groups(ledger, activity, attention(att("gap", "g1", "failed", rel = "rel-a"))).needYou.size)
+	fun p6_aGapFillWhoseGroupIsGoneIsNotCountedTwice() {
+		val rows = listOf(gapRow())
+		val gone = activity(gapFill = true, groupId = "", releaseMbid = "rel-gap", rgid = "")
+		assertEquals(1, count(activity = listOf(gone), ledger = rows))
+		val other = activity(album = "Other", artist = "Else", gapFill = true, groupId = "", releaseMbid = "rel-z", rgid = "")
+		assertEquals(2, count(activity = listOf(gone, other), ledger = rows), "an empty id never joins two unrelated rows")
 	}
 
 	@Test
-	fun aGapWhoseGroupIsGoneIsFoundByItsNames() {
-		// H1.4: lb-bot names a gap fill from its labels once its review group is gone: no groupId to join by.
-		val ledger = listOf(gapEntry("g1", LbBotManager.OUTCOME_FAILED, artist = "Gap Artist", album = "Gap Album"))
-		val activity = listOf(req("rel-x", "failed", gap = true, group = "", artist = "Gap Artist", album = "Gap Album"))
-		val g = groups(ledger, activity)
-		assertEquals(1, g.needYou.size)
-		assertEquals(1, (g.running + g.earlier).size)
+	fun everyItemHasAUniqueStableKey() {
+		val a1 = activity(releaseMbid = "rel-x", rgid = "rg-x")
+		val a2 = activity(groupId = "g-9", releaseMbid = "rel-y", rgid = "")
+		val att = attention(groupId = "g-2", releaseMbid = "rel-c2", rgid = "rg-2")
+		val l1 = ledgerRow()
+		val l2 = ledgerRow(key = "g-3", releaseMbid = "", rgid = "", groupId = "g-3", isGap = true)
+		val keys = items(activity = listOf(a1, a2), attention = listOf(att), ledger = listOf(l1, l2)).map { it.key }
+		assertEquals(keys.size, keys.toSet().size)
+		assertEquals(5, keys.size)
+		val again = items(activity = listOf(a2, a1), attention = listOf(att), ledger = listOf(l2, l1)).map { it.key }
+		assertEquals(keys.toSet(), again.toSet())
+	}
+
+	// ---- L3: drawn from the state that decided ------------------------------------------------- //
+
+	@Test
+	fun p7_aLocalRetryStartedAfterLbBotsFailureIsInFlightNotNeedYou() {
+		val rows = listOf(ledgerRow(outcome = LbBotManager.OUTCOME_RUNNING, settled = false, sortAt = ms(t0 + 5), state = "searching"))
+		assertEquals(0, count(activity = listOf(activity(updatedAt = t0)), ledger = rows))
 	}
 
 	@Test
-	fun dismissedHereStaysOutOfNeedYou() {
-		// M1 (desktop review): Dismiss is local; lb-bot keeps its failed row 24 h. Once this device's row is gone,
-		// lb-bot's must not come back as another client's.
-		val dismissed = dismissalIds(entry("x", "rel-x"))
-		assertEquals(setOf("r:rel-x"), dismissed)
-		val g = groups(emptyList(), listOf(req("rel-x", "failed"), req("rel-y", "failed")), dismissed = dismissed)
-		assertEquals(listOf("rel-y"), g.needYou.map { it.key })
-		// A dismissed gap, by its group, from activity and from attention alike.
-		val gapIds = dismissalIds(gapEntry("g1", LbBotManager.OUTCOME_NEEDS_PICK))
-		assertEquals(setOf("g:g1"), gapIds)
-		val gg = groups(emptyList(), listOf(req("rel-a", "failed", gap = true, group = "g1")), attention(att("gap", "g1", "picking")), gapIds)
-		assertEquals(0, gg.needYou.size)
-		// A new request for the same release made here is this device's row again, whatever was dismissed.
-		assertEquals(1, groups(listOf(entry("x2", "rel-x")), listOf(req("rel-x", "failed")), dismissed = dismissed).needYou.size)
+	fun p8_ourCancelledRowUnderLbBotsNewerFailureIsDrawnAsLbBotsFailure() {
+		val rows = listOf(ledgerRow(outcome = LbBotManager.OUTCOME_CANCELLED, sortAt = ms(t0), state = "cancelled"))
+		val item = items(activity = listOf(activity(reason = "No peer had it", updatedAt = t0 + 30)), ledger = rows).single()
+		val row = item.drawn()
+		assertEquals(LbBotManager.OUTCOME_FAILED, row.outcome)
+		assertEquals("failed", row.state)
+		assertEquals("No peer had it", row.reason)
+		// Android draws lb-bot's differing newer state as lb-bot's row (Open album only), keeping the item's key.
+		assertEquals("here:rg-1", item.key)
 	}
 
 	@Test
-	fun dismissalsAreKeptWhileLbBotListsThem() {
-		val d = mapOf("r:rel-x" to 1_000L, "r:gone" to 1_000L, "g:g1" to 1_000L, "r:old" to 0L)
-		val kept = prunedDismissals(d, listOf(req("rel-x", "failed"), req("old", "failed")), listOf(att("gap", "g1", "picking")), now = DISMISSAL_KEEP_MS + 500)
-		assertEquals(setOf("r:rel-x", "g:g1"), kept.keys, "gone from lb-bot, or past the 48 h cap: forgotten")
-		// With no attention answer a gap's dismissal is kept (nothing says lb-bot dropped it).
-		assertEquals(setOf("g:g1"), prunedDismissals(mapOf("g:g1" to 1_000L), emptyList(), null, 2_000L).keys)
+	fun aRowThisDeviceDecidedIsDrawnAsThisDevices() {
+		val rows = listOf(ledgerRow(reason = "ours", sortAt = ms(t0 + 60)))
+		val item = items(activity = listOf(activity(reason = "theirs", updatedAt = t0)), ledger = rows).single()
+		assertSame(rows.single(), item.drawn())
 	}
 
 	@Test
-	fun lbBotsLaterStateStillWins() {
-		// This phone's request failed; lb-bot's later answer has it verified (retried from the desktop): not counted.
-		val ledger = listOf(entry("x", "rel-x"))
-		assertEquals(0, sourceHistoryBadge(ledger, ActivityAnswer(listOf(req("rel-x", "verified")), emptyList(), readAt = 5_000L)))
-		// Running here (a Retry lb-bot has not been read since) while lb-bot lists an earlier failure: not counted.
-		val running = listOf(entry("y", "rel-y", outcome = LbBotManager.OUTCOME_RUNNING, settled = false))
-		assertEquals(0, sourceHistoryBadge(running, ActivityAnswer(listOf(req("rel-y", "failed")), emptyList(), 5_000L)))
+	fun lbBotNewerAndAgreeingKeepsThisDevicesRowAndItsButtons() {
+		val rows = listOf(ledgerRow(sortAt = ms(t0)))
+		val item = items(activity = listOf(activity(updatedAt = t0 + 30)), ledger = rows).single()
+		assertSame(rows.single(), item.drawn())
 	}
 
-	@Test
-	fun eachRequestIsCountedOnce() {
-		val ledger = listOf(entry("x", "rel-x"))
-		assertEquals(1, sourceHistoryBadge(ledger, ActivityAnswer(listOf(req("rel-x", "failed")), emptyList(), readAt = 5_000L)))
-	}
+	// ---- L2: a failed read is not an answer ---------------------------------------------------- //
 
 	@Test
-	fun withNoAnswerTheBadgeIsStillTheLedgers() {
-		val ledger = listOf(entry("x", "rel-x"), entry("d", "rel-d", outcome = LbBotManager.OUTCOME_DONE))
-		assertEquals(1, sourceHistoryBadge(ledger, null))
+	fun l2_aFailedReadIsNotAnAnswerOnlyAMissingRouteOrTooOldIs() {
+		assertIs<ActivityRead.Ok>(activityRead(200, """{"version":1,"requests":[]}"""))
+		assertEquals(ActivityRead.Older, activityRead(404, ""))
+		assertEquals(ActivityRead.Older, activityRead(503, """{"code":"lbbot_too_old"}"""))
+		for (status in listOf(500, 502, 503, 504)) assertEquals(ActivityRead.Unavailable, activityRead(status, """{"code":"busy"}"""), "$status")
+	}
+
+	// ---- the page and the badge read one set --------------------------------------------------- //
+
+	@Test
+	fun theChipAndTheBadgeAreOneSet() {
+		val ledger = listOf(ledgerRow(), gapRow(LbBotManager.OUTCOME_NEEDS_PICK, state = ""))
+		val answer = ActivityAnswer(listOf(activity(releaseMbid = "rel-o", rgid = "rg-o"), activity(state = "verified", updatedAt = t0 + 600)), emptyList(), readAt = 5_000L)
+		val att = AttentionState(last = LbAttention(version = 1, albums = listOf(attention(groupId = "g-p", releaseMbid = "", rgid = ""))), lastAt = 5_000L, readAt = 5_000L)
+		val g = sourceHistoryGroups(ledger, answer, att, emptyList())
+		// rel-1 retried elsewhere and verified (newer): not counted; the gap here at a pick, another client's failure,
+		// another client's gap at a pick (attention): counted.
+		assertEquals(3, g.needYou.size)
+		assertEquals(g.needYou.size, sourceHistoryBadge(ledger, answer, att, emptyList()))
+		assertEquals(g.needYou.map { it.key }.toSet().size, g.needYou.size, "keys unique")
+		assertTrue(g.needYou.all { it.shown.settled })
 	}
 }

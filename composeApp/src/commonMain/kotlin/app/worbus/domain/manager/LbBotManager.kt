@@ -340,32 +340,36 @@ class LbBotManager(
 	val activityAnswer: StateFlow<ActivityAnswer?> = _activityAnswer.asStateFlow()
 
 	/**
-	 * Follow-up 2026-11-14 (desktop review M1): requests dismissed here, by release (an album fill) or group (a
-	 * gap), with when. A dismissal is local, and lb-bot keeps its own row (a failure 24 h), which would otherwise
-	 * come back into Need you as another client's. Persisted; pruned on each good `/lb/activity` read.
+	 * Follow-up 2026-11-14 (desktop review M1): requests dismissed here (Dismiss, Add to wishlist), by identity and
+	 * when ([dismissalOf]). A dismissal is local, and lb-bot keeps its own row (a failure 24 h), which would otherwise
+	 * come back into Need you as another client's: Need you hides lb-bot's rows of it that are not newer than the
+	 * dismissal ([needYouItems]). Persisted; forgotten once lb-bot lists nothing for it ([dismissalsStillListed]),
+	 * 30 days and 200 at most (the desktop's bounds).
 	 */
 	private val _dismissed = MutableStateFlow(
 		try {
-			Json.decodeFromString(serializer<Map<String, Long>>(), preferenceManager.lbDismissedRequests)
+			Json.decodeFromString(serializer<List<DismissedRequest>>(), preferenceManager.lbDismissedRequests)
 		} catch (e: Exception) {
-			emptyMap()
+			emptyList()
 		}
 	)
-	val dismissedRequests: StateFlow<Map<String, Long>> = _dismissed.asStateFlow()
+	val dismissedRequests: StateFlow<List<DismissedRequest>> = _dismissed.asStateFlow()
 
-	private fun setDismissed(next: Map<String, Long>) {
-		if (next == _dismissed.value) return
-		_dismissed.value = next
-		preferenceManager.lbDismissedRequests = Json.encodeToString(serializer<Map<String, Long>>(), next)
+	private fun setDismissed(next: List<DismissedRequest>) {
+		val now = nowMs()
+		val bounded = next.filter { now - it.at < DISMISSED_RETAIN_MS }.takeLast(DISMISSED_MAX)
+		if (bounded == _dismissed.value) return
+		_dismissed.value = bounded
+		preferenceManager.lbDismissedRequests = Json.encodeToString(serializer<List<DismissedRequest>>(), bounded)
 	}
 
 	/**
-	 * Source history's menu badge: every failure and pick Source history draws, from any client (follow-up
-	 * 2026-11-14), its Need you chip ([sourceHistoryBadge]). With [attentionBadge] it lights the
-	 * avatar's dot. Not turned off with downloading (review L3). lb-bot's half is read by [refreshActivity].
+	 * Source history's menu badge: Need you's number, every client's failures and picks (follow-up 2026-11-14, the
+	 * desktop's rule, [sourceHistoryBadge]). With [attentionBadge] it lights the avatar's dot. Not turned off with
+	 * downloading (review L3). lb-bot's half is read by [refreshActivity] and [refreshAttention].
 	 */
 	val sourceHistoryBadge: StateFlow<Int> = combine(_ledger, _activityAnswer, _attention, _dismissed) { ledger, answer, attention, dismissed ->
-		sourceHistoryBadge(ledger, answer, attention, dismissed.keys)
+		sourceHistoryBadge(ledger, answer, attention, dismissed)
 	}.stateIn(scope, SharingStarted.Eagerly, 0)
 
 	/** Whether the hub carries the attention route: an older one is "older", not "nothing to fix". */
@@ -455,7 +459,8 @@ class LbBotManager(
 		when (read) {
 			is ActivityRead.Ok -> {
 				_activityAnswer.value = ActivityAnswer(read.requests, read.transfers, nowMs())
-				setDismissed(prunedDismissals(_dismissed.value, read.requests, _attention.value.last?.albums, nowMs()))
+				// Forgotten once lb-bot lists nothing for them (only with both answers in hand).
+				setDismissed(dismissalsStillListed(_dismissed.value, read.requests, _attention.value.last?.albums))
 			}
 			ActivityRead.Older -> _activityAnswer.value = null
 			ActivityRead.Unavailable -> Unit
@@ -3459,10 +3464,7 @@ class LbBotManager(
 	/** Forget one finished row. Only ever offered on a settled fill. */
 	fun dismiss(key: String) {
 		// Follow-up 2026-11-14: remembered by release or group, so lb-bot's row for it stays out of Need you.
-		_ledger.value.firstOrNull { it.key == key }?.let(::dismissalIds)?.takeIf { it.isNotEmpty() }?.let { ids ->
-			val now = nowMs()
-			setDismissed(_dismissed.value + ids.associateWith { now })
-		}
+		_ledger.value.firstOrNull { it.key == key }?.let { setDismissed(_dismissed.value + dismissalOf(it, nowMs())) }
 		scope.launch {
 			watchLock.withLock { saveWatches(loadWatches() - key) }
 			// The sheet reads these; a dismissed row must not keep showing its last state.

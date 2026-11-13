@@ -200,7 +200,7 @@ fun attentionBadge(state: AttentionState, ledger: List<LbFillEntry>, downloadsOn
  *
  * Follow-up 2026-11-14 (the owner: "no separation for requests between clients"): every request lb-bot lists
  * as failed or waiting on a pick, **from any client**, plus this phone's ledger rows lb-bot does not list: one
- * set ([HistoryRow.needsYou]), one number. The desktop's Activity still counts its own ledger only.
+ * set, one number, by the desktop's rule ([needYouItems], a port of `need-you.ts`).
  *
  * Review M1: **it is the size of Source history's Need you chip** ([HistoryGroups.needYou]), counted over
  * the same rows the page draws ([mergeHistory] of lb-bot's last answer, [activity], read at its
@@ -217,8 +217,8 @@ fun sourceHistoryBadge(
 	ledger: List<LbFillEntry>,
 	activity: ActivityAnswer? = null,
 	attention: AttentionState? = null,
-	dismissed: Set<String> = emptySet()
-): Int = historyGroups(sourceHistoryRows(ledger, activity, attention, dismissed)).needYou.size
+	dismissed: List<DismissedRequest> = emptyList()
+): Int = needYouItems(activity?.requests, attention?.last?.albums, dismissed, ledger).size
 
 /**
  * Whether the avatar's dot is drawn: something to fix, the dot not turned off, and a hub configured.

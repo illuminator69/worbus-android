@@ -16,8 +16,7 @@ import app.worbus.domain.manager.ActivityTransfer
 import app.worbus.domain.manager.HistoryGroups
 import app.worbus.domain.manager.LbActivity
 import app.worbus.domain.manager.LbBotManager
-import app.worbus.domain.manager.historyGroups
-import app.worbus.domain.manager.sourceHistoryRows
+import app.worbus.domain.manager.sourceHistoryGroups
 
 /**
  * What lb-bot said last ([last], null before its first good answer, read at [lastAt] epoch ms) and how
@@ -48,12 +47,12 @@ class SourceHistoryViewModel(private val lbBot: LbBotManager) : ViewModel() {
 		)
 	}.stateIn(viewModelScope, SharingStarted.Eagerly, SourceHistoryServer())
 
-	// Follow-up 2026-11-14: the badge's own join (`sourceHistoryRows`): lb-bot's activity, its attention answer
-	// (the gaps' state), the ledger and what was dismissed here.
+	// Follow-up 2026-11-14: the badge's own reading (`sourceHistoryGroups`): lb-bot's activity, its attention answer
+	// (the gaps' state), the ledger and what was dismissed here; Need you by the desktop's rule.
 	val groups: StateFlow<HistoryGroups> = combine(
 		lbBot.activityAnswer, lbBot.ledger, lbBot.attention, lbBot.dismissedRequests
 	) { answer, ledger, attention, dismissed ->
-		historyGroups(sourceHistoryRows(ledger, answer, attention, dismissed.keys))
+		sourceHistoryGroups(ledger, answer, attention, dismissed)
 	}.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryGroups(emptyList(), emptyList()))
 
 	val transfers: StateFlow<List<ActivityTransfer>> = lbBot.activityAnswer.map { it?.transfers.orEmpty() }
