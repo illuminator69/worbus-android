@@ -76,7 +76,7 @@ class HubSignInStepTest {
 		HubStepSentence.NotEncryptedAt -> "finder_not_encrypted"
 	}
 
-	private fun step(probe: HubInfoProbe): HubSignInStep {
+	private fun step(probe: HubInfoProbe, keptAddress: String? = null): HubSignInStep {
 		val finder = HubFinder(
 			probe = probe,
 			localSubnet = { null },
@@ -95,7 +95,8 @@ class HubSignInStepTest {
 			scope = scope,
 			onPaired = { paired++ },
 			words = { sentence, arg -> strings.getValue(keyOf(sentence)).replace("%1\$s", arg) },
-			log = {}
+			log = {},
+			keptAddress = keptAddress
 		)
 	}
 
@@ -262,5 +263,65 @@ class HubSignInStepTest {
 		assertEquals("wss://hub.example.com", typedHubCandidate("wss://hub.example.com/"))
 		assertEquals(null, typedHubCandidate("ftp://10.0.0.9"))
 		assertEquals(null, typedHubCandidate("http://"))
+	}
+
+	/*
+	 * B-409 (the owner's walk, 2026-11-13): switching to a new user never offered the Worbus Server's
+	 * sign-in although one was set. A logout signs the device out and keeps the address, and the step
+	 * was offered only when no address was set (LoginManager: `!hubAddressSet`).
+	 */
+	@Test
+	fun aLoginWithAKeptAddressItIsNotSignedInToOffersItsSignIn() {
+		assertEquals(HubStepStart.LookBeside, hubStepAfterLogin(addressSet = false, connectOn = true, signedIn = false))
+		assertEquals(HubStepStart.LookBeside, hubStepAfterLogin(addressSet = false, connectOn = false, signedIn = false))
+		assertEquals(HubStepStart.KeptAddress, hubStepAfterLogin(addressSet = true, connectOn = true, signedIn = false), "the switch of user")
+		assertEquals(null, hubStepAfterLogin(addressSet = true, connectOn = true, signedIn = true), "already signed in")
+		assertEquals(null, hubStepAfterLogin(addressSet = true, connectOn = false, signedIn = false), "Connect turned off by the user")
+		val login = sourceFile("src/commonMain/kotlin/app/worbus/domain/manager/LoginManager.kt").readText()
+		assertTrue("hubStepAfterLogin(" in login && "HubStepStart.KeptAddress ->" in login, "the login asks it")
+	}
+
+	@Test
+	fun theKeptAddressIsOfferedAtOnceAndSignsInThere() = runBlocking<Unit> {
+		prefs.hubUrl = "ws://192.168.1.20:4790"
+		prefs.hubEnabled = true
+		val probe = FakeProbe { InfoOutcome.Unreachable }
+		val s = step(probe, keptAddress = prefs.hubUrl)
+		assertEquals(HubStepState.Found("http://192.168.1.20:4790"), s.state.value, "offered from the first frame, nothing looked for")
+		s.signIn()
+		assertEquals(HubStepState.Done(paired = true), s.await { it is HubStepState.Done })
+		assertEquals(listOf("http://192.168.1.20:4790/hub/signin"), transport.urls.toList())
+		assertTrue(probe.asked.isEmpty(), "no look beside Navidrome")
+		assertEquals("ws://192.168.1.20:4790", prefs.hubUrl)
+		assertTrue(auth.serverSet)
+		assertEquals(1, paired)
+	}
+
+	@Test
+	fun aKeptAddressStaysWhenItsSignInDoesNotPairOrIsSkipped() = runBlocking<Unit> {
+		prefs.hubUrl = "ws://192.168.1.20:4790"
+		prefs.hubEnabled = true
+		transport.reply = { HubAuthReply.Answered(401, """{"code": "navidrome_refused"}""") }
+		val s = step(FakeProbe { InfoOutcome.Unreachable }, keptAddress = prefs.hubUrl)
+		s.signIn()
+		assertEquals(
+			HubStepState.Found("http://192.168.1.20:4790", failure = SignInResult.Refused),
+			s.await { it is HubStepState.Found && it.failure != null }
+		)
+		assertEquals("ws://192.168.1.20:4790", prefs.hubUrl, "the server stays set")
+		assertTrue(prefs.hubEnabled)
+		// Another address typed that does not pair puts the kept one back, not none.
+		val other = FakeProbe { base -> if (base == "ws://10.0.0.9:4790") InfoOutcome.Match(id, "Worbus Server") else InfoOutcome.Unreachable }
+		val t = step(other, keptAddress = prefs.hubUrl)
+		t.typeAddress()
+		t.submit("10.0.0.9")
+		t.await { it is HubStepState.Found && it.address == "http://10.0.0.9:4790" }
+		t.signIn()
+		t.await { it is HubStepState.Found && it.failure != null }
+		assertEquals("ws://192.168.1.20:4790", prefs.hubUrl, "the kept address is back")
+		t.skip()
+		assertEquals(HubStepState.Done(paired = false), t.await { it is HubStepState.Done })
+		assertEquals("ws://192.168.1.20:4790", prefs.hubUrl)
+		assertEquals(0, paired)
 	}
 }

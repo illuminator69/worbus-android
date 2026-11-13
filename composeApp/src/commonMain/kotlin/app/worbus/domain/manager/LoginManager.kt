@@ -189,7 +189,14 @@ class LoginManager(
 					pageHolder.show(LoginUiState.Syncing(progress, message))
 				}.onSuccess {
 					// Success and the step in one write (B-344): the page never heads Home ahead of it.
-					pageHolder.loggedIn(if (!hubAddressSet(preferenceManager)) newHubStep() else null)
+					// B-409: a kept address this account is not signed in to is offered too.
+					pageHolder.loggedIn(
+						when (hubStepAfterLogin(hubAddressSet(preferenceManager), preferenceManager.hubEnabled, hubAuth.signedIn)) {
+							HubStepStart.LookBeside -> newHubStep()
+							HubStepStart.KeptAddress -> newHubStep(keptAddress = preferenceManager.hubUrl)
+							null -> null
+						}
+					)
 					syncManager.startPeriodicSync()
 				}.onFailure { e ->
 					pageHolder.show(failure(e as? Exception ?: Exception(e), address.host))
@@ -225,7 +232,7 @@ class LoginManager(
 	/** The Worbus Server step is over ([HubStepState.Done]): Home follows. */
 	fun finishHubStep() = pageHolder.finishHubStep()
 
-	private fun newHubStep() = HubSignInStep(
+	private fun newHubStep(keptAddress: String? = null) = HubSignInStep(
 		finder = hubFinder,
 		probe = KtorHubInfoProbe(),
 		auth = hubAuth,
@@ -233,7 +240,8 @@ class LoginManager(
 		store = preferenceManager.serverRecordStore,
 		scope = scope,
 		onPaired = { hubManager.restart() },
-		words = { sentence, arg -> getString(sentenceResource(sentence), arg) }
+		words = { sentence, arg -> getString(sentenceResource(sentence), arg) },
+		keptAddress = keptAddress
 	)
 
 	fun logout() {

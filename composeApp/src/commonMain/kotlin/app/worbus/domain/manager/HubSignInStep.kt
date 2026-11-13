@@ -24,7 +24,34 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Only a sign-in that pairs leaves anything behind. A found or typed server is kept for the step's
  * Sign in; one that is refused, or a step that ends without pairing, leaves Settings › Server as it
  * was before the login (no address, Connect as it was), so it can pair later.
+ *
+ * B-409 (the owner's walk, 2026-11-13): after a logout and another user's login the Worbus Server's
+ * address is still set (a logout signs the device out of it and keeps it), and the step was offered
+ * only when no address was set, so the new user went straight Home, never offered the sign-in a first
+ * login gets. [hubStepAfterLogin] offers it then too, started from the kept address ([keptAddress]):
+ * Found at once, no look, Sign in is `POST /hub/signin` there, and nothing it does unpaired takes the
+ * address away (a typed other one that does not pair puts the kept one back).
  */
+
+/** Which Worbus Server step a login that just succeeded offers, or null for none (B-409). */
+enum class HubStepStart {
+	/** No address set: look beside Navidrome (P7, I-064). */
+	LookBeside,
+
+	/** An address set, Connect on, and this device not signed in to it: offer that server's sign-in. */
+	KeptAddress
+}
+
+/**
+ * B-409: the step after a Navidrome login. No address: look beside Navidrome. An address with Connect
+ * on and no device secret (the logout before this login signed the device out, or it never paired):
+ * offer the kept server's sign-in. Signed in already, or Connect turned off by the user: none.
+ */
+fun hubStepAfterLogin(addressSet: Boolean, connectOn: Boolean, signedIn: Boolean): HubStepStart? = when {
+	!addressSet -> HubStepStart.LookBeside
+	connectOn && !signedIn -> HubStepStart.KeptAddress
+	else -> null
+}
 
 /** Where the step stands; the screen draws one layout per state (`HubStep.kt`). */
 sealed interface HubStepState {
@@ -76,7 +103,9 @@ class HubSignInStep(
 	private val onPaired: () -> Unit,
 	/** A sentence with its one argument (the app: compose resources' `getString`). */
 	private val words: suspend (HubStepSentence, String) -> String,
-	private val log: (String) -> Unit = { Logger.i("HubSignInStep", it) }
+	private val log: (String) -> Unit = { Logger.i("HubSignInStep", it) },
+	/** B-409: the address already set ([HubStepStart.KeptAddress]); null looks beside Navidrome. */
+	private val keptAddress: String? = null
 ) {
 	private val _state = MutableStateFlow<HubStepState>(HubStepState.Finding)
 	val state: StateFlow<HubStepState> = _state.asStateFlow()
@@ -92,6 +121,10 @@ class HubSignInStep(
 	/** Connect as it was before the step wrote anything: put back when a sign-in does not pair. */
 	private val enabledBefore = preferenceManager.hubEnabled
 
+	/** B-409: the kept server's address and record, put back when a typed other one does not pair. */
+	private val urlBefore = if (keptAddress != null) preferenceManager.hubUrl else ""
+	private val recordBefore = if (keptAddress != null) store.read() else null
+
 	/** The step's Sign in wrote an address and a record that a pairing has not yet made good. */
 	private var stored = false
 
@@ -102,7 +135,11 @@ class HubSignInStep(
 	private var job: Job? = null
 
 	init {
-		replaceJob {
+		if (keptAddress != null) {
+			// B-409: the server this phone already has; offered at once, nothing looked for.
+			_state.value = HubStepState.Found(httpBaseOfAddress(keptAddress) ?: keptAddress)
+			log("offering the kept address's sign-in")
+		} else replaceJob {
 			val found = try {
 				finder.lookBesideWithinBudget()
 			} catch (e: CancellationException) {
@@ -126,16 +163,21 @@ class HubSignInStep(
 	fun signIn() {
 		if (ended) return
 		val shown = (_state.value as? HubStepState.Found)?.address ?: return
-		val (server, address) = offered ?: return
+		// B-409: the kept address is already Settings' own; only a found or typed one is written first.
+		val offer = offered
+		if (offer == null && keptAddress == null) return
 		_state.value = HubStepState.SigningIn(shown)
 		replaceJob {
-			// Review Minor 4: kept only as far as signInToFound wrote it (it writes nothing for an address
-			// it cannot keep); with nothing written there is nothing to sign in with, nor to take back.
-			stored = signInToFound(preferenceManager, store, server, address) {}
-			if (!stored) {
-				_state.value = HubStepState.Found(shown, failure = SignInResult.NoAccount)
-				log("sign-in not asked: the address was not kept")
-				return@replaceJob
+			if (offer != null) {
+				val (server, address) = offer
+				// Review Minor 4: kept only as far as signInToFound wrote it (it writes nothing for an address
+				// it cannot keep); with nothing written there is nothing to sign in with, nor to take back.
+				stored = signInToFound(preferenceManager, store, server, address) {}
+				if (!stored) {
+					_state.value = HubStepState.Found(shown, failure = SignInResult.NoAccount)
+					log("sign-in not asked: the address was not kept")
+					return@replaceJob
+				}
 			}
 			val result = try {
 				auth.signIn()
@@ -225,7 +267,8 @@ class HubSignInStep(
 	private fun forgetStored() {
 		if (!stored) return
 		stored = false
-		store.startOver(HubServerRecord(promptDismissed = store.read().promptDismissed), hubUrl = "")
+		// B-409: a step started from a kept address puts that address back, not none.
+		store.startOver(recordBefore ?: HubServerRecord(promptDismissed = store.read().promptDismissed), hubUrl = urlBefore)
 		preferenceManager.hubEnabled = enabledBefore
 	}
 
