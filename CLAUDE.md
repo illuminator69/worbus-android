@@ -28,7 +28,7 @@ front end.
 | Version | `0.7.0`, versionCode 63 (`androidApp/build.gradle.kts`; BuildInfo reads the name from there) |
 | Release key | lives only on the workstation; its certificate's SHA-256 is `androidApp/release-cert.sha256` (§3) |
 | Upstream base | ssalggnikool/Navic **`v1.0.0-alpha59`** |
-| Divergence | ~264 files, +33.6k / −3.5k (before the package move) |
+| Divergence | 1,300 files, +157k / −24k against `v1.0.0-alpha59` (2026-11-14, `git diff --shortstat -M`; the package move to `app.worbus` counts in it) |
 | Modules | `:androidApp` (the application), `:composeApp` (the shared KMP library, Android its only target) |
 | Licence | GPL-3.0, inherited |
 
