@@ -8,6 +8,7 @@ import app.worbus.domain.manager.LbBotManager
 import app.worbus.domain.manager.LbFillEntry
 import app.worbus.domain.manager.LbGapSource
 import app.worbus.domain.manager.LbRelease
+import app.worbus.domain.manager.LbRefusal
 import app.worbus.ui.components.common.FillButton
 import app.worbus.ui.components.common.FillPresentation
 import app.worbus.ui.components.common.FillProgressKind
@@ -100,6 +101,22 @@ class RequestStageTest {
 	@Test
 	fun aHubTooOldWithNoFillNeedsARestart() {
 		assertEquals(RequestStage.NeedsHubRestart, requestStage(input(support = Support.NEEDS_HUB_RESTART)))
+	}
+
+	// ---- B-408: a non-admin on a server that can get albums ------------------ //
+
+	@Test
+	fun aNonAdminIsToldOnlyAnAdminCanNotThatTheServerIsNotSetUp() {
+		assertEquals(RequestStage.AdminOnly, requestStage(input(support = Support.ADMIN_ONLY)))
+		val failed = fill(state = "failed", outcome = "failed", settled = true, failureKind = "transfer_failed", retryable = true)
+		assertEquals(RequestStage.AdminOnly, requestStage(input(support = Support.ADMIN_ONLY, fill = failed)))
+		val refused = SourceSearch.Failed(LbBotManager.LbError.AccessRefused(LbRefusal.ADMIN_ONLY))
+		assertEquals(RequestStage.AdminOnly, requestStage(input(support = Support.ADMIN_ONLY, search = refused)))
+		// What the library holds is still said.
+		assertEquals(
+			RequestStage.InLibrary,
+			requestStage(input(support = Support.ADMIN_ONLY, indexed = LbRelease(rgid = "rg-1", status = "complete")))
+		)
 	}
 
 	// ---- Worbus P1: downloading off ------------------------------------------ //

@@ -259,4 +259,20 @@ class HubRolesTest {
 		// A signed-in device before its welcome shows nothing gated.
 		assertEquals(HubRoles.NOTHING_YET, hubRolesOf(null, signedIn = true))
 	}
+
+	/*
+	 * B-408 (the owner's walk, 2026-11-13, a non-admin on the phone): an unowned album said "this server
+	 * isn't set up to get albums". The server was; lb-bot keeps downloads (and the source list) to admins.
+	 * Off for a non-admin on a server that can is its own answer, not the server's mode.
+	 */
+	@Test
+	fun downloadsOffForANonAdminIsNotTheServerBeingOff() {
+		val user = hubRolesOf(bob, signedIn = true)
+		val admin = hubRolesOf(alice, signedIn = true)
+		assertTrue(downloadsAdminOnlyFor(user, LbDownloads.ON), "a server that can: the user may not")
+		assertTrue(downloadsAdminOnlyFor(user, LbDownloads.UNKNOWN), "an older peer reads as on")
+		assertFalse(downloadsAdminOnlyFor(user, LbDownloads.OFF), "a server that cannot is that, for everyone")
+		assertFalse(downloadsAdminOnlyFor(admin, LbDownloads.ON))
+		assertFalse(downloadsAdminOnlyFor(admin, LbDownloads.OFF))
+	}
 }

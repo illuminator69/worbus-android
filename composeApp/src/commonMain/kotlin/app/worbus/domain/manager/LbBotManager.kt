@@ -465,6 +465,10 @@ class LbBotManager(
 	val downloads: StateFlow<LbDownloads> = combine(downloadsMode.value, _roles) { mode, roles -> downloadsFor(roles, mode) }
 		.stateIn(scope, SharingStarted.Eagerly, downloadsFor(_roles.value, downloadsMode.current))
 
+	/** B-408: [downloads] is off for this user only because they are not an admin ([downloadsAdminOnlyFor]). */
+	val downloadsAdminOnly: StateFlow<Boolean> = combine(downloadsMode.value, _roles) { mode, roles -> downloadsAdminOnlyFor(roles, mode) }
+		.stateIn(scope, SharingStarted.Eagerly, downloadsAdminOnlyFor(_roles.value, downloadsMode.current))
+
 	/** [downloads] as the one question most surfaces ask (Worbus P2: off for a non-admin, [downloadsFor]). */
 	val downloadsOn: Boolean get() = downloadsFor(_roles.value, downloadsMode.current).isOn
 

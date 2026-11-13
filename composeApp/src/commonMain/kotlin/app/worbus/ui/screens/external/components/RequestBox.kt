@@ -71,6 +71,7 @@ import worbus.composeapp.generated.resources.label_version
 import worbus.composeapp.generated.resources.lbbot_fill_cancelled
 import worbus.composeapp.generated.resources.request_cancel
 import worbus.composeapp.generated.resources.request_downloads_off
+import worbus.composeapp.generated.resources.request_admin_only
 import worbus.composeapp.generated.resources.request_leave_any_time
 import worbus.composeapp.generated.resources.request_refused
 import worbus.composeapp.generated.resources.request_retry_from
@@ -285,6 +286,15 @@ private fun StageContent(
 		// server is set up, not a fault), and nothing to press.
 		RequestStage.DownloadsOff -> Text(
 			stringResource(Res.string.request_downloads_off),
+			style = MaterialTheme.typography.bodyMedium,
+			color = MaterialTheme.colorScheme.onSurfaceVariant
+		)
+
+		// B-408: the server can get albums, and only its admins may: lb-bot answers anyone else 403
+		// `admin_only` for a download and for the source list. Said plainly, nothing to press; the
+		// page's Add to wishlist is still there.
+		RequestStage.AdminOnly -> Text(
+			stringResource(Res.string.request_admin_only),
 			style = MaterialTheme.typography.bodyMedium,
 			color = MaterialTheme.colorScheme.onSurfaceVariant
 		)

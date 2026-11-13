@@ -39,9 +39,10 @@ sealed interface SourceSearch {
 /**
  * Whether this hub can take a request at all: lb-bot off, a hub too old for the source picker, or yes.
  * [DOWNLOADS_OFF] (Worbus P1) is lb-bot saying it cannot download (`downloads: "off"`, or its 409
- * `downloads_off`): appended, so the order of the others is unchanged.
+ * `downloads_off`): appended, so the order of the others is unchanged. [ADMIN_ONLY] (B-408): the
+ * server can download, and this user may not (lb-bot's route table keeps downloading to admins).
  */
-enum class Support { ABSENT, NEEDS_HUB_RESTART, YES, DOWNLOADS_OFF }
+enum class Support { ABSENT, NEEDS_HUB_RESTART, YES, DOWNLOADS_OFF, ADMIN_ONLY }
 
 data class RequestInput(
 	val support: Support,
@@ -80,6 +81,11 @@ sealed interface RequestStage {
 	 * Add to wishlist and Find it are the ways on.
 	 */
 	data object DownloadsOff : RequestStage
+	/**
+	 * B-408: the server can get albums and this user is not an admin, whom lb-bot keeps downloading
+	 * (and the source list) to. Said as that, never as "this server isn't set up"; nothing offered.
+	 */
+	data object AdminOnly : RequestStage
 	/** Nothing asked yet; [cancelledBefore] when the last request was cancelled. */
 	data class Idle(val cancelledBefore: Boolean) : RequestStage
 	data object Searching : RequestStage
@@ -112,8 +118,9 @@ fun requestStage(input: RequestInput): RequestStage {
 	if (input.support == Support.ABSENT) return RequestStage.Absent
 	// Worbus P1: decided before the fill ledger. A settled fill's Retry would be refused, and a fill
 	// lb-bot cannot carry on will not move again; what the library holds is still said.
-	if (input.support == Support.DOWNLOADS_OFF) {
-		return if (input.indexed != null && !input.indexed.isMissing) RequestStage.InLibrary else RequestStage.DownloadsOff
+	if (input.support == Support.DOWNLOADS_OFF || input.support == Support.ADMIN_ONLY) {
+		if (input.indexed != null && !input.indexed.isMissing) return RequestStage.InLibrary
+		return if (input.support == Support.ADMIN_ONLY) RequestStage.AdminOnly else RequestStage.DownloadsOff
 	}
 	val fill = input.fill
 	if (fill != null && !fill.settled) {

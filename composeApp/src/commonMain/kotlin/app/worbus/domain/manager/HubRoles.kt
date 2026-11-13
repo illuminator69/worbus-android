@@ -50,6 +50,13 @@ fun primaryGated(offered: Boolean, roles: HubRoles): Boolean = offered && roles.
  */
 fun downloadsFor(roles: HubRoles, mode: LbDownloads): LbDownloads = if (roles.admin) mode else LbDownloads.OFF
 
+/**
+ * B-408: [downloadsFor] is off for this user only because they are not an admin: the server itself can
+ * download (on, or an older peer that did not say). What a page says differs: "only an admin can",
+ * never "this server isn't set up" for a server that is.
+ */
+fun downloadsAdminOnlyFor(roles: HubRoles, mode: LbDownloads): Boolean = !roles.admin && mode.isOn
+
 /** Your mix (the seedless station, the hub's "Your mix") is read from the primary user's listening. */
 fun yourMixOffered(engine: Boolean, roles: HubRoles): Boolean = engine && roles.primary
 
