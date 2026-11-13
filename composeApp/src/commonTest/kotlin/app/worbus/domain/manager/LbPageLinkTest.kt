@@ -27,7 +27,9 @@ class LbPageLinkTest {
 		assertEquals(0, older.counts!!.imports)
 		assertEquals(6, toFixCount(older.counts!!))
 		val page = attentionPage(attentionRead(200, answer("""{"failedGaps":1,"imports":4}""")), null, null, emptyList(), null)
-		assertEquals(5, (page as AttentionPage.Rows).toFix)
+		// B-406 (second re-walk): the To fix number is the desktop's, imports + folders; the failed gap is listed.
+		assertEquals(4, (page as AttentionPage.Rows).toFix)
+		assertEquals(4, libraryToFixCount(counts.copy(folders = 0)))
 	}
 
 	@Test

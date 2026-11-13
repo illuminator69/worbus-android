@@ -11,12 +11,14 @@ import kotlinx.serialization.json.jsonObject
  * hub's `GET /lb/attention`, joined with this device's request ledger.
  *
  * lb-bot's to-fix number is its web UI's, `failedGaps + failedRequests + folders` (+ `imports` since
- * Worbus P4, the import records it could not finish filing) ([toFixCount]). Since B-406's review (M4) the
- * phone's To fix number, for the dot, the badge, the chip and the headline alike, is that plus the albums
- * waiting on a pick and this phone's own rows, everything the section lists ([toFixTotal]). Artists to
- * check are Library Matches' To check chip and are not counted here. Where the hub cannot answer (older, unreachable,
- * nothing read yet) the P1 count of this device's own ledger ([needsAttentionCount]) stands, and a
- * read that did not happen is never drawn as zero.
+ * Worbus P4, the import records it could not finish filing) ([toFixCount]). Since the owner's second
+ * re-walk (B-406, 2026-11-13 evening) the phone's To fix number, for the chip, the headline and Library
+ * Matches' menu badge alike, is **Worbus for desktop's**: lb-bot's imports plus the folders waiting to be
+ * filed ([libraryToFixCount], desktop `libraryToFixCount`). The failed albums, the picks and this phone's
+ * own rows are still listed in the section, and not counted there; this phone's own failures and picks
+ * are Source history's badge ([needsAttentionCount], desktop Activity's `attentionCount`). Artists to
+ * check are Library Matches' To check chip. Where lb-bot has not answered (older, unreachable, nothing
+ * read yet) the section has no number at all, as the desktop has no To fix chip then.
  */
 
 /** lb-bot's numbers, the keys of `/lb/attention`'s `counts`. */
@@ -139,15 +141,38 @@ fun toFixCount(c: AttentionCounts, downloadsOn: Boolean = true): Int =
 	c.failedGaps + c.failedRequests + (if (downloadsOn) c.folders else 0) + c.imports
 
 /**
- * The dot's and the badge's number (B-406 review M4): the To fix section's own number ([toFixTotal]) over
- * the same page the section draws ([attentionPage], from the same state and ledger), so the menu's badge,
- * the chip and the headline are one number whether or not lb-bot has answered. With nothing read yet it
- * is this device's own count (P1), which is the page's no-answer count too.
+ * B-406, the owner's second re-walk (2026-11-13 evening): **the To fix number, as Worbus for desktop counts
+ * it** (`libraryToFixCount` in its `lbbot/lb-page-link.ts`): lb-bot's imports plus, while downloading is on,
+ * the folders waiting to be filed. Its counts, not the rows listed.
+ *
+ * The phone said 67 where the desktop said 41 (16 imports + 25 folders) because its number was
+ * [toFixCount] (which adds lb-bot's failed gaps and failed requests, and lb-bot counts a failed gap fill in
+ * **both**: it is a failed group and a failed ledger row under the group's release, listed once and counted
+ * twice, `_attention_view`), plus the albums waiting on a pick, plus this phone's own rows lb-bot no longer
+ * lists. Not files: both apps read the same `counts.imports` and `counts.folders`.
+ */
+fun libraryToFixCount(c: AttentionCounts, downloadsOn: Boolean = true): Int =
+	c.imports + (if (downloadsOn) c.folders else 0)
+
+/**
+ * Library Matches' menu badge: the To fix section's own number ([toFixTotal]) over the same page the
+ * section draws ([attentionPage], from the same state and ledger), so the badge, the chip and the headline
+ * are one number, the desktop's ([libraryToFixCount]). With no answer from lb-bot it is 0 (no badge), as
+ * the desktop's Library Matches badge is.
  */
 fun attentionBadge(state: AttentionState, ledger: List<LbFillEntry>, downloadsOn: Boolean = true): Int =
 	(attentionPage(state.status, state.last, state.lastAt.takeIf { it > 0L }, ledger, null, downloadsOn) as? AttentionPage.Rows)
 		?.let(::toFixTotal)
-		?: needsAttentionCount(ledger)
+		?: 0
+
+/**
+ * B-406 (second re-walk): Source history's menu badge, Worbus for desktop's Activity badge
+ * (`attentionCount`): this phone's own settled fills that wait on the user, failed or waiting on a pick
+ * ([needsAttentionCount]). They were added into the To fix number, which the desktop never did. None while
+ * downloading is off: Source history is not drawn then, and a badge must be on a row that shows.
+ */
+fun sourceHistoryBadge(ledger: List<LbFillEntry>, downloadsOn: Boolean = true): Int =
+	if (downloadsOn) needsAttentionCount(ledger) else 0
 
 /**
  * Whether the avatar's dot is drawn: something to fix, the dot not turned off, and a hub configured.
@@ -237,7 +262,10 @@ sealed interface AttentionPage {
 		val folders: List<AttentionFolder>,
 		/** Library Matches' "to check" list, or null when it is not known. Listed, never counted. */
 		val artistsToCheck: Int?,
-		/** lb-bot's number, or null when no answer is known (then the title says no number at all). */
+		/**
+		 * The To fix number, the desktop's ([libraryToFixCount]: lb-bot's imports and folders to file), or null
+		 * when no answer is known (then the chip and the title say no number at all).
+		 */
 		val toFix: Int?,
 		val notices: List<AttentionNotice>,
 		/**
@@ -250,9 +278,7 @@ sealed interface AttentionPage {
 		/** Worbus P4: lb-bot's `counts.imports` from the answer shown, 0 without one. */
 		val imports: Int = 0,
 		/** B-406: lb-bot's `counts.folders` from the answer shown, 0 without one or while downloading is off. */
-		val foldersCounted: Int = 0,
-		/** B-406 review M4: lb-bot's `counts.picks` (albums waiting on a pick) from the answer shown, 0 without one. */
-		val picksCounted: Int = 0
+		val foldersCounted: Int = 0
 	) : AttentionPage
 }
 
@@ -267,22 +293,17 @@ fun toFixSectionCount(page: AttentionPage.Rows): Int =
 	page.imports + maxOf(page.foldersCounted, page.folders.size)
 
 /**
- * B-406 review M4: the To fix section's number, for its chip, its headline, the page's first choice and the
- * avatar's badge alike: **everything the section lists that waits on the user**.
+ * The To fix section's number, for its chip, its headline, the page's first choice and Library Matches'
+ * menu badge alike: **Worbus for desktop's** ([libraryToFixCount]; B-406, the owner's second re-walk), or
+ * null with no answer from lb-bot (the desktop then offers no To fix chip; the phone keeps its chip, with
+ * no number, over this phone's own rows).
  *
- * - With lb-bot's answer: lb-bot's to-fix ([toFixCount]: failed gaps and requests, folders, imports), the
- *   albums waiting on a pick (lb-bot's `picks`, never fewer than are listed) and this phone's own rows
- *   lb-bot no longer lists. Picks and this phone's rows were listed and not counted, so a section holding
- *   only those said "To fix (0)" over its rows, the page opened elsewhere, and no badge led there.
- *   Worbus for desktop and lb-bot's web UI count lb-bot's to-fix only (picks apart): a recorded divergence.
- * - With none (lb-bot not answering, an older hub or lb-bot): this phone's own rows, which is the badge's
- *   count of the ledger ([needsAttentionCount]: the same rows), so the chip, the headline and the badge
- *   agree where they used to say a number, nothing and a number.
+ * Review M4 had made it everything the section lists (lb-bot's [toFixCount], the picks, this phone's rows):
+ * 67 on the owner's phone against the desktop's 41. Those rows are still listed, under Albums and Only on
+ * this phone, each group with its own row count; this phone's failures and picks are Source history's
+ * badge ([sourceHistoryBadge]).
  */
-fun toFixTotal(page: AttentionPage.Rows): Int {
-	val counted = page.toFix ?: return page.albums.size
-	return counted + maxOf(page.picksCounted, page.albums.count { it.album.picking && !it.isDeviceOnly }) + page.deviceOnly.size
-}
+fun toFixTotal(page: AttentionPage.Rows): Int? = page.toFix
 
 /**
  * The page, from the last read, the last good answer ([last], read at [lastAt]) and the ledger.
@@ -345,12 +366,11 @@ fun attentionPage(
 		albums = serverRows,
 		folders = if (downloadsOn) answer.folders else emptyList(),
 		artistsToCheck = artistsToCheck,
-		toFix = answer.counts?.let { toFixCount(it, downloadsOn) },
+		toFix = answer.counts?.let { libraryToFixCount(it, downloadsOn) },
 		notices = notices,
 		deviceOnly = deviceOnly,
 		imports = answer.counts?.imports ?: 0,
-		foldersCounted = if (downloadsOn) answer.counts?.folders ?: 0 else 0,
-		picksCounted = answer.counts?.picks ?: 0
+		foldersCounted = if (downloadsOn) answer.counts?.folders ?: 0 else 0
 	)
 }
 

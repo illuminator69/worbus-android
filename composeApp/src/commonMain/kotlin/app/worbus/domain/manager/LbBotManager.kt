@@ -324,11 +324,19 @@ class LbBotManager(
 	private var attentionInFlight = false
 
 	/**
-	 * The number behind the avatar's dot and the menu's badge: the To fix section's own number over the
-	 * same state and ledger ([attentionBadge], B-406 review M4).
+	 * Library Matches' menu badge: the To fix section's own number over the same state and ledger
+	 * ([attentionBadge]), the desktop's (lb-bot's imports and folders to file; B-406, second re-walk).
 	 */
 	val attentionBadge: StateFlow<Int> = combine(_attention, _ledger, downloadsMode.value) { state, ledger, downloads ->
 		attentionBadge(state, ledger, downloadsOn = downloads.isOn)
+	}.stateIn(scope, SharingStarted.Eagerly, 0)
+
+	/**
+	 * Source history's menu badge: this phone's own failures and picks ([sourceHistoryBadge]), the desktop's
+	 * Activity badge. With [attentionBadge] it lights the avatar's dot.
+	 */
+	val sourceHistoryBadge: StateFlow<Int> = combine(_ledger, downloadsMode.value) { ledger, downloads ->
+		sourceHistoryBadge(ledger, downloadsOn = downloads.isOn)
 	}.stateIn(scope, SharingStarted.Eagerly, 0)
 
 	/** Whether the hub carries the attention route: an older one is "older", not "nothing to fix". */

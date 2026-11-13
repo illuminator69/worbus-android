@@ -226,7 +226,13 @@ internal fun avatarMenuItems(
 	 * Worbus P2: the signed-in user is an admin ([app.worbus.domain.manager.HubRoles]). Not, Library
 	 * tools is the wishlist alone: every other row is lb-bot's operator half (P1's rights table).
 	 */
-	admin: Boolean = true
+	admin: Boolean = true,
+	/**
+	 * B-406 (second re-walk): Source history's badge, this phone's own failures and picks
+	 * ([app.worbus.domain.manager.sourceHistoryBadge]), as the desktop's Activity badge. [attentionCount] is
+	 * Library Matches' (the desktop's to-fix number).
+	 */
+	sourceHistoryCount: Int = 0
 ): List<AvatarMenuEntry> = buildList {
 	add(
 		AvatarMenuEntry.Group(
@@ -264,7 +270,7 @@ internal fun avatarMenuItems(
 					),
 					if (downloadsOn) AvatarMenuEntry.Link(
 						AvatarMenuIds.SOURCE_HISTORY, Icons.Outlined.History, Res.string.title_source_history,
-						Screen.SourceHistory()
+						Screen.SourceHistory(), badge = sourceHistoryCount.takeIf { it > 0 }
 					) else null,
 					// Worbus P1: the wishlist's own page, in both modes.
 					AvatarMenuEntry.Link(
@@ -428,6 +434,7 @@ private fun AvatarMenuContent() {
 	val preferenceManager = koinInject<PreferenceManager>()
 
 	val attention by lbBot.attentionBadge.collectAsState()
+	val sourceHistory by lbBot.sourceHistoryBadge.collectAsState()
 	val webUrl by lbBot.webUrl.collectAsState()
 	val downloads by lbBot.downloads.collectAsState()
 	// Worbus P2: the signed-in user's roles; a `user` frame moves the rows in place.
@@ -436,8 +443,11 @@ private fun AvatarMenuContent() {
 	val autoplayOn by radioManager.autoplayOn.collectAsState()
 	val lbConfigured = lbAccess.let { lbBot.isConfigured }
 	val canShare = rememberCanShare(sessionManager)
-	val items = remember(lbConfigured, canShare, attention, webUrl, downloads, roles) {
-		avatarMenuItems(lbConfigured, canShare, menuAttentionBadge(attention, lbConfigured), webUrl, downloads.isOn, roles.admin)
+	val items = remember(lbConfigured, canShare, attention, sourceHistory, webUrl, downloads, roles) {
+		avatarMenuItems(
+			lbConfigured, canShare, menuAttentionBadge(attention, lbConfigured), webUrl, downloads.isOn, roles.admin,
+			sourceHistoryCount = menuAttentionBadge(sourceHistory, lbConfigured)
+		)
 	}
 	// R34: what an admin would see, so the rows a role change takes or gives fold out and in.
 	val everyGroup = remember(lbConfigured, canShare, webUrl, downloads) {

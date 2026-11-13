@@ -2127,9 +2127,13 @@ true of invented *album art*, and not of an icon naming the kind.
 - **Library tools (P6): Needs attention and Source history, from lb-bot's own lists.** The avatar menu's top rows are
   gone; Library tools holds, in order, Needs attention (badge: the count), Source history, Library Matches, and, only while
   the hub advertises a `webUrl`, Duplicates and trash, Source rules and Logs (`AvatarMenuEntry.External`: they open
-  `webUrl/#/<path>` in a browser). **The count is lb-bot's web UI's own**, `failedGaps + failedRequests + folders`
-  (`toFixCount`, from `GET /lb/attention`'s `counts`, PROTOCOL §15.6): the same on every client; albums waiting on a pick
-  and artists to check are listed, never counted. It is read on a hub `welcome` / `lb` frame and on a `fill` frame that
+  `webUrl/#/<path>` in a browser). (Since B-406 the list is Library Matches' **To fix** chip.) **Its number is
+  Worbus for desktop's** (B-406, the owner's second re-walk, 2026-11-13): `imports + folders` (`libraryToFixCount`, from
+  `GET /lb/attention`'s `counts`, PROTOCOL §15.6; desktop `libraryToFixCount`), for the chip, the headline and Library
+  Matches' menu badge alike, and no number without an answer. The failed albums, the picks and this phone's own rows are
+  listed, never counted there (lb-bot's own `toFixCount` adds `failedGaps + failedRequests`, and lb-bot counts a failed
+  gap fill in both, which is how the phone once said 67 against the desktop's 41); this phone's failures and picks are
+  Source history's badge (`sourceHistoryBadge`, desktop Activity's `attentionCount`). It is read on a hub `welcome` / `lb` frame and on a `fill` frame that
   names a failure or a pick (forced), when the menu opens and when a page appears, at most every 30 s otherwise, one read
   at a time; never polled. **A read that did not happen is never zero**: an older hub or lb-bot (a bare 404, a 405) keeps
   P1's ledger count and the page lists the device's rows with one sentence; a failed read keeps the last answer and says
@@ -2191,9 +2195,9 @@ true of invented *album art*, and not of an icon naming the kind.
   and one 48 dp node carries its click, role and label; an `IconButton` clipped its dot, and `minimumInteractiveComponentSize`
   split the click from the label. `AccountSheet` is gone; the sleep timer it held is in the song sheet (Now Playing,
   More). A new root page is behind `Washed`, in `WashedBrowsingScreens`, and has a rule-14 row (§2).
-  The dot counts lb-bot's own to-fix number where the hub answers `/lb/attention`, the device's own ledger
-  (`needsAttentionCount`: settled rows that failed or wait on a pick) where it cannot (P6, below), and is drawn only
-  with a hub configured, like the menu's Needs attention row (`attentionDotShown`, fix round B1); the
+  The dot stands for the menu's two badges, Library Matches' to-fix number and Source history's count of the device's
+  own ledger (`needsAttentionCount`: settled rows that failed or wait on a pick) (B-406, P6 below), and is drawn only
+  with a hub configured (`attentionDotShown`, fix round B1); the
   menu's Autoplay switch goes through `RadioManager.setAutoplayOn` (the manager keeps its own flow: writing the
   preference alone would not reach the driver).
 - **Arrival: `rememberArrivalGate()` per page visit, `Modifier.arrive(gate, key, index)` per tile (P1).** The gate is

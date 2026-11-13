@@ -9,9 +9,9 @@ package app.worbus.domain.manager
  *
  * Worbus for desktop's Library Matches page is the twin for To check, Artists, Albums and Merged names.
  * Android has a fifth, To fix (B-406, the owner's ruling of 2026-11-13: the Needs attention page that
- * was); the desktop's half of that move is its own lane's, and until it lands the two differ there. Its
- * number counts the albums waiting on a pick and this phone's own rows too (`toFixTotal`, review M4),
- * where the desktop and lb-bot's web UI count lb-bot's to-fix only.
+ * was), as the desktop's Library Matches has. **Its number is the desktop's** (`libraryToFixCount`:
+ * lb-bot's imports and folders to file; the owner's second re-walk, 2026-11-13 evening), though the phone's
+ * section also lists the failed albums, the picks and this phone's own rows, uncounted.
  */
 
 /**

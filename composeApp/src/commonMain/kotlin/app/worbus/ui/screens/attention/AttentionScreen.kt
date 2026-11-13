@@ -236,11 +236,23 @@ fun rememberToFixUi(snackbar: SnackbarHostState): ToFixUi {
 }
 
 /**
- * B-406 review M4: the To fix number the chip says and the page chooses its section by: the section's own
- * ([toFixTotal], which the headline says too), and while nothing is read yet the avatar's badge ([badge]),
- * which is the same rule over the same state: one number, never one per surface.
+ * The To fix number the chip says and the page chooses its section by: the section's own ([toFixTotal], the
+ * desktop's number, which the headline says too), and while nothing is read yet Library Matches' menu badge
+ * ([badge]), which is the same rule over the same state: one number, never one per surface. Null (no number
+ * on the chip) where lb-bot has not answered, or before the first read with no badge to go on.
  */
-fun toFixNumber(page: AttentionPage, badge: Int): Int = (page as? AttentionPage.Rows)?.let(::toFixTotal) ?: badge
+fun toFixNumber(page: AttentionPage, badge: Int): Int? = when (page) {
+	is AttentionPage.Rows -> toFixTotal(page)
+	AttentionPage.Loading -> badge.takeIf { it > 0 }
+}
+
+/**
+ * Whether the To fix headline may say "Nothing to fix" under a 0: only when the section lists no album
+ * either. Since the number is the desktop's (imports and folders), a failed album or a pick is listed and not
+ * counted, and "Nothing to fix" above it would be false.
+ */
+fun toFixHeadlineNothingShown(page: AttentionPage.Rows): Boolean =
+	page.toFix == 0 && page.albums.isEmpty() && page.deviceOnly.isEmpty()
 
 /** The section's rows, as items of the holding page's list. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -351,15 +363,16 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 private fun AttentionHead(page: AttentionPage.Rows, modifier: Modifier = Modifier) {
 	val unreachable = page.notices.any { it is AttentionNotice.Unreachable }
 	Column(modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp, bottom = 4.dp)) {
-		// B-406 review M4: the chip's and the badge's number (`toFixTotal`), with or without an answer.
+		// The chip's and the badge's number (`toFixTotal`, the desktop's: imports + folders to file), or
+		// none without an answer from lb-bot.
 		val count = toFixTotal(page)
-		// "Nothing to fix" is said only for an answer lb-bot just gave; a number from an older
-		// answer is still said, with the notice saying when it was read. Without an answer, the phone's
-		// own rows are counted and the notice says lb-bot's list could not be read.
 		val headline = when {
+			count == null -> null
 			count > 0 -> stringResource(Res.string.attention_to_fix, count)
-			page.toFix == null -> null
-			unreachable -> null
+			// "Nothing to fix" is said only for an answer lb-bot just gave (a number from an older answer is
+			// still said, with the notice saying when it was read), and never over rows the section lists
+			// but the number does not count (failed albums, picks, this phone's own rows).
+			unreachable || !toFixHeadlineNothingShown(page) -> null
 			else -> stringResource(Res.string.attention_nothing_to_fix)
 		}
 		if (headline != null) {

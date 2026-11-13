@@ -24,6 +24,15 @@ class LibraryMatchesToFixWiringTest {
 		assertFalse("toFixChipCount" in screen)
 	}
 
+	/** B-406 (second re-walk): the dot stands for both menu badges, as the desktop's sidebar shows both. */
+	@Test
+	fun theDotAndTheMenuReadBothBadges() {
+		val button = sourceFile("src/commonMain/kotlin/app/worbus/ui/components/common/AvatarButton.kt").readText()
+		assertTrue("attentionDotShown(badge + sourceHistory," in button, "the dot ignores this phone's own failures")
+		val menu = sourceFile("src/commonMain/kotlin/app/worbus/ui/components/sheets/AvatarMenu.kt").readText()
+		assertTrue("sourceHistoryCount = menuAttentionBadge(sourceHistory, lbConfigured)" in menu, "Source history has no badge")
+	}
+
 	@Test
 	fun nothingOfToFixIsReadForANonAdmin() {
 		assertTrue("val toFix = if (roles.admin) rememberToFixUi(snackbar) else null" in screen, "L8")
