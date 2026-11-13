@@ -28,9 +28,18 @@ import kotlinx.coroutines.withTimeoutOrNull
  * B-409 (the owner's walk, 2026-11-13): after a logout and another user's login the Worbus Server's
  * address is still set (a logout signs the device out of it and keeps it), and the step was offered
  * only when no address was set, so the new user went straight Home, never offered the sign-in a first
- * login gets. [hubStepAfterLogin] offers it then too, started from the kept address ([keptAddress]):
- * Found at once, no look, Sign in is `POST /hub/signin` there, and nothing it does unpaired takes the
- * address away (a typed other one that does not pair puts the kept one back).
+ * login gets. [hubStepAfterLogin] offers it then too, started from the kept address ([keptAddress]),
+ * and nothing the step does unpaired takes the address away (one found or typed that does not pair puts
+ * the kept one back).
+ *
+ * B-409 review M1: only a kept server that belongs to the Navidrome just signed in to
+ * ([keptServerBelongsTo]): the Navidrome it was paired beside, recorded at pairing
+ * (`PreferenceManager.hubPairedNavidrome`), or, paired before that was recorded, a server whose host is
+ * one the look beside this Navidrome asks. Sign in sends this account's token pair, so another
+ * Navidrome's server is never offered: the step looks beside the new Navidrome instead. And the kept
+ * address is asked (`GET /hub/info`) before it is called found: it must answer as the server the record
+ * names, and never over plain text to a public host (the finder's rule, [groupFound]); otherwise the
+ * step looks beside Navidrome as a first login does.
  */
 
 /** Which Worbus Server step a login that just succeeded offers, or null for none (B-409). */
@@ -47,10 +56,32 @@ enum class HubStepStart {
  * on and no device secret (the logout before this login signed the device out, or it never paired):
  * offer the kept server's sign-in. Signed in already, or Connect turned off by the user: none.
  */
-fun hubStepAfterLogin(addressSet: Boolean, connectOn: Boolean, signedIn: Boolean): HubStepStart? = when {
+fun hubStepAfterLogin(addressSet: Boolean, connectOn: Boolean, signedIn: Boolean, keptBelongsHere: Boolean): HubStepStart? = when {
 	!addressSet -> HubStepStart.LookBeside
-	connectOn && !signedIn -> HubStepStart.KeptAddress
-	else -> null
+	signedIn || !connectOn -> null
+	keptBelongsHere -> HubStepStart.KeptAddress
+	// Review M1: another Navidrome's server is never offered; look beside this one, the kept address kept.
+	else -> HubStepStart.LookBeside
+}
+
+/**
+ * Review M1: whether the kept Worbus Server at [keptAddress] belongs to the Navidrome at [navidromeUrl]:
+ * the one it was paired beside ([pairedNavidrome], recorded at each pairing), or, with none recorded (a
+ * pairing made before it was), a server whose host is one the look beside [navidromeUrl] asks
+ * ([candidatesFor]).
+ */
+fun keptServerBelongsTo(navidromeUrl: String, pairedNavidrome: String, keptAddress: String): Boolean {
+	if (pairedNavidrome.isNotBlank()) return sameNavidrome(pairedNavidrome, navidromeUrl)
+	val host = normaliseHubAddress(keptAddress)?.let(::hubAddressHost)?.lowercase() ?: return false
+	return candidatesFor(navidromeUrl).any { candidate ->
+		normaliseHubAddress(candidate)?.let(::hubAddressHost)?.lowercase() == host
+	}
+}
+
+/** Two Navidrome addresses are one server: the same text, case and a trailing slash aside. */
+fun sameNavidrome(a: String, b: String): Boolean {
+	fun key(url: String) = url.trim().trimEnd('/').lowercase()
+	return key(a).isNotEmpty() && key(a) == key(b)
 }
 
 /** Where the step stands; the screen draws one layout per state (`HubStep.kt`). */
@@ -121,9 +152,16 @@ class HubSignInStep(
 	/** Connect as it was before the step wrote anything: put back when a sign-in does not pair. */
 	private val enabledBefore = preferenceManager.hubEnabled
 
-	/** B-409: the kept server's address and record, put back when a typed other one does not pair. */
-	private val urlBefore = if (keptAddress != null) preferenceManager.hubUrl else ""
-	private val recordBefore = if (keptAddress != null) store.read() else null
+	/**
+	 * B-409: the address and record set before the step, put back when one the step wrote does not pair
+	 * (a kept server's, or, review M1, another Navidrome's that the step looked past). None set: none.
+	 */
+	private val urlBefore = preferenceManager.hubUrl
+	private val recordBefore = if (urlBefore.isNotBlank()) store.read() else null
+
+	/** Review M1: the kept address answered as the server its record names, so Sign in may go there. */
+	@kotlin.concurrent.Volatile
+	private var keptVerified = false
 
 	/** The step's Sign in wrote an address and a record that a pairing has not yet made good. */
 	private var stored = false
@@ -135,11 +173,14 @@ class HubSignInStep(
 	private var job: Job? = null
 
 	init {
-		if (keptAddress != null) {
-			// B-409: the server this phone already has; offered at once, nothing looked for.
-			_state.value = HubStepState.Found(httpBaseOfAddress(keptAddress) ?: keptAddress)
-			log("offering the kept address's sign-in")
-		} else replaceJob {
+		replaceJob {
+			// B-409, review M1: the kept server is asked first, and offered only as the server its record names.
+			if (keptAddress != null && keptAnswers(keptAddress)) {
+				keptVerified = true
+				_state.value = HubStepState.Found(httpBaseOfAddress(keptAddress) ?: keptAddress)
+				log("offering the kept address's sign-in")
+				return@replaceJob
+			}
 			val found = try {
 				finder.lookBesideWithinBudget()
 			} catch (e: CancellationException) {
@@ -159,13 +200,34 @@ class HubSignInStep(
 		}
 	}
 
+	/**
+	 * Review M1: the kept address answers `/hub/info` as the server the record names (any server when the
+	 * record has no id yet), over an address the finder would offer: encrypted, or private.
+	 */
+	private suspend fun keptAnswers(kept: String): Boolean {
+		val candidate = normaliseHubAddress(kept) ?: return false
+		val timeout = probeTimeoutMs(candidate)
+		val outcome = try {
+			withTimeoutOrNull(timeout + PROBE_ANSWER_SLACK_MS) { probe.probe(candidate, timeout) } ?: InfoOutcome.Unreachable
+		} catch (e: CancellationException) {
+			throw e
+		} catch (e: Exception) {
+			InfoOutcome.Unreachable
+		}
+		val server = groupFound(listOf(candidate to outcome), olderCounts = true).firstOrNull() as? Found.Server
+		val recordId = recordBefore?.serverId
+		val ok = server != null && (recordId == null || recordId == server.serverId)
+		log("kept address asked: ${outcome::class.simpleName}${if (server != null && !ok) " (another server)" else ""}")
+		return ok
+	}
+
 	/** Sign in to the server offered ([HubStepState.Found]). */
 	fun signIn() {
 		if (ended) return
 		val shown = (_state.value as? HubStepState.Found)?.address ?: return
 		// B-409: the kept address is already Settings' own; only a found or typed one is written first.
 		val offer = offered
-		if (offer == null && keptAddress == null) return
+		if (offer == null && !keptVerified) return
 		_state.value = HubStepState.SigningIn(shown)
 		replaceJob {
 			if (offer != null) {
@@ -267,7 +329,7 @@ class HubSignInStep(
 	private fun forgetStored() {
 		if (!stored) return
 		stored = false
-		// B-409: a step started from a kept address puts that address back, not none.
+		// B-409: an address set before the step is put back, not none.
 		store.startOver(recordBefore ?: HubServerRecord(promptDismissed = store.read().promptDismissed), hubUrl = urlBefore)
 		preferenceManager.hubEnabled = enabledBefore
 	}

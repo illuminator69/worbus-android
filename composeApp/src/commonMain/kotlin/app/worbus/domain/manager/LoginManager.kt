@@ -191,7 +191,13 @@ class LoginManager(
 					// Success and the step in one write (B-344): the page never heads Home ahead of it.
 					// B-409: a kept address this account is not signed in to is offered too.
 					pageHolder.loggedIn(
-						when (hubStepAfterLogin(hubAddressSet(preferenceManager), preferenceManager.hubEnabled, hubAuth.signedIn)) {
+						when (hubStepAfterLogin(
+							hubAddressSet(preferenceManager), preferenceManager.hubEnabled, hubAuth.signedIn,
+							// Review M1: only the server of the Navidrome just signed in to is offered as kept.
+							keptBelongsHere = keptServerBelongsTo(
+								sessionManager.instanceUrl(), preferenceManager.hubPairedNavidrome, preferenceManager.hubUrl
+							)
+						)) {
 							HubStepStart.LookBeside -> newHubStep()
 							HubStepStart.KeptAddress -> newHubStep(keptAddress = preferenceManager.hubUrl)
 							null -> null

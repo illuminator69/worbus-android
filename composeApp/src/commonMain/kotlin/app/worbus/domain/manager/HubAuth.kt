@@ -294,7 +294,9 @@ class HubAuth(
 	/** Where its lines go (lengths and outcomes only, never a credential). Tests pass a no-op. */
 	private val log: (String) -> Unit = { Logger.i("HubAuth", it) },
 	/** The device's model, the name it signs in with until the user types one (Worbus P5). */
-	private val model: () -> String? = { null }
+	private val model: () -> String? = { null },
+	/** B-409 review M1: the Navidrome this device is signed in to, recorded with each pairing. */
+	private val navidromeUrl: () -> String? = { null }
 ) {
 	/** The app's: the account from [SessionManager], the device kind from [HubLocalDevice]. */
 	constructor(
@@ -302,7 +304,10 @@ class HubAuth(
 		secrets: SecretStore,
 		sessionManager: SessionManager,
 		localDevice: HubLocalDevice
-	) : this(preferenceManager, secrets, { sessionManager.navidromeAccount() }, { localDevice.kind }, model = { localDevice.model })
+	) : this(
+		preferenceManager, secrets, { sessionManager.navidromeAccount() }, { localDevice.kind },
+		model = { localDevice.model }, navidromeUrl = { sessionManager.instanceUrl() }
+	)
 
 	private val lock = Mutex()
 
@@ -563,6 +568,8 @@ class HubAuth(
 				deviceIdKey(acct.username)?.let { saveBoundId(it, grant.deviceId) }
 				if (grant.deviceId == preferenceManager.hubDeviceId) preferenceManager.hubLegacyDeviceIdClaimed = true
 				preferenceManager.hubOldServerUrl = ""
+				// Review M1: the server is this Navidrome's from now on (B-409's kept-server offer reads it).
+				navidromeUrl()?.trim()?.takeIf { it.isNotEmpty() }?.let { preferenceManager.hubPairedNavidrome = it }
 				log("signed in as ${grant.user.name} (admin=${grant.user.isAdmin}, primary=${grant.user.isPrimary}); secret length ${grant.deviceSecret.length}")
 				SignInResult.SignedIn(grant.user)
 			}

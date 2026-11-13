@@ -259,6 +259,10 @@ class PreferenceManager(
 	// Worbus P2: the address whose `/hub/signin` answered as a server from before sign-in (404, 405,
 	// not its JSON; R6), so the token field stays offered there across a restart. "" for none.
 	var hubOldServerUrl by preference("")
+	// B-409 review M1: the Navidrome address this device was signed in to when it last paired with the
+	// Worbus Server ("" for a pairing made before it was recorded). A kept server is offered after a login
+	// only to an account of that Navidrome.
+	var hubPairedNavidrome by preference("")
 	// Comma-joined device ids the user manually hid from the device picker.
 	var hubHiddenDeviceIds by preference("")
 	// Worbus P1: the last downloads mode ("on" | "off") lb-bot reported through each hub, as a JSON
