@@ -68,11 +68,11 @@ class DiscographyListMemoryTest {
 	}
 
 	/** Composes the page's list memory under [registry], as the page does, and returns the composition. */
-	private fun Page.compose(registry: SaveableStateRegistry, view: DiscographyView): Composition {
+	private fun Page.compose(registry: SaveableStateRegistry, view: DiscographyView, presentAtOpen: Boolean = false): Composition {
 		val composition = Composition(NoApplier(), recomposer)
 		composition.setContent {
 			CompositionLocalProvider(LocalSaveableStateRegistry provides registry) {
-				memory = rememberDiscographyListMemory(filter.value, view)
+				memory = rememberDiscographyListMemory(filter.value, view, presentAtOpen)
 			}
 		}
 		return composition
@@ -132,5 +132,34 @@ class DiscographyListMemoryTest {
 		val keys = discographyArrivalKeys(view)
 		assertEquals(310, keys.size)
 		assertTrue(aRowFarDown in keys)
+	}
+
+	/*
+	 * B-405 (the owner's re-walk, 2026-11-13): rows the page has on its first frame (it opened on the
+	 * artist page's state) slid in with the page and then arrived again, one after another, after the
+	 * slide: a stage of its own. They are there from the first frame; a later filter still plays the
+	 * arrival; a page that had to wait for its rows still plays it too.
+	 */
+	@Test
+	fun rowsThereOnThePagesFirstFrameDoNotArriveAgain() = page {
+		compose(SaveableStateRegistry(null) { true }, view, presentAtOpen = true)
+		assertFalse(memory!!.gate.claim("album-1"), "before any frame, a row on the first frame has arrived")
+		assertFalse(memory!!.gate.claim(aRowFarDown), "and one far down")
+	}
+
+	@Test
+	fun aNewFilterStillPlaysTheArrivalOnAPageOpenedWithItsRows() = page {
+		compose(SaveableStateRegistry(null) { true }, view, presentAtOpen = true)
+		frame()
+		filter.value = DiscographyFilter(sort = DiscographySort.NEWEST)
+		Snapshot.sendApplyNotifications()
+		frame()
+		assertTrue(memory!!.gate.claim("album-1"), "the new filter's rows arrive")
+	}
+
+	@Test
+	fun rowsThatComeAfterThePageStillArrive() = page {
+		compose(SaveableStateRegistry(null) { true }, view, presentAtOpen = false)
+		assertTrue(memory!!.gate.claim("album-1"), "a page that waited for its rows: they arrive")
 	}
 }

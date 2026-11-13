@@ -33,9 +33,19 @@ fun discographyArrivalKeys(view: DiscographyView): List<String> =
 	view.sections.flatMap { section -> section.entries.map { it.key } }.distinct()
 
 @Composable
-fun rememberDiscographyListMemory(filter: DiscographyFilter, view: DiscographyView): DiscographyListMemory {
+fun rememberDiscographyListMemory(
+	filter: DiscographyFilter,
+	view: DiscographyView,
+	/**
+	 * B-405: the page had its rows on its first frame (opened on the artist page's state). They are then
+	 * there as the page slides in, not arriving one after another once it has; a filter changed later still
+	 * plays the arrival, as before.
+	 */
+	presentAtOpen: Boolean = false
+): DiscographyListMemory {
+	val openingFilter = remember { filter }
 	val gate = rememberSaveable(filter, saver = listSaver(save = { it.toSaved() }, restore = { ArrivalGate.fromSaved(it) })) {
-		ArrivalGate()
+		ArrivalGate().also { if (presentAtOpen && filter == openingFilter) it.claimAll(discographyArrivalKeys(view)) }
 	}
 	val expanded = rememberSaveable(filter) { mutableStateOf(listOf<String>()) }
 	ClaimAfterFirstFrame(gate, remember(view) { discographyArrivalKeys(view) })

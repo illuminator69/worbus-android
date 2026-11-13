@@ -110,6 +110,7 @@ import app.worbus.ui.util.rememberCoverColorScheme
 import app.worbus.ui.components.sheets.CollectionSheet
 import app.worbus.ui.components.sheets.MbidMatchSheet
 import app.worbus.ui.core.UiState
+import app.worbus.ui.util.OnPageSettled
 import app.worbus.ui.navigation.Screen
 import app.worbus.ui.screens.artist.components.ArtistActionButtons
 import app.worbus.ui.components.sheets.AboutSheet
@@ -142,6 +143,8 @@ fun ArtistDetailScreen(
 		key = artistId,
 		parameters = { parametersOf(artistId) }
 	)
+	// B-405: a page opened on another page's state of this artist reads Room once it has slid in.
+	OnPageSettled { viewModel.pageSettled() }
 	val platformContext = LocalPlatformContext.current
 	val player = koinInject<MediaPlayerViewModel>()
 	val playerState by player.steadyState.collectAsStateWithLifecycle()

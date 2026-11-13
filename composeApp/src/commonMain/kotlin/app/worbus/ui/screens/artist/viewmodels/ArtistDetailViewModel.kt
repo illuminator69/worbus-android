@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Job
@@ -194,6 +196,9 @@ data class MbidMatchUi(
 	val error: LbBotManager.LbError? = null
 )
 
+/** B-405: how long a page opened on another page's state waits for its slide before reading Room anyway. */
+private const val SEEDED_READ_WAIT_MS = 1_500L
+
 class ArtistDetailViewModel(
 	private val artistId: String,
 	private val repository: DbRepository,
@@ -207,7 +212,8 @@ class ArtistDetailViewModel(
 	private val lbIndexSync: LbIndexSync,
 	private val nativeApiManager: NativeApiManager,
 	private val snackBarManager: SnackBarManager,
-	connectivityManager: ConnectivityManager
+	connectivityManager: ConnectivityManager,
+	private val pageMemory: ArtistPageMemory
 ) : ViewModel() {
 	val artistState: StateFlow<UiState<ArtistState>>
 		field = MutableStateFlow<UiState<ArtistState>>(UiState.Loading())
@@ -316,8 +322,35 @@ class ArtistDetailViewModel(
 	private var scanJob: Job? = null
 	private var metaJob: Job? = null
 
+	/** B-405: the page's slide has ended ([pageSettled]); a page opened on [pageMemory] reads Room after it. */
+	private val settled = CompletableDeferred<Unit>()
+
+	/** B-405: called by the page once its opening transition has ended. */
+	fun pageSettled() {
+		settled.complete(Unit)
+	}
+
 	init {
-		loadArtistData()
+		// B-405: a page of an artist another page has shown opens on what that page showed, at once, and
+		// reads Room again (the same read, which then changes nothing it shows) only once its slide has
+		// ended, so neither the read's main-thread work nor a list's first composition lands mid-slide.
+		val seed = pageMemory[artistId]
+		if (seed != null) {
+			artistState.value = UiState.Success(seed.state)
+			_discography.value = seed.discography.seeded()
+			_artistMbid.value = seed.mbid
+			viewModelScope.launch {
+				withTimeoutOrNull(SEEDED_READ_WAIT_MS) { settled.await() }
+				loadArtistData()
+			}
+		} else {
+			loadArtistData()
+		}
+		viewModelScope.launch {
+			combine(artistState, _discography, _artistMbid) { state, discography, mbid ->
+				(state as? UiState.Success)?.data?.let { ArtistPageSnapshot(it, discography, mbid) }
+			}.collect { snapshot -> if (snapshot != null) pageMemory.put(artistId, snapshot) }
+		}
 		// A fill landing — here or on another client — changes two answers at once:
 		// Navidrome has an album it didn't, and lb-bot no longer counts that
 		// release-group as missing. Showing one without the other is exactly the
@@ -432,12 +465,17 @@ class ArtistDetailViewModel(
 					askUnresolvedIfDue(mirrored, fromNetwork = false)
 				}
 
+				// B-405: a page opened on another page's state keeps what that page had already learned
+				// beyond Room (the guest albums, the similar artists the server answered) until its own reads
+				// say otherwise, instead of emptying a shelf it shows and filling it again.
+				val shown = (artistState.value as? UiState.Success)?.data
 				artistState.value = UiState.Success(
 					ArtistState(
 						artist = domainArtist,
 						albums = domainAlbums,
 						topSongs = domainSongs,
-						similarArtists = initialSimilarArtists
+						similarArtists = shown?.similarArtists?.takeIf { it.isNotEmpty() } ?: initialSimilarArtists,
+						appearsOn = shown?.appearsOn.orEmpty()
 					)
 				)
 				// The mirror keeps answering for as long as the page lives: a sync that

@@ -48,11 +48,14 @@ import app.worbus.domain.manager.RoomWriteQueueStore
 import app.worbus.data.database.dao.PendingWriteDao
 import app.worbus.data.database.dao.SyncActionDao
 import app.worbus.ui.util.AmbientColorHolder
+import app.worbus.ui.screens.artist.viewmodels.ArtistPageMemory
 import app.worbus.ui.util.CoverSeedPrefetcher
 import app.worbus.ui.util.CoverSeedStore
 
 val managerModule = module {
 	singleOf(::AmbientColorHolder)
+	// B-405: what an artist's page last showed, for the next page of that artist.
+	singleOf(::ArtistPageMemory)
 	// P3: where a Deezer browse tile opens, for Discover and the Charts / Editors' picks pages.
 	singleOf(::BrowseResolver)
 	// I-043: cover seed colours, persisted. An explicit lambda: singleOf would try to resolve the

@@ -45,6 +45,8 @@ import androidx.compose.runtime.remember
 import app.worbus.ui.screens.artist.components.DiscographyScanAction
 import app.worbus.ui.screens.artist.components.indexFreshnessLabel
 import app.worbus.ui.screens.artist.viewmodels.ArtistDetailViewModel
+import app.worbus.ui.core.UiState
+import app.worbus.ui.util.OnPageSettled
 
 /**
  * An owned artist's whole discography (P4 round 2), behind the chips the owner's mockups draw: type
@@ -74,8 +76,13 @@ fun ArtistDiscographyScreen(artistId: String) {
 	val types = remember(sections) { entryTypes(sections) }
 	val ledger by koinInject<LbBotManager>().ledger.collectAsStateWithLifecycle()
 	// Review M2, M3, m2: the arrival and the open groups, saved with the page and started over per filter.
-	val memory = rememberDiscographyListMemory(filter, view)
+	// B-405: rows the page has on its first frame (it opened on the artist page's state, ArtistPageMemory)
+	// slide in with the page; only rows that come later play the arrival.
+	val presentAtOpen = remember { viewModel.artistState.value is UiState.Success }
+	val memory = rememberDiscographyListMemory(filter, view, presentAtOpen)
 	val open = rememberDiscographyOpener(viewModel, artistId)
+	// B-405: the page reads Room again once it has slid in, not during the slide.
+	OnPageSettled { viewModel.pageSettled() }
 
 	Scaffold(
 		topBar = {
