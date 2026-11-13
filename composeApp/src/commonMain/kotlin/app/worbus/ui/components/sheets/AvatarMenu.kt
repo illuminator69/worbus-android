@@ -219,7 +219,9 @@ internal fun avatarMenuItems(
 	webUrl: String = "",
 	/**
 	 * Worbus P1: lb-bot can download. Off, Source rules (how lb-bot picks a source) and Source history
-	 * (requests and transfers) are not drawn: both are about downloading, and both say "source".
+	 * (requests and transfers) are not drawn: both are about downloading, and both say "source". Review L3
+	 * (second re-walk): Source history stays while its badge counts this phone's own failures or picks
+	 * ([sourceHistoryCount] > 0), as the desktop keeps Activity, since they would otherwise be unreachable.
 	 */
 	downloadsOn: Boolean = true,
 	/**
@@ -268,7 +270,7 @@ internal fun avatarMenuItems(
 						AvatarMenuIds.LIBRARY_MATCHES, Icons.Brand.Musicbrainz,
 						Res.string.title_library_matches, Screen.LibraryMatches, badge = attentionCount.takeIf { it > 0 }
 					),
-					if (downloadsOn) AvatarMenuEntry.Link(
+					if (downloadsOn || sourceHistoryCount > 0) AvatarMenuEntry.Link(
 						AvatarMenuIds.SOURCE_HISTORY, Icons.Outlined.History, Res.string.title_source_history,
 						Screen.SourceHistory(), badge = sourceHistoryCount.takeIf { it > 0 }
 					) else null,
@@ -450,8 +452,11 @@ private fun AvatarMenuContent() {
 		)
 	}
 	// R34: what an admin would see, so the rows a role change takes or gives fold out and in.
-	val everyGroup = remember(lbConfigured, canShare, webUrl, downloads) {
-		avatarMenuItems(lbConfigured, canShare, 0, webUrl, downloads.isOn, admin = true)
+	val everyGroup = remember(lbConfigured, canShare, webUrl, downloads, sourceHistory) {
+		avatarMenuItems(
+			lbConfigured, canShare, 0, webUrl, downloads.isOn, admin = true,
+			sourceHistoryCount = menuAttentionBadge(sourceHistory, lbConfigured)
+		)
 			.filterIsInstance<AvatarMenuEntry.Group>().associateBy { it.id }
 	}
 	val uriHandler = LocalUriHandler.current

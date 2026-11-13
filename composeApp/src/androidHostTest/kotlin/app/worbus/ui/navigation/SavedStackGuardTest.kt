@@ -88,6 +88,7 @@ class SavedStackGuardTest {
 	@Test
 	fun enumsSavedByPositionKeepTheirOrder() {
 		assertEquals(listOf("Device", "Fills", "Wishlist"), DownloadsSection.entries.map { it.name })
-		assertEquals(listOf("Requests", "Transfers", "Wishlist"), SourceHistorySection.entries.map { it.name })
+		// Review M1 (second re-walk): Need you appended, never inserted (it is drawn second).
+		assertEquals(listOf("Requests", "Transfers", "Wishlist", "NeedYou"), SourceHistorySection.entries.map { it.name })
 	}
 }

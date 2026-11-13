@@ -145,7 +145,11 @@ class AvatarMenuItemsTest {
 		assertEquals(41, items.link(AvatarMenuIds.LIBRARY_MATCHES).badge)
 		assertEquals(3, items.link(AvatarMenuIds.SOURCE_HISTORY).badge)
 		val off = avatarMenuItems(lbConfigured = true, canShare = true, attentionCount = 0, downloadsOn = false, sourceHistoryCount = 3)
-		assertFalse(AvatarMenuIds.SOURCE_HISTORY in off.flat().ids(), "off: no Source history row, so no badge")
+		// Review L3 (second re-walk): off, the row stays while this phone's own failures are badged, as the
+		// desktop keeps Activity; with none, it goes.
+		assertEquals(3, off.link(AvatarMenuIds.SOURCE_HISTORY).badge)
+		val offNone = avatarMenuItems(lbConfigured = true, canShare = true, attentionCount = 0, downloadsOn = false, sourceHistoryCount = 0)
+		assertFalse(AvatarMenuIds.SOURCE_HISTORY in offNone.flat().ids(), "off and nothing badged: no Source history row")
 	}
 
 	@Test

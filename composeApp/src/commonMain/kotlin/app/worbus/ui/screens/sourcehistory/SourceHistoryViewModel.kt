@@ -1,6 +1,5 @@
 package app.worbus.ui.screens.sourcehistory
 
-import kotlin.time.Clock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
@@ -9,6 +8,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import app.worbus.domain.manager.ActivityRead
@@ -32,15 +32,28 @@ data class SourceHistoryServer(val last: LbActivity? = null, val status: Activit
  * (the screen drives that; nobody watching, no read).
  */
 class SourceHistoryViewModel(private val lbBot: LbBotManager) : ViewModel() {
-	private val _server = MutableStateFlow(SourceHistoryServer())
-	val server: StateFlow<SourceHistoryServer> = _server.asStateFlow()
+	/** How the last read went; what it said is the manager's ([LbBotManager.activityAnswer]). */
+	private val _status = MutableStateFlow<ActivityRead?>(null)
 
-	val groups: StateFlow<HistoryGroups> = combine(_server, lbBot.ledger) { server, ledger ->
-		historyGroups(mergeHistory(server.last?.requests.orEmpty(), ledger))
+	/**
+	 * Review M1 (second re-walk): lb-bot's half is the manager's last answer, the one Source history's menu
+	 * badge is counted over, so the Need you chip and the badge are one number at every moment (an answer
+	 * from an earlier visit included).
+	 */
+	val server: StateFlow<SourceHistoryServer> = combine(_status, lbBot.activityAnswer) { status, answer ->
+		SourceHistoryServer(
+			last = answer?.let { LbActivity(version = 1, requests = it.requests, transfers = it.transfers) },
+			status = status,
+			lastAt = answer?.readAt
+		)
+	}.stateIn(viewModelScope, SharingStarted.Eagerly, SourceHistoryServer())
+
+	val groups: StateFlow<HistoryGroups> = combine(lbBot.activityAnswer, lbBot.ledger) { answer, ledger ->
+		historyGroups(mergeHistory(answer?.requests.orEmpty(), ledger, answer?.readAt))
 	}.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryGroups(emptyList(), emptyList()))
 
-	val transfers: StateFlow<List<ActivityTransfer>> get() = _transfers
-	private val _transfers = MutableStateFlow<List<ActivityTransfer>>(emptyList())
+	val transfers: StateFlow<List<ActivityTransfer>> = lbBot.activityAnswer.map { it?.transfers.orEmpty() }
+		.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
 	val lbConfigured: Boolean get() = lbBot.isConfigured
 
@@ -48,7 +61,7 @@ class SourceHistoryViewModel(private val lbBot: LbBotManager) : ViewModel() {
 	/** A read of lb-bot is out. */
 	val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
-	/** A good answer replaces the last; an older lb-bot forgets it; a failure keeps it on screen. */
+	/** A good answer replaces the last; an older lb-bot forgets it; a failure keeps it on screen (the manager's). */
 	fun load(): Job = viewModelScope.launch {
 		_loading.value = true
 		val read = try {
@@ -56,15 +69,8 @@ class SourceHistoryViewModel(private val lbBot: LbBotManager) : ViewModel() {
 		} finally {
 			_loading.value = false
 		}
-		_server.value = when (read) {
-			is ActivityRead.Ok -> SourceHistoryServer(
-				LbActivity(version = 1, requests = read.requests, transfers = read.transfers), read,
-				lastAt = Clock.System.now().toEpochMilliseconds()
-			)
-			ActivityRead.Older -> SourceHistoryServer(null, read)
-			ActivityRead.Unavailable -> _server.value.copy(status = read)
-		}
-		_transfers.value = _server.value.last?.transfers.orEmpty()
+		// The manager keeps (or, for an older lb-bot, forgets) the answer itself.
+		_status.value = read
 	}
 
 	companion object {

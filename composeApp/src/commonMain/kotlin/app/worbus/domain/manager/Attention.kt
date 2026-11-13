@@ -1,9 +1,17 @@
 package app.worbus.domain.manager
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 
 /*
@@ -21,19 +29,39 @@ import kotlinx.serialization.json.jsonObject
  * read yet) the section has no number at all, as the desktop has no To fix chip then.
  */
 
-/** lb-bot's numbers, the keys of `/lb/attention`'s `counts`. */
+/**
+ * Review L7 (second re-walk): one of lb-bot's counts as Worbus for desktop reads it (`attentionImports`,
+ * `attentionFolderCount`): a whole number above 0, else 0. A negative number, a fraction, a string or a
+ * null is 0 for that count alone; it used to be taken as it came (a negative count) or to fail the
+ * whole answer (a fraction), so a malformed answer showed different numbers on the two clients.
+ */
+internal object LbCountSerializer : KSerializer<Int> {
+	override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("app.worbus.LbCount", PrimitiveKind.INT)
+
+	override fun deserialize(decoder: Decoder): Int {
+		if (decoder !is JsonDecoder) return decoder.decodeInt().coerceAtLeast(0)
+		val p = decoder.decodeJsonElement() as? JsonPrimitive ?: return 0
+		if (p.isString) return 0
+		val d = p.doubleOrNull ?: return 0
+		return if (d.isFinite() && d > 0 && d == kotlin.math.floor(d) && d <= Int.MAX_VALUE) d.toInt() else 0
+	}
+
+	override fun serialize(encoder: Encoder, value: Int) = encoder.encodeInt(value)
+}
+
+/** lb-bot's numbers, the keys of `/lb/attention`'s `counts`, each read by [LbCountSerializer]. */
 @Serializable
 data class AttentionCounts(
-	val failedGaps: Int = 0,
-	val failedRequests: Int = 0,
-	val folders: Int = 0,
-	val foldersUnidentified: Int = 0,
-	val picks: Int = 0,
+	@Serializable(with = LbCountSerializer::class) val failedGaps: Int = 0,
+	@Serializable(with = LbCountSerializer::class) val failedRequests: Int = 0,
+	@Serializable(with = LbCountSerializer::class) val folders: Int = 0,
+	@Serializable(with = LbCountSerializer::class) val foldersUnidentified: Int = 0,
+	@Serializable(with = LbCountSerializer::class) val picks: Int = 0,
 	/**
 	 * Worbus P4: import records (`_albums`) lb-bot could not finish filing, `needs_review` or `failed`.
 	 * Counted in the to-fix number; absent (an older lb-bot) is 0.
 	 */
-	val imports: Int = 0
+	@Serializable(with = LbCountSerializer::class) val imports: Int = 0
 )
 
 /** One album lb-bot holds as failed or waiting on a pick: a review group (`gap`) or a whole-album request. */
@@ -167,12 +195,22 @@ fun attentionBadge(state: AttentionState, ledger: List<LbFillEntry>, downloadsOn
 
 /**
  * B-406 (second re-walk): Source history's menu badge, Worbus for desktop's Activity badge
- * (`attentionCount`): this phone's own settled fills that wait on the user, failed or waiting on a pick
- * ([needsAttentionCount]). They were added into the To fix number, which the desktop never did. None while
- * downloading is off: Source history is not drawn then, and a badge must be on a row that shows.
+ * (`attentionCount`): this phone's own settled fills that wait on the user, failed or waiting on a pick.
+ * They were added into the To fix number, which the desktop never did.
+ *
+ * Review M1: **it is the size of Source history's Need you chip** ([HistoryGroups.needYou]), counted over
+ * the same rows the page draws ([mergeHistory] of lb-bot's last answer, [activity], read at its
+ * [ActivityAnswer.readAt], and the ledger), so a row is counted only when the state it is drawn in is
+ * failed or waiting on a pick: where lb-bot's later state differs (a retry from another client that
+ * landed), lb-bot's wins for the badge as on the row. With no answer from lb-bot it is the ledger's
+ * count ([needsAttentionCount]), as the page is then the ledger.
+ *
+ * Review L3: **not turned off with downloading**: an admin's own failures from an earlier "on" period keep
+ * the badge, and Source history's row stays in the menu for them ([avatarMenuItems]), as the desktop keeps
+ * Activity (`sidebar-groups.ts`: "which would otherwise be unreachable").
  */
-fun sourceHistoryBadge(ledger: List<LbFillEntry>, downloadsOn: Boolean = true): Int =
-	if (downloadsOn) needsAttentionCount(ledger) else 0
+fun sourceHistoryBadge(ledger: List<LbFillEntry>, activity: ActivityAnswer? = null): Int =
+	historyGroups(mergeHistory(activity?.requests.orEmpty(), ledger, activity?.readAt)).needYou.size
 
 /**
  * Whether the avatar's dot is drawn: something to fix, the dot not turned off, and a hub configured.

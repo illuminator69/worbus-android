@@ -55,6 +55,17 @@ data class LbActivity(
 	val transfers: List<ActivityTransfer> = emptyList()
 )
 
+/**
+ * Review M1 (second re-walk): lb-bot's last good `/lb/activity` answer and when this device read it (epoch ms,
+ * its own clock), kept by [LbBotManager.activityAnswer] so Source history and its menu badge join the ledger
+ * with the same answer.
+ */
+data class ActivityAnswer(
+	val requests: List<ActivityRequest>,
+	val transfers: List<ActivityTransfer>,
+	val readAt: Long
+)
+
 sealed interface ActivityRead {
 	data class Ok(val requests: List<ActivityRequest>, val transfers: List<ActivityTransfer>) : ActivityRead
 	data object Older : ActivityRead
@@ -77,9 +88,12 @@ fun activityRead(status: Int, body: String): ActivityRead = when (status) {
 	else -> ActivityRead.Unavailable
 }
 
-/** Source history's chips, in order. */
+/**
+ * Source history's chips. Saved by position with a back stack (CLAUDE.md §2 rule 15), so only ever appended
+ * to: [NeedYou] (review M1, second re-walk) is drawn second, after Requests, as the desktop's Activity has it.
+ */
 @Serializable
-enum class SourceHistorySection { Requests, Transfers, Wishlist }
+enum class SourceHistorySection { Requests, Transfers, Wishlist, NeedYou }
 
 /**
  * One row of Requests. [state] is the ledger's own state string (lb-bot's when it lists the row);
@@ -96,8 +110,36 @@ data class HistoryRow(
 	val updatedAt: Long,
 	val fromDevice: Boolean,
 	val entry: LbFillEntry?,
-	val server: ActivityRequest? = null
+	val server: ActivityRequest? = null,
+	/**
+	 * Review M1: the row's state is the ledger's although lb-bot lists it: a Retry lb-bot has not been read
+	 * since, or a row that settled here after lb-bot's answer was read.
+	 */
+	val ledgerWins: Boolean = false
 ) {
+	/**
+	 * Review M1 (second re-walk): the fill the row is drawn as, words, pill and buttons. This device's row
+	 * ([entry]) while it is running, while the ledger is newer than lb-bot's answer ([ledgerWins]) and while
+	 * the two agree; **lb-bot's row when lb-bot's later state differs** (a fill retried from another client
+	 * that has landed, or one it is working on again), which then offers Open album alone, as any row only
+	 * lb-bot knows. It used to be the ledger's always, while [state] (and so the Running group) was lb-bot's.
+	 */
+	val shown: LbFillEntry
+		get() {
+			val s = server ?: return entry!!
+			val e = entry ?: return s.asLedgerRow()
+			if (!e.settled || ledgerWins || serverAgrees(s.state, e.outcome)) return e
+			return s.asLedgerRow()
+		}
+
+	/**
+	 * Review M1: one of this phone's own requests drawn as failed or waiting on a pick: Source history's Need
+	 * you chip and its menu badge ([sourceHistoryBadge]), desktop `needsYou`.
+	 */
+	val needsYou: Boolean
+		get() = entry != null && shown.settled &&
+			(shown.outcome == LbBotManager.OUTCOME_FAILED || shown.outcome == LbBotManager.OUTCOME_NEEDS_PICK)
+
 	/**
 	 * Searching, queued, downloading or placing: the Running group. A device row lb-bot does not list,
 	 * or one it lists as finished while the ledger runs it again (a Retry), is running by its ledger.
@@ -110,6 +152,15 @@ data class HistoryRow(
 }
 
 private val RUNNING_STATES = setOf("searching", "queued", "downloading", "placing")
+
+/** Whether lb-bot's [state] says what a settled ledger row's [outcome] says. */
+private fun serverAgrees(state: String, outcome: String): Boolean = when (state) {
+	"verified", "placed" -> outcome == LbBotManager.OUTCOME_DONE
+	"failed", "needs_match" -> outcome == LbBotManager.OUTCOME_FAILED
+	"picking" -> outcome == LbBotManager.OUTCOME_NEEDS_PICK
+	"cancelled" -> outcome == LbBotManager.OUTCOME_CANCELLED
+	else -> false
+}
 
 /** lb-bot's states a request ends in. A running ledger row against one of these is a Retry. */
 private val TERMINAL_SERVER_STATES = setOf("failed", "placed", "verified", "cancelled")
@@ -158,8 +209,12 @@ fun historyEmptyState(read: HistoryRead, rows: Int, asOf: Long? = null): History
  * lb-bot's list joined with the device's, each request once. A server row and a device row are the
  * same request by release MBID, else by group id ([sameFill]); lb-bot's state wins, the device's row
  * comes along. A device row lb-bot no longer lists stays, however old.
+ *
+ * Review M1 (second re-walk): **lb-bot's later state wins**. A ledger row that settled after lb-bot's
+ * answer was read ([readAt], epoch ms on this device's clock; null is "not known", and lb-bot's state wins)
+ * keeps its own state: that answer predates it.
  */
-fun mergeHistory(server: List<ActivityRequest>, device: List<LbFillEntry>): List<HistoryRow> {
+fun mergeHistory(server: List<ActivityRequest>, device: List<LbFillEntry>, readAt: Long? = null): List<HistoryRow> {
 	val claimed = mutableSetOf<String>()
 	val fromServer = server.map { s ->
 		val entry = device.firstOrNull { it.key !in claimed && sameFill(s.releaseMbid, s.groupId, it) }
@@ -168,7 +223,8 @@ fun mergeHistory(server: List<ActivityRequest>, device: List<LbFillEntry>): List
 		// not been read since. The ledger is newer for the rows it names (a fill frame or a poll moves
 		// it at once), as on Needs attention: the row is running, in the device's own state.
 		val retried = entry != null && !entry.settled && s.state in TERMINAL_SERVER_STATES
-		val state = if (retried) entry.state else s.state
+		val settledSince = entry != null && entry.settled && readAt != null && entry.finishedAt > readAt
+		val state = if (retried || settledSince) entry.state else s.state
 		HistoryRow(
 			key = entry?.key ?: s.releaseMbid.ifBlank { s.groupId.ifBlank { s.rgid } },
 			artist = s.artist.ifBlank { entry?.artist.orEmpty() },
@@ -179,7 +235,8 @@ fun mergeHistory(server: List<ActivityRequest>, device: List<LbFillEntry>): List
 			updatedAt = if (retried) maxOf((s.updatedAt * 1000).toLong(), deviceClock(entry)) else (s.updatedAt * 1000).toLong(),
 			fromDevice = entry != null,
 			entry = entry,
-			server = s
+			server = s,
+			ledgerWins = retried || settledSince
 		)
 	}
 	val deviceOnly = device.filter { it.key !in claimed }.map { e ->
@@ -202,14 +259,23 @@ fun mergeHistory(server: List<ActivityRequest>, device: List<LbFillEntry>): List
 internal fun deviceClock(e: LbFillEntry): Long =
 	if (e.settled && e.finishedAt > 0L) e.finishedAt else maxOf(e.startedAt, e.lastCheckedAt)
 
-data class HistoryGroups(val running: List<HistoryRow>, val earlier: List<HistoryRow>)
+/**
+ * Requests' two groups, and (review M1) the Need you chip's rows: this phone's requests drawn as failed or
+ * waiting on a pick ([HistoryRow.needsYou]), which Requests also lists under Earlier.
+ */
+data class HistoryGroups(
+	val running: List<HistoryRow>,
+	val earlier: List<HistoryRow>,
+	val needYou: List<HistoryRow> = emptyList()
+)
 
 /** Running over Earlier, newest first inside each; a tie keeps the merged order. */
 fun historyGroups(rows: List<HistoryRow>): HistoryGroups {
 	val (running, earlier) = rows.partition { it.running }
 	return HistoryGroups(
 		running = running.sortedByDescending { it.updatedAt },
-		earlier = earlier.sortedByDescending { it.updatedAt }
+		earlier = earlier.sortedByDescending { it.updatedAt },
+		needYou = rows.filter { it.needsYou }.sortedByDescending { it.updatedAt }
 	)
 }
 

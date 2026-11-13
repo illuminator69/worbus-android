@@ -100,7 +100,8 @@ class AttentionTest {
 		assertEquals(16, attentionBadge(read(ok()), emptyList()))
 		assertEquals(0, attentionBadge(AttentionState(), twoFailed), "nothing read: no number, as the desktop")
 		assertEquals(2, sourceHistoryBadge(twoFailed))
-		assertEquals(0, sourceHistoryBadge(twoFailed, downloadsOn = false), "Source history is not drawn while off")
+		// Review L3 (second re-walk): kept with downloading off, as the desktop keeps Activity's badge.
+		assertEquals(2, sourceHistoryBadge(twoFailed))
 		val nothing = ok().copy(counts = AttentionCounts(), albums = emptyList(), folders = emptyList())
 		assertEquals(0, attentionBadge(read(nothing), emptyList()))
 	}

@@ -332,11 +332,20 @@ class LbBotManager(
 	}.stateIn(scope, SharingStarted.Eagerly, 0)
 
 	/**
-	 * Source history's menu badge: this phone's own failures and picks ([sourceHistoryBadge]), the desktop's
-	 * Activity badge. With [attentionBadge] it lights the avatar's dot.
+	 * Review M1 (second re-walk): lb-bot's last good `/lb/activity` answer ([activity]), in memory, so Source
+	 * history and its menu badge join the ledger with one answer. An older lb-bot forgets it; a failed read
+	 * keeps it. Declared before [sourceHistoryBadge], which reads it.
 	 */
-	val sourceHistoryBadge: StateFlow<Int> = combine(_ledger, downloadsMode.value) { ledger, downloads ->
-		sourceHistoryBadge(ledger, downloadsOn = downloads.isOn)
+	private val _activityAnswer = MutableStateFlow<ActivityAnswer?>(null)
+	val activityAnswer: StateFlow<ActivityAnswer?> = _activityAnswer.asStateFlow()
+
+	/**
+	 * Source history's menu badge: this phone's own failures and picks as Source history draws them, its Need
+	 * you chip ([sourceHistoryBadge]), the desktop's Activity badge. With [attentionBadge] it lights the
+	 * avatar's dot. Not turned off with downloading (review L3).
+	 */
+	val sourceHistoryBadge: StateFlow<Int> = combine(_ledger, _activityAnswer) { ledger, answer ->
+		sourceHistoryBadge(ledger, answer)
 	}.stateIn(scope, SharingStarted.Eagerly, 0)
 
 	/** Whether the hub carries the attention route: an older one is "older", not "nothing to fix". */
@@ -378,14 +387,23 @@ class LbBotManager(
 		scope.launch { refreshAttention(force) }
 	}
 
-	/** `GET /lb/activity`: every request lb-bot's ledger still holds, and the transfers. */
+	/**
+	 * `GET /lb/activity`: every request lb-bot's ledger still holds, and the transfers. A good answer is kept
+	 * as [activityAnswer] (with when it was read), "older" forgets the last one, a failure keeps it.
+	 */
 	suspend fun activity(): ActivityRead {
 		if (!isConfigured) return ActivityRead.Unavailable
-		if (!supportsActivity) return ActivityRead.Older
-		return when (val raw = rawGet("/lb/activity", emptyList(), timeoutMs = ATTENTION_TIMEOUT_MS)) {
+		val read = if (!supportsActivity) ActivityRead.Older
+		else when (val raw = rawGet("/lb/activity", emptyList(), timeoutMs = ATTENTION_TIMEOUT_MS)) {
 			is LbResult.Ok -> activityRead(raw.value.status, raw.value.text)
 			is LbResult.Failed -> ActivityRead.Unavailable
 		}
+		when (read) {
+			is ActivityRead.Ok -> _activityAnswer.value = ActivityAnswer(read.requests, read.transfers, nowMs())
+			ActivityRead.Older -> _activityAnswer.value = null
+			ActivityRead.Unavailable -> Unit
+		}
+		return read
 	}
 
 	/** The user's sticky quality preference. Empty means "lb-bot's own default". */

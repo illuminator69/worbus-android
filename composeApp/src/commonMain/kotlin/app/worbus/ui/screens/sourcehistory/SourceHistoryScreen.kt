@@ -48,6 +48,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import worbus.composeapp.generated.resources.Res
 import worbus.composeapp.generated.resources.source_history_earlier
+import worbus.composeapp.generated.resources.source_history_need_you
+import worbus.composeapp.generated.resources.source_history_need_you_empty
+import app.worbus.icons.outlined.Check
 import worbus.composeapp.generated.resources.source_history_empty
 import worbus.composeapp.generated.resources.source_history_notice_older
 import worbus.composeapp.generated.resources.source_history_notice_unreachable
@@ -69,7 +72,6 @@ import app.worbus.domain.manager.HistoryRow
 import app.worbus.domain.manager.LbFillEntry
 import app.worbus.domain.manager.PreferenceManager
 import app.worbus.domain.manager.SourceHistorySection
-import app.worbus.domain.manager.asLedgerRow
 import app.worbus.domain.manager.transfersShown
 import app.worbus.domain.models.settings.BottomBarVisibilityMode
 import app.worbus.icons.Icons
@@ -152,6 +154,10 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 
 	val sections = buildList {
 		add(SourceHistorySection.Requests)
+		// Review M1 (second re-walk): the menu badge's set, gathered, as the desktop's Activity has its Need
+		// you chip. Drawn while it holds rows, and kept while it is the one shown, so a row that leaves it
+		// (a Retry) does not move the page off the chip.
+		if (groups.needYou.isNotEmpty() || section == SourceHistorySection.NeedYou) add(SourceHistorySection.NeedYou)
 		if (transfersShown(transfers)) add(SourceHistorySection.Transfers)
 		add(SourceHistorySection.Wishlist)
 	}
@@ -173,6 +179,7 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 					label = { chip ->
 						val n = when (chip) {
 							SourceHistorySection.Requests -> groups.running.size + groups.earlier.size
+							SourceHistorySection.NeedYou -> groups.needYou.size
 							SourceHistorySection.Transfers -> transfers.size
 							SourceHistorySection.Wishlist -> wishlist.items.size
 						}
@@ -254,6 +261,19 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 							historyGroup("earlier", Res.string.source_history_earlier, groups.earlier, now,
 								actions, wishlisted, openAlbum)
 						}
+						SourceHistorySection.NeedYou -> {
+							if (groups.needYou.isEmpty()) {
+								item(key = "need-you-empty") {
+									ContentUnavailable(
+										modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp).animateItem(),
+										icon = Icons.Outlined.Check,
+										label = stringResource(Res.string.source_history_need_you_empty)
+									)
+								}
+							}
+							historyGroup("need-you", Res.string.source_history_need_you, groups.needYou, now,
+								actions, wishlisted, openAlbum)
+						}
 						SourceHistorySection.Transfers -> transferRows(transfers)
 						SourceHistorySection.Wishlist -> wishlistSection(
 							state = wishlist,
@@ -272,6 +292,7 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 private val SourceHistorySection.label
 	get() = when (this) {
 		SourceHistorySection.Requests -> Res.string.source_history_requests
+		SourceHistorySection.NeedYou -> Res.string.source_history_need_you
 		SourceHistorySection.Transfers -> Res.string.source_history_transfers
 		SourceHistorySection.Wishlist -> Res.string.title_wishlist
 	}
@@ -294,8 +315,10 @@ private fun LazyListScope.historyGroup(
 		GroupHeader(stringResource(title), count = rows.size, modifier = Modifier.animateItem())
 	}
 	itemsIndexed(rows, key = { _, row -> "request:${row.key}" }) { index, row ->
-		val entry: LbFillEntry = row.entry ?: row.server!!.asLedgerRow()
-		val mine = row.entry != null
+		// Review M1: drawn as its state is (lb-bot's later state wins), and with this device's buttons only
+		// while it is drawn as this device's row.
+		val entry: LbFillEntry = row.shown
+		val mine = row.entry != null && entry === row.entry
 		FillRow(
 			fill = entry,
 			now = now,

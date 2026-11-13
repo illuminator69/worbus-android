@@ -78,6 +78,10 @@ import worbus.composeapp.generated.resources.attention_device_only
 import worbus.composeapp.generated.resources.attention_section_albums
 import worbus.composeapp.generated.resources.attention_section_to_fix
 import worbus.composeapp.generated.resources.attention_to_fix
+import worbus.composeapp.generated.resources.attention_to_fix_summary
+import worbus.composeapp.generated.resources.attention_to_fix_imports
+import worbus.composeapp.generated.resources.attention_to_fix_folders
+import worbus.composeapp.generated.resources.attention_not_counted
 import worbus.composeapp.generated.resources.attention_tracks_missing
 import worbus.composeapp.generated.resources.attention_unidentified_folder
 import worbus.composeapp.generated.resources.title_needs_attention
@@ -242,17 +246,32 @@ fun rememberToFixUi(snackbar: SnackbarHostState): ToFixUi {
  * on the chip) where lb-bot has not answered, or before the first read with no badge to go on.
  */
 fun toFixNumber(page: AttentionPage, badge: Int): Int? = when (page) {
-	is AttentionPage.Rows -> toFixTotal(page)
+	// Review L1 (second re-walk): never "To fix (0)" over rows the section lists.
+	is AttentionPage.Rows -> toFixTotal(page)?.takeUnless { it == 0 && !toFixHeadlineNothingShown(page) }
 	AttentionPage.Loading -> badge.takeIf { it > 0 }
 }
 
 /**
- * Whether the To fix headline may say "Nothing to fix" under a 0: only when the section lists no album
- * either. Since the number is the desktop's (imports and folders), a failed album or a pick is listed and not
- * counted, and "Nothing to fix" above it would be false.
+ * Whether the To fix headline may say "Nothing to fix" under a 0 (and the chip "To fix (0)"): only when the
+ * section lists no row at all. Since the number is the desktop's (imports and folders), a failed album or a
+ * pick is listed and not counted, and "Nothing to fix" above it would be false; review L1: nor over folders
+ * listed while lb-bot's `counts` say none (an lb-bot whose counts lack `folders`).
  */
 fun toFixHeadlineNothingShown(page: AttentionPage.Rows): Boolean =
-	page.toFix == 0 && page.albums.isEmpty() && page.deviceOnly.isEmpty()
+	page.toFix == 0 && page.albums.isEmpty() && page.deviceOnly.isEmpty() && page.folders.isEmpty()
+
+/**
+ * Review L2 (second re-walk): what the To fix number is made of, as Worbus for desktop's first line says it
+ * ("41 to fix: 16 imports, 25 downloaded folders to file"): lb-bot's imports, and the folders counted (the
+ * number less the imports, so the parts always add up to it). A part that is 0 is not said.
+ */
+data class ToFixParts(val total: Int, val imports: Int, val folders: Int)
+
+fun toFixParts(page: AttentionPage.Rows): ToFixParts? {
+	val total = toFixTotal(page) ?: return null
+	val imports = page.imports.coerceIn(0, total)
+	return ToFixParts(total, imports, total - imports)
+}
 
 /** The section's rows, as items of the holding page's list. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -277,10 +296,23 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 					)
 				}
 			}
+			// Review L2 (second re-walk): a group the headline's number does not count says so under its header,
+			// so "41 to fix" over "Albums (10)" never reads as 41 of those.
+			val uncountedNote = (toFixTotal(p) ?: 0) > 0
 			val albumRows: LazyListScope.(String, StringResource, List<AttentionRow>) -> Unit = { key, title, rows ->
 				if (rows.isNotEmpty()) {
 					item(key = "fix:$key-header") {
 						GroupHeader(stringResource(title), count = rows.size, modifier = Modifier.animateItem())
+					}
+					if (uncountedNote) {
+						item(key = "fix:$key-uncounted") {
+							Text(
+								stringResource(Res.string.attention_not_counted),
+								style = MaterialTheme.typography.bodySmall,
+								color = MaterialTheme.colorScheme.onSurfaceVariant,
+								modifier = Modifier.padding(start = 4.dp, bottom = 8.dp).animateItem()
+							)
+						}
 					}
 					itemsIndexed(rows, key = { _, row -> "fix:${row.id}" }) { index, row ->
 						AlbumRow(
@@ -366,8 +398,19 @@ private fun AttentionHead(page: AttentionPage.Rows, modifier: Modifier = Modifie
 		// The chip's and the badge's number (`toFixTotal`, the desktop's: imports + folders to file), or
 		// none without an answer from lb-bot.
 		val count = toFixTotal(page)
+		val parts = toFixParts(page)
 		val headline = when {
 			count == null -> null
+			// Review L2: what the number is made of, as the desktop's line: "41 to fix: 16 imports, 25
+			// downloaded folders to file". It is the "Downloaded, to file" group's number, not the page's rows.
+			count > 0 && parts != null -> stringResource(
+				Res.string.attention_to_fix_summary,
+				count,
+				listOfNotNull(
+					parts.imports.takeIf { it > 0 }?.let { pluralStringResource(Res.plurals.attention_to_fix_imports, it, it) },
+					parts.folders.takeIf { it > 0 }?.let { pluralStringResource(Res.plurals.attention_to_fix_folders, it, it) }
+				).joinToString(", ")
+			)
 			count > 0 -> stringResource(Res.string.attention_to_fix, count)
 			// "Nothing to fix" is said only for an answer lb-bot just gave (a number from an older answer is
 			// still said, with the notice saying when it was read), and never over rows the section lists

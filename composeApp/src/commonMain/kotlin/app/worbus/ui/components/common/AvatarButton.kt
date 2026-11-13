@@ -36,8 +36,10 @@ import app.worbus.ui.theme.warning
 /**
  * navi-connect P1: the account's monogram at the start of every root page's header. It opens the
  * avatar menu (hosted once in App.kt through [ShellController]), which holds what the bar does not:
- * the rare tools, Settings and Log out. An amber dot sits on it while something needs attention
- * ([needsAttentionCount]) and the user has not turned the dot off.
+ * the rare tools, Settings and Log out. An amber dot sits on it while either of the menu's two badges has
+ * a number (B-406, second re-walk: Library Matches' to-fix number, [LbBotManager.attentionBadge], and Source
+ * history's Need you, [LbBotManager.sourceHistoryBadge]), for an admin, and the user has not turned the dot
+ * off.
  *
  * The username is read from the same setting the old account sheet read. It may be empty (the
  * monogram then draws a person) and long (only its first two characters are drawn).
