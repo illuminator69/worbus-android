@@ -158,7 +158,7 @@ class FollowupsNeedYouTest {
 	@Test
 	fun dismissalsAreKeptWhileLbBotListsThem() {
 		val d = mapOf("r:rel-x" to 1_000L, "r:gone" to 1_000L, "g:g1" to 1_000L, "r:old" to 0L)
-		val kept = prunedDismissals(d, listOf(req("rel-x", "failed"), req("old", "failed")), listOf(att("gap", "g1", "picking")), now = DISMISSAL_KEEP_MS - 1)
+		val kept = prunedDismissals(d, listOf(req("rel-x", "failed"), req("old", "failed")), listOf(att("gap", "g1", "picking")), now = DISMISSAL_KEEP_MS + 500)
 		assertEquals(setOf("r:rel-x", "g:g1"), kept.keys, "gone from lb-bot, or past the 48 h cap: forgotten")
 		// With no attention answer a gap's dismissal is kept (nothing says lb-bot dropped it).
 		assertEquals(setOf("g:g1"), prunedDismissals(mapOf("g:g1" to 1_000L), emptyList(), null, 2_000L).keys)
