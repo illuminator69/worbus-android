@@ -57,6 +57,9 @@ class HubSignInStepTest {
 	private val prefs = PreferenceManager(settings, secrets)
 	private val store = prefs.serverRecordStore
 	private val navidrome = "http://192.168.1.20:4533"
+
+	/** The Navidrome the account is signed in to now (the look beside it asks its host). */
+	private var signedInTo = navidrome
 	private val transport = FakeTransport { granted }
 	private val auth = HubAuth(prefs, secrets, { NavidromeAccount("bob", "hunter2-p4ss") }, { "phone" }, transport, log = {}, navidromeUrl = { navidrome })
 	private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -81,7 +84,7 @@ class HubSignInStepTest {
 			probe = probe,
 			localSubnet = { null },
 			localNetworkGranted = { true },
-			navidromeUrl = { navidrome },
+			navidromeUrl = { signedInTo },
 			serverSet = { hubAddressSet(prefs) },
 			store = store,
 			log = {}
@@ -405,5 +408,46 @@ class HubSignInStepTest {
 		assertEquals(HubStepState.Done(paired = false), t.await { it is HubStepState.Done })
 		assertEquals("ws://192.168.1.20:4790", prefs.hubUrl)
 		assertEquals(0, paired)
+	}
+
+	/*
+	 * The VM re-walk (RESULTS-owner-walk-vmcheck-2026-11-13.md § Re-walk, last note): log in to ANOTHER Navidrome, the
+	 * step finds nothing, Skip; log out; log back in to the Navidrome the kept server belongs to. The kept server must
+	 * be offered again: nothing in the first visit (the look that found nothing, Skip, the logout) forgets the kept
+	 * address, its record or the Navidrome it was paired beside. (On the AVD the kept address had been changed in
+	 * between, by the Android lane's own follow-up: it repointed the app to another hub paired beside nd3k.)
+	 */
+	@Test
+	fun aVisitToAnotherNavidromeAndSkipDoNotForgetTheKeptServer() = runBlocking<Unit> {
+		val walk = navidrome
+		keepServer("ws://192.168.1.20:4790", pairedBeside = walk)
+		val probe = FakeProbe { base -> if (base == "ws://192.168.1.20:4790") InfoOutcome.Match(id, "Worbus Server") else InfoOutcome.Unreachable }
+
+		// 1. Logged in to the other Navidrome: the look beside it finds nothing; Skip.
+		signedInTo = "http://10.0.0.77:4533"
+		assertEquals(
+			HubStepStart.LookBeside,
+			hubStepAfterLogin(hubAddressSet(prefs), prefs.hubEnabled, auth.signedIn, keepServerBelongs(signedInTo))
+		)
+		val elsewhere = step(probe, keptAddress = null)
+		assertEquals(HubStepState.NotFound, elsewhere.await { it != HubStepState.Finding })
+		elsewhere.skip()
+		elsewhere.await { it is HubStepState.Done }
+
+		// 2. Log out (as LoginManager does: the Worbus Server half forgets the credentials, keeps the address).
+		auth.beginSignOut()
+
+		// 3. Logged back in to the walk Navidrome: the kept server is offered.
+		signedInTo = walk
+		assertEquals("ws://192.168.1.20:4790", prefs.hubUrl)
+		assertEquals(id, store.read().serverId)
+		assertEquals(walk, prefs.hubPairedNavidrome)
+		assertEquals(
+			HubStepStart.KeptAddress,
+			hubStepAfterLogin(hubAddressSet(prefs), prefs.hubEnabled, auth.signedIn, keepServerBelongs(signedInTo))
+		)
+		val back = step(probe, keptAddress = prefs.hubUrl)
+		assertEquals(HubStepState.Found("http://192.168.1.20:4790"), back.await { it != HubStepState.Finding })
+		assertTrue(transport.urls.isEmpty(), "nothing sent before Sign in")
 	}
 }
