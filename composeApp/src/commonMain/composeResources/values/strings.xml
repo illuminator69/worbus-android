@@ -1272,7 +1272,8 @@
 		<item quantity="one">%1$d artist to check</item>
 		<item quantity="other">%1$d artists to check</item>
 	</plurals>
-	<string name="attention_artists_to_check_hint">Worth a look in Library Matches. Not counted.</string>
+	<!-- B-406 VM walk: the "To fix" header counts this row (the contract), so it no longer says "Not counted". -->
+	<string name="attention_artists_to_check_hint">Worth a look in Library Matches.</string>
 	<string name="attention_choose_source">Choose a source</string>
 	<string name="attention_failed">Failed</string>
 	<string name="attention_needs_pick">Needs your pick</string>
