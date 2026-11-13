@@ -133,11 +133,16 @@ data class HistoryRow(
 		}
 
 	/**
-	 * Review M1: one of this phone's own requests drawn as failed or waiting on a pick: Source history's Need
-	 * you chip and its menu badge ([sourceHistoryBadge]), desktop `needsYou`.
+	 * Review M1: a request drawn as failed or waiting on a pick: Source history's Need you chip and its menu
+	 * badge ([sourceHistoryBadge]), desktop `needsYou`.
+	 *
+	 * Follow-up 2026-11-14 (the owner: "no separation for requests between clients"): **any client's**. A row
+	 * only lb-bot lists (another client's request, or one this phone's ledger has forgotten) counts when lb-bot
+	 * lists it as failed, `needs_match` (its files are in and wait to be matched) or `picking`; this phone's
+	 * rows lb-bot does not list count by the ledger, as before. lb-bot's later state still wins ([shown]).
 	 */
 	val needsYou: Boolean
-		get() = entry != null && shown.settled &&
+		get() = shown.settled &&
 			(shown.outcome == LbBotManager.OUTCOME_FAILED || shown.outcome == LbBotManager.OUTCOME_NEEDS_PICK)
 
 	/**
@@ -260,8 +265,8 @@ internal fun deviceClock(e: LbFillEntry): Long =
 	if (e.settled && e.finishedAt > 0L) e.finishedAt else maxOf(e.startedAt, e.lastCheckedAt)
 
 /**
- * Requests' two groups, and (review M1) the Need you chip's rows: this phone's requests drawn as failed or
- * waiting on a pick ([HistoryRow.needsYou]), which Requests also lists under Earlier.
+ * Requests' two groups, and (review M1) the Need you chip's rows: every request drawn as failed or waiting on
+ * a pick, from any client ([HistoryRow.needsYou]), which Requests also lists under Earlier.
  */
 data class HistoryGroups(
 	val running: List<HistoryRow>,
@@ -282,7 +287,8 @@ fun historyGroups(rows: List<HistoryRow>): HistoryGroups {
 /** The Transfers chip is drawn only when lb-bot lists any. */
 fun transfersShown(transfers: List<ActivityTransfer>): Boolean = transfers.isNotEmpty()
 
-private val SETTLED_SERVER_STATES = setOf("verified", "failed", "cancelled", "needs_match")
+/** `picking` is not one of `/lb/activity`'s states today (a pick is a gap group's); read as waiting on a pick if it comes. */
+private val SETTLED_SERVER_STATES = setOf("verified", "failed", "cancelled", "needs_match", "picking")
 
 /**
  * A row only lb-bot knows as a ledger row, so the fill vocabulary words it ([app.worbus.ui.components.common.describeFill]).
@@ -303,6 +309,7 @@ fun ActivityRequest.asLedgerRow(): LbFillEntry {
 		outcome = when (state) {
 			"verified" -> LbBotManager.OUTCOME_DONE
 			"failed", "needs_match" -> LbBotManager.OUTCOME_FAILED
+			"picking" -> LbBotManager.OUTCOME_NEEDS_PICK
 			"cancelled" -> LbBotManager.OUTCOME_CANCELLED
 			else -> LbBotManager.OUTCOME_RUNNING
 		},

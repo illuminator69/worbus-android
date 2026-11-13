@@ -56,7 +56,8 @@ class SecondRewalkReviewTest {
 		val server = listOf(req("rel-x", "verified"), req("rel-y", "failed"), req("rel-p", "picking"), req("rel-o", "failed"))
 		val answer = ActivityAnswer(server, emptyList(), readAt = 5_000L)
 		val g = groups(server, ledger, answer.readAt)
-		assertEquals(listOf("p", "y", "z").sorted(), g.needYou.map { it.key }.sorted())
+		// Follow-up 2026-11-14: another client's failed request (rel-o, only lb-bot lists it) is counted too.
+		assertEquals(listOf("p", "y", "z", "rel-o").sorted(), g.needYou.map { it.key }.sorted())
 		assertEquals(g.needYou.size, sourceHistoryBadge(ledger, answer), "one set, one number")
 		// x is drawn as lb-bot's verified row (Open album only), so it is neither shown nor counted as failed.
 		val x = (g.running + g.earlier).single { it.key == "x" }
@@ -65,8 +66,8 @@ class SecondRewalkReviewTest {
 		// A row lb-bot agrees with keeps this phone's entry and its buttons.
 		val y = g.needYou.single { it.key == "y" }
 		assertSame(y.entry, y.shown)
-		// lb-bot's own failed row (another client's) is listed and not this phone's to count.
-		assertTrue((g.running + g.earlier).any { it.entry == null && it.state == "failed" })
+		// lb-bot's own failed row (another client's) is listed, and (follow-up 2026-11-14) counted.
+		assertTrue((g.running + g.earlier).any { it.entry == null && it.state == "failed" && it.needsYou })
 		// Every Need you row is a row Requests lists too.
 		assertTrue(g.needYou.all { it in g.earlier })
 	}

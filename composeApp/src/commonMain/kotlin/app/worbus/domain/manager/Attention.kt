@@ -195,8 +195,12 @@ fun attentionBadge(state: AttentionState, ledger: List<LbFillEntry>, downloadsOn
 
 /**
  * B-406 (second re-walk): Source history's menu badge, Worbus for desktop's Activity badge
- * (`attentionCount`): this phone's own settled fills that wait on the user, failed or waiting on a pick.
+ * (`attentionCount`): settled fills that wait on the user, failed or waiting on a pick.
  * They were added into the To fix number, which the desktop never did.
+ *
+ * Follow-up 2026-11-14 (the owner: "no separation for requests between clients"): every request lb-bot lists
+ * as failed or waiting on a pick, **from any client**, plus this phone's ledger rows lb-bot does not list: one
+ * set ([HistoryRow.needsYou]), one number. The desktop's Activity still counts its own ledger only.
  *
  * Review M1: **it is the size of Source history's Need you chip** ([HistoryGroups.needYou]), counted over
  * the same rows the page draws ([mergeHistory] of lb-bot's last answer, [activity], read at its

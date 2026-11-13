@@ -340,9 +340,9 @@ class LbBotManager(
 	val activityAnswer: StateFlow<ActivityAnswer?> = _activityAnswer.asStateFlow()
 
 	/**
-	 * Source history's menu badge: this phone's own failures and picks as Source history draws them, its Need
-	 * you chip ([sourceHistoryBadge]), the desktop's Activity badge. With [attentionBadge] it lights the
-	 * avatar's dot. Not turned off with downloading (review L3).
+	 * Source history's menu badge: every failure and pick Source history draws, from any client (follow-up
+	 * 2026-11-14), its Need you chip ([sourceHistoryBadge]). With [attentionBadge] it lights the
+	 * avatar's dot. Not turned off with downloading (review L3). lb-bot's half is read by [refreshActivity].
 	 */
 	val sourceHistoryBadge: StateFlow<Int> = combine(_ledger, _activityAnswer) { ledger, answer ->
 		sourceHistoryBadge(ledger, answer)
@@ -385,6 +385,40 @@ class LbBotManager(
 	/** [refreshAttention] from somewhere that is not a coroutine (a frame, a tap). */
 	fun requestAttentionRefresh(force: Boolean = false) {
 		scope.launch { refreshAttention(force) }
+	}
+
+	@Volatile
+	private var activityInFlight = false
+	/** When [refreshActivity] last asked (epoch ms), whatever came of it. */
+	@Volatile
+	private var activityAskedAt = 0L
+
+	/**
+	 * Follow-up 2026-11-14 (the badge lagged after a restart: nothing but Source history read `/lb/activity`, so
+	 * until the page was opened the badge was this phone's ledger alone). Read lb-bot's list for Source history's
+	 * badge ([sourceHistoryBadge]) by [shouldRefreshAttention]'s rule: an admin only (lb-bot lists the route as
+	 * admin), never while one is out, at most every 30 s unless [force]d. Asked when the avatar menu opens, on a
+	 * hub advert (welcome or `lb` frame, so once a start), when the hub says this user is an admin, and (forced)
+	 * on a `fill` frame that names a failure or a pick, from any client. Never on a timer of its own.
+	 */
+	suspend fun refreshActivity(force: Boolean = false) {
+		if (!isConfigured) return
+		if (!shouldRefreshAttention(nowMs(), activityAskedAt, force, activityInFlight, admin = _roles.value.admin)) return
+		attentionLock.withLock {
+			if (activityInFlight) return
+			activityInFlight = true
+		}
+		try {
+			activityAskedAt = nowMs()
+			activity()
+		} finally {
+			activityInFlight = false
+		}
+	}
+
+	/** [refreshActivity] from somewhere that is not a coroutine (a frame, a tap). */
+	fun requestActivityRefresh(force: Boolean = false) {
+		scope.launch { refreshActivity(force) }
 	}
 
 	/**
@@ -582,7 +616,10 @@ class LbBotManager(
 		val promoted = roles.admin && !_roles.value.admin
 		_roles.value = roles
 		// NB3: an admin's count is read once the hub says admin (a non-admin never reads it).
-		if (promoted && fromHub) requestAttentionRefresh(force = true)
+		if (promoted && fromHub) {
+			requestAttentionRefresh(force = true)
+			requestActivityRefresh(force = true)
+		}
 		if (fromHub && changed) setAccess(LbAccess.OPEN)
 		if (changed) publishAllSupport()
 	}
@@ -1142,6 +1179,9 @@ class LbBotManager(
 		publishListeningSupport()
 		// P6: a new advert (welcome, or an `lb` frame) is when the count may have moved unseen.
 		if (available) requestAttentionRefresh(force = true)
+		// Follow-up 2026-11-14: Source history's badge counts lb-bot's list too, so it is read with the advert
+		// (once a start, then at most every 30 s), not first when the page is opened.
+		if (available) requestActivityRefresh()
 	}
 
 	/**
@@ -3415,6 +3455,8 @@ class LbBotManager(
 		lastPushAt = nowMs()
 		// P6: a failure or a pick may have changed lb-bot's count; progress only asks within the 30 s.
 		requestAttentionRefresh(force = fillFrameForcesAttention(frame))
+		// Follow-up 2026-11-14: a failure or a pick, from any client, may move Source history's Need you.
+		if (fillFrameForcesAttention(frame)) requestActivityRefresh(force = true)
 		fun str(key: String): String =
 			(frame[key] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
 		val kind = str("kind")
