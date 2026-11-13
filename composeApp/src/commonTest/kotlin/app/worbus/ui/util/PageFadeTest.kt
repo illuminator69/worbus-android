@@ -35,7 +35,9 @@ class PageFadeTest {
 			assertEquals(0, w.exitStartMs, "$style")
 			val third = w.exitEndMs.toFloat() / m.enterSlideMs
 			assertTrue(third in 0.25f..0.45f, "$style: the old page fades over ${(third * 100).toInt()} % of the motion")
-			assertTrue(w.exitEndMs >= 60, "$style at $speed: never a cut (${w.exitEndMs} ms)")
+			// Review M2: Quick's push is 300 ms, so at 2x a 150 ms push whose old page fades over 53 ms (three
+			// frames at 60 Hz): still a fade, never a cut.
+			assertTrue(w.exitEndMs >= 50, "$style at $speed: never a cut (${w.exitEndMs} ms)")
 		}
 	}
 

@@ -35,9 +35,13 @@ class PageMotionTest {
 	@Test
 	fun quickIsTheSpeedExpressiveHadAt4b592a4e() {
 		val quick = pageMotionOf(AnimationStyle.Quick)
-		// Every page and tab number this session's B-378, B-403 and B-404 set.
+		// Every page and tab number this session's B-378, B-403 and B-404 set, but the slide and fade, which is
+		// 300 ms since review M2 (the owner, 2026-11-13: "make it 300"), its fades scaled with it (x 0.6).
 		assertEquals(
-			at4b592a4e.copy(sheetShowMs = 300, sheetHideMs = 250, foldMs = 200, foldTallMs = 280),
+			at4b592a4e.copy(
+				enterFadeMs = 195, enterFadeDelayMs = 105, enterSlideMs = 300, exitFadeMs = 105, exitSlideMs = 300,
+				sheetShowMs = 300, sheetHideMs = 250, foldMs = 200, foldTallMs = 280
+			),
 			quick
 		)
 		// Settings' slide 300 ms on EaseOutQuart, the album slide and the cover's flight 300 ms on Emphasized.
@@ -45,7 +49,10 @@ class PageMotionTest {
 		assertEquals(300, quick.slideMs)
 		assertEquals(PageEasing.EaseOutQuart, quick.slideEasing)
 		assertEquals(PageFadeWindows(0, 90, 90, 300), tabFadeWindows(quick))
-		assertEquals(PageFadeWindows(0, 175, 175, 500), pageFadeWindows(quick))
+		// Review M2: the old page out over 0-105, the new one in over 105-300, ending with the 300 ms slide.
+		assertEquals(PageFadeWindows(0, 105, 105, 300), pageFadeWindows(quick))
+		assertEquals(300, quick.enterSlideMs)
+		assertEquals(300, quick.exitSlideMs)
 		// Quick's own sheets and folds, which this session did not touch, stay quicker than Expressive's.
 		assertTrue(quick.sheetShowMs < at4b592a4e.sheetShowMs && quick.sheetHideMs < at4b592a4e.sheetHideMs)
 	}
@@ -97,6 +104,7 @@ class PageMotionTest {
 			assertTrue(quick <= expressive, "$name: Quick $quick ms > Expressive $expressive ms")
 		}
 		assertTrue(q.slideMs < e.slideMs, "the album and Settings slides are what Quick shortens")
+		assertTrue(q.enterSlideMs < e.enterSlideMs, "review M2: and the ordinary push (300 against 500)")
 	}
 
 	// ---- I-075: the animation speed ------------------------------------------------------------ //

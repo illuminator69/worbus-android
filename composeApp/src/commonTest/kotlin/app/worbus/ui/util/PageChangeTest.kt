@@ -51,7 +51,9 @@ class PageChangeTest {
 			assertTrue(w.exitEndMs <= w.enterStartMs, "$style: the two fades never overlap")
 			assertTrue(w.exitEndMs >= 50, "$style: never a cut (${w.exitEndMs} ms)")
 			assertTrue(w.enterEndMs <= 330, "$style: a tab switch takes ${w.enterEndMs} ms")
-			assertTrue(w.enterEndMs < pageFadeWindows(m).enterEndMs, "$style: shorter than a page push")
+			// Review M2 (the owner, 2026-11-13: Quick's push "make it 300"): under Quick a push and a tab switch now
+			// both take 300 ms, so "never longer than a page push".
+			assertTrue(w.enterEndMs <= pageFadeWindows(m).enterEndMs, "$style: no longer than a page push")
 		}
 	}
 }

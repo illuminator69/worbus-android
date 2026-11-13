@@ -101,22 +101,27 @@ val DefaultPageMotion = PageMotion(
 
 /**
  * Quick (I-075, the owner's ruling): **the page motion Expressive had at `4b592a4e`**, every number this
- * session's B-378, B-403 and B-404 set: the slide and fade 500 ms from half the width on Emphasized, both
- * pages sliding the whole time, fades 175 then 325; Settings' slide 300 ms on EaseOutQuart; the album slide
- * and the cover's flight 300 ms on Emphasized; a root tab 90 out then 210 in. Quick's own sheets and folds,
- * which this session did not touch and which were already quicker than Expressive's, are kept.
+ * session's B-378, B-403 and B-404 set: Settings' slide 300 ms on EaseOutQuart; the album slide and the cover's
+ * flight 300 ms on Emphasized; a root tab 90 out then 210 in. Quick's own sheets and folds, which this session
+ * did not touch and which were already quicker than Expressive's, are kept.
+ *
+ * **The slide and fade is 300 ms** (review M2, the owner's ruling of 2026-11-13: "make it 300"): it had become
+ * Expressive's 500, so the commonest page change no longer told the two presets apart. From half the width on
+ * Emphasized, both pages sliding the whole time, and the fades scaled with it (× 0.6) so they keep B-378's
+ * structure: the old page out over 0-105 ms, the new one in over 105-300 ms, never both at once, the new fade
+ * ending with the slide.
  *
  * It was a starting proposal, half of everything (250 ms, 30 dp, EmphasizedDecelerate; Settings and the
  * album 250; tabs 60 + 140; the flight 250).
  */
 val QuickPageMotion = PageMotion(
-	enterFadeMs = 325,
-	enterFadeDelayMs = 175,
-	enterSlideMs = 500,
+	enterFadeMs = 195,
+	enterFadeDelayMs = 105,
+	enterSlideMs = 300,
 	enterSlideDp = null,
 	enterEasing = PageEasing.Emphasized,
-	exitFadeMs = 175,
-	exitSlideMs = 500,
+	exitFadeMs = 105,
+	exitSlideMs = 300,
 	exitSlideDp = 30,
 	sheetShowMs = 300,
 	sheetHideMs = 250,
@@ -217,7 +222,10 @@ enum class PageChange {
 	/** B-378's slide and fade: both pages slide, the old one fades out over the first third, then the new one in. */
 	SharedAxis,
 
-	/** The regular slide (B-403, Settings): both pages move the whole width together on EaseOutQuart, nothing fades. */
+	/**
+	 * The regular slide (B-403, Settings): both pages move the whole width together on the style's
+	 * [PageMotion.slideEasing] (Emphasized under Expressive and Standard, EaseOutQuart under Quick), nothing fades.
+	 */
 	Slide,
 
 	/**
