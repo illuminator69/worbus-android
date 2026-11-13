@@ -69,6 +69,12 @@ class SessionManager(
 	private val userGeneration = MutableStateFlow(0L)
 
 	/**
+	 * Moves on every login and logout, so on every change of server or user (B-405 review L3): what a
+	 * process keeps about one session's pages (`ArtistPageMemory`) is not shown to the next.
+	 */
+	val sessionGeneration: Long get() = userGeneration.value
+
+	/**
 	 * Review of fix round 2, nit 2: the generation's check and the user's assignment are one step
 	 * against logout's move and clear. Held for a few instructions only, never across a request.
 	 */

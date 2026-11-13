@@ -288,6 +288,15 @@ class ArtistDetailViewModel(
 	/** The album list [lbData] was last built against — compared by identity, see [applyLbData]. */
 	private var builtAlbums: List<DomainAlbum>? = null
 
+	/**
+	 * Navidrome album ids resolved out of Room that are NOT on this artist's album list.
+	 *
+	 * A collaboration record filed under the other credited artist, in practice. Kept so
+	 * [openPendingSync] can accept the same ids [buildSections] already proved resolvable.
+	 * Declared above `init`, which seeds it from [pageMemory] (B-405 review L2).
+	 */
+	private val resolvedStrayAlbumIds = mutableSetOf<String>()
+
 	private val discographyLock = Mutex()
 	private var mirrorJob: Job? = null
 
@@ -330,6 +339,13 @@ class ArtistDetailViewModel(
 		settled.complete(Unit)
 	}
 
+	/**
+	 * B-405 review L2: the page's own Room read has given it the artist (the state, the mirror observed).
+	 * A library bump waits for it: on a page opened on [pageMemory] a bump in the seeded window took the
+	 * network branch for an artist the mirror holds, against a list Room had not been asked for yet.
+	 */
+	private val roomRead = CompletableDeferred<Unit>()
+
 	init {
 		// B-405: a page of an artist another page has shown opens on what that page showed, at once, and
 		// reads Room again (the same read, which then changes nothing it shows) only once its slide has
@@ -339,6 +355,12 @@ class ArtistDetailViewModel(
 			artistState.value = UiState.Success(seed.state)
 			_discography.value = seed.discography.seeded()
 			_artistMbid.value = seed.mbid
+			// B-405 review L1, L2: what the deferred read is needed for, from the page that read it.
+			starred.value = seed.starred
+			lbData = seed.lbData
+			fromMirror = seed.fromMirror
+			builtAlbums = seed.state.albums.takeIf { seed.lbData != null }
+			resolvedStrayAlbumIds.addAll(seed.strayAlbumIds)
 			viewModelScope.launch {
 				withTimeoutOrNull(SEEDED_READ_WAIT_MS) { settled.await() }
 				loadArtistData()
@@ -347,8 +369,16 @@ class ArtistDetailViewModel(
 			loadArtistData()
 		}
 		viewModelScope.launch {
-			combine(artistState, _discography, _artistMbid) { state, discography, mbid ->
-				(state as? UiState.Success)?.data?.let { ArtistPageSnapshot(it, discography, mbid) }
+			combine(artistState, _discography, _artistMbid, starred) { state, discography, mbid, star ->
+				(state as? UiState.Success)?.data?.let {
+					ArtistPageSnapshot(
+						it, discography, mbid,
+						starred = star,
+						lbData = lbData,
+						fromMirror = fromMirror,
+						strayAlbumIds = resolvedStrayAlbumIds.toSet()
+					)
+				}
 			}.collect { snapshot -> if (snapshot != null) pageMemory.put(artistId, snapshot) }
 		}
 		// A fill landing — here or on another client — changes two answers at once:
@@ -363,6 +393,7 @@ class ArtistDetailViewModel(
 		// landing anywhere in the library a network refetch per page ever opened.
 		viewModelScope.launch {
 			lbBotManager.libraryBumps.collect { bump ->
+				roomRead.await()
 				if ((artistState.value as? UiState.Success) == null) return@collect
 				if (!concerns(bump)) return@collect
 				// The page's album list is a snapshot of Room taken at open. Without
@@ -482,6 +513,7 @@ class ArtistDetailViewModel(
 				// changes this artist re-emits, with no refetch and no bump involved.
 				observeMirror()
 				observeOverrides()
+				roomRead.complete(Unit)
 
 				// Fire-and-forget, and strictly after the page has its own data: the
 				// discography shelf is an enhancement, and an artist page must render
@@ -514,6 +546,7 @@ class ArtistDetailViewModel(
 					}
 			} catch (e: Exception) {
 				artistState.value = UiState.Error(e)
+				roomRead.complete(Unit)
 			}
 		}
 	}
@@ -1136,14 +1169,6 @@ class ArtistDetailViewModel(
 			}
 		}
 	}
-
-	/**
-	 * Navidrome album ids resolved out of Room that are NOT on this artist's album list.
-	 *
-	 * A collaboration record filed under the other credited artist, in practice. Kept so
-	 * [openPendingSync] can accept the same ids [buildSections] already proved resolvable.
-	 */
-	private val resolvedStrayAlbumIds = mutableSetOf<String>()
 
 	/**
 	 * Build the discography shelf: everything Navidrome has by this artist, plus

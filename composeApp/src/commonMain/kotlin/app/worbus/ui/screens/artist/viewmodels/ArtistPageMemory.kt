@@ -12,15 +12,36 @@ package app.worbus.ui.screens.artist.viewmodels
  *
  * Process memory only, a few artists. Main-thread only (view models write and read it there).
  */
-class ArtistPageMemory {
+class ArtistPageMemory(
+	/**
+	 * B-405 review L3: which session the pages were shown in (`SessionManager.sessionGeneration`, moved by
+	 * every login and logout). A snapshot holds one user's data (top songs by their play counts, their
+	 * guest albums), and Navidrome's artist ids are derived from the name, so they match across servers:
+	 * after a logout, another user or another server, nothing kept is shown.
+	 */
+	private val session: () -> Long = { 0L }
+) {
 	private val pages = LinkedHashMap<String, ArtistPageSnapshot>()
+	private var keptFor: Long? = null
 
-	operator fun get(artistId: String): ArtistPageSnapshot? = pages[artistId]
+	operator fun get(artistId: String): ArtistPageSnapshot? {
+		forgetAnotherSession()
+		return pages[artistId]
+	}
 
 	fun put(artistId: String, snapshot: ArtistPageSnapshot) {
+		forgetAnotherSession()
 		pages.remove(artistId)
 		pages[artistId] = snapshot
 		while (pages.size > KEPT) pages.remove(pages.keys.first())
+	}
+
+	private fun forgetAnotherSession() {
+		val now = session()
+		if (keptFor != now) {
+			pages.clear()
+			keptFor = now
+		}
 	}
 
 	private companion object {
@@ -32,7 +53,19 @@ class ArtistPageMemory {
 data class ArtistPageSnapshot(
 	val state: ArtistState,
 	val discography: DiscographyUi,
-	val mbid: ArtistMbidUi
+	val mbid: ArtistMbidUi,
+	/** B-405 review L1: the favourite, so the menu of a page opened on this offers the right one at once. */
+	val starred: Boolean = false,
+	/**
+	 * B-405 review L2: what the page's own Room read had worked out beyond what it shows, which a seeded
+	 * page needs before its deferred read: lb-bot's rows the shelf was built from ([lbData]), whether the
+	 * mirror answered for this artist ([fromMirror]: a library bump then rebuilds locally rather than
+	 * asking the network), and the albums filed under another artist that a discography row resolved to
+	 * ([strayAlbumIds]: a pending-sync row opens the album, not the unowned page).
+	 */
+	val lbData: app.worbus.domain.manager.LbDiscography? = null,
+	val fromMirror: Boolean = false,
+	val strayAlbumIds: Set<String> = emptySet()
 )
 
 /**

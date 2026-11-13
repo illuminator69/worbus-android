@@ -46,6 +46,34 @@ class ArtistPageMemoryTest {
 		assertNull(memory["a3"])
 	}
 
+	/*
+	 * B-405 review L3: the memory outlived a logout, a user switch and a server switch: user B's first open
+	 * of an artist A had visited showed A's top songs (sorted by A's plays) until the re-read, and
+	 * Navidrome's artist ids are derived from the name, so they match across servers.
+	 */
+	@Test
+	fun anotherSessionSeesNothingThePreviousOneKept() {
+		var session = 1L
+		val memory = ArtistPageMemory { session }
+		memory.put("x", snapshot("x"))
+		assertEquals("x", memory["x"]?.state?.artist?.id)
+		session = 2L // a logout, or a login as someone else or to another server
+		assertNull(memory["x"])
+		memory.put("y", snapshot("y"))
+		session = 3L
+		memory.put("z", snapshot("z"))
+		assertNull(memory["y"], "a write in a new session also drops the old one's")
+	}
+
+	/* B-405 review L1: the favourite is part of what a page showed. */
+	@Test
+	fun theFavouriteTravelsWithThePage() {
+		val memory = ArtistPageMemory()
+		memory.put("x", snapshot("x").copy(starred = true, fromMirror = true, strayAlbumIds = setOf("al-9")))
+		assertEquals(true, memory["x"]?.starred)
+		assertEquals(setOf("al-9"), memory["x"]?.strayAlbumIds)
+	}
+
 	@Test
 	fun aNewPageTakesTheIndexNotTheOtherPagesWorkInFlight() {
 		val sections = listOf(DiscographySection("album", listOf(DiscographyEntry(key = "rg1", title = "One", year = "2001"))))
