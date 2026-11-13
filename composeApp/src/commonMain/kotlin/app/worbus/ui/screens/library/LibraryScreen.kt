@@ -376,11 +376,11 @@ private fun RecentsBody(
 					// Opened, not started (P5 round 2): its page builds it and plays from there.
 					is Mix -> backStack.add(Screen.MixDetail(source.id))
 					is SavedQueueEntity -> queueActions.resume(source)
-					is DomainPlaylist -> backStack.add(Screen.CollectionDetail(source.id, ""))
+					is DomainPlaylist -> backStack.add(Screen.CollectionDetail(source.id, "", coverArtId = source.coverArtId))
 					is DomainAlbum -> if (entry.kind == EntryKind.Artist) {
 						backStack.add(Screen.ArtistDetail(source.artistId))
 					} else {
-						backStack.add(Screen.CollectionDetail(source.id, ""))
+						backStack.add(Screen.CollectionDetail(source.id, "", coverArtId = source.coverArtId))
 					}
 				}
 			},

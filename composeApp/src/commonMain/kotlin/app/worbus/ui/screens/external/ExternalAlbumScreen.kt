@@ -122,6 +122,7 @@ import app.worbus.ui.util.coverAmbientGradient
 import app.worbus.ui.util.onAmbientColor
 import app.worbus.ui.util.rememberAppIsDark
 import app.worbus.ui.util.rememberCoverColorScheme
+import app.worbus.ui.util.AmbientColorHolder
 
 /**
  * A release the library does not have: its tracklist, and the way to get it.
@@ -238,11 +239,21 @@ fun ExternalAlbumScreen(
 	// not resolve, `themed` stays false and the page is the app's own surface: an
 	// unresolved cover is an absence, not a colour, and must never be fabricated.
 	val appIsDark = rememberAppIsDark()
+	// B-404: while the sleeve's colours are being read, the page wears the colours of the page it came
+	// from (it drew the neutral surface and recoloured), and publishes its own for the next page.
+	val ambientHolder = koinInject<AmbientColorHolder>()
+	val initialSeed = remember { ambientHolder.last }
+	val initialDark = remember { ambientHolder.lastDark }
 	val coverColors = rememberCoverColorScheme(
 		coverArtId = null,
 		isDark = appIsDark,
-		paletteUrl = LbBotManager.caaCoverUrl(rgid).ifBlank { null }
+		paletteUrl = LbBotManager.caaCoverUrl(rgid).ifBlank { null },
+		initialSeed = initialSeed,
+		initialDark = initialDark
 	)
+	LaunchedEffect(coverColors.seed, coverColors.isDark, coverColors.themed) {
+		ambientHolder.publish(coverColors.seed.takeIf { coverColors.themed }, coverColors.isDark)
+	}
 	val (washTop, _) = coverAmbientGradient(coverColors.seed, coverColors.isDark)
 	val ambientTop = if (coverColors.themed) washTop else MaterialTheme.colorScheme.surface
 	ForceSystemBars(coverColors.isDark)

@@ -60,7 +60,7 @@ fun PlaylistListScreenGridItem(
 		ArtGridItem(
 			onClick = dropUnlessResumed {
 				scope.launch {
-					backStack.add(Screen.CollectionDetail(playlist.id, tab))
+					backStack.add(Screen.CollectionDetail(playlist.id, tab, coverArtId = playlist.coverArtId))
 				}
 			},
 			onLongClick = onSelect,

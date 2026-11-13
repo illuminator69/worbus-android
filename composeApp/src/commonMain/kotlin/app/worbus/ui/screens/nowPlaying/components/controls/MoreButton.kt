@@ -74,7 +74,7 @@ fun NowPlayingMoreButton(
 				onViewAlbum = dropUnlessResumed {
 					playerState.currentCollection?.let { collection ->
 						NowPlayingSheetController.requestHide {
-							backStack.add(Screen.CollectionDetail(collection.id, ""))
+							backStack.add(Screen.CollectionDetail(collection.id, "", coverArtId = collection.coverArtId))
 						}
 					}
 				},

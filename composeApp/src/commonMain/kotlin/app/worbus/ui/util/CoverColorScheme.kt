@@ -165,6 +165,28 @@ sealed interface CoverSeedFetch {
 internal fun coverSeedFetchOf(derived: CoverSeeds?): CoverSeedFetch =
 	derived?.let { CoverSeedFetch.Seeds(it) } ?: CoverSeedFetch.Unextractable
 
+/**
+ * Whether a page still waiting for its colours wears the colour it was opened from (`initialSeed`).
+ * Only while artwork is on its way: a cover being fetched ([coverToFetch]) or, B-404, a page whose record
+ * has not named its cover yet ([coverPending]). With nothing on its way nothing would ever replace the
+ * bridge, and an artist with no picture sat for good in the colour of the album it was opened from
+ * (rule 3 of the colour engine).
+ */
+internal fun coverBridgeHolds(
+	themingOn: Boolean,
+	resolved: Boolean,
+	hasInitialSeed: Boolean,
+	coverToFetch: Boolean,
+	coverPending: Boolean
+): Boolean = themingOn && !resolved && hasInitialSeed && (coverToFetch || coverPending)
+
+/**
+ * B-404: the cover a cover page wears. Its record's once that has been read, whatever it says (an album
+ * with no cover has none); before that, the one it was opened with ([opened], the tile's).
+ */
+fun pageCoverArtId(recordRead: Boolean, recordCover: String?, opened: String?): String? =
+	if (recordRead) recordCover else opened
+
 /** A readable Material scheme derived from artwork plus the extracted seed color. */
 data class CoverColors(
 	val scheme: ColorScheme,
@@ -228,7 +250,15 @@ fun rememberCoverColorScheme(
 	 * placeholder check is skipped: it identifies Navidrome's generic artist
 	 * glyph by cover id and means nothing for a foreign URL.
 	 */
-	paletteUrl: String? = null
+	paletteUrl: String? = null,
+	/**
+	 * B-404: the page does not know its cover yet, and one is on its way: its record (the album, the
+	 * artist) is still being read. [initialSeed] is then the bridge as it is for a cover being fetched,
+	 * so the page opens in the colours of the page it came from rather than the neutral surface.
+	 */
+	coverPending: Boolean = false,
+	/** B-404: the brightness of the page [initialSeed] came from ([AmbientColorHolder.lastDark]). */
+	initialDark: Boolean? = null
 ): CoverColors {
 	val themingOn = coverThemingEnabled()
 	val sessionManager = koinInject<SessionManager>()
@@ -315,15 +345,16 @@ fun rememberCoverColorScheme(
 	// false), and it only earns its place while artwork is actually on its way: with nothing to
 	// fetch — no cover id, or Navidrome's generic avatar — nothing will ever replace it, and an
 	// artist with no picture sat permanently in the colour of whatever album you opened it from.
-	val hasSeedSource = themingOn && (resolved || (initialSeed != null && coverUri != null))
+	val bridging = coverBridgeHolds(themingOn, resolved, initialSeed != null, coverUri != null, coverPending)
+	val hasSeedSource = themingOn && (resolved || bridging)
 	// The most POPULOUS colour, by family (see `dominantByColorFamily` in CoverSeeds.kt — NOT `dominantSwatch`).
 	// It decides page BRIGHTNESS — a mostly-black cover has to give a dark page — and, since the
 	// scheme's neutrals are seeded from it below, every background. On its own it's still a poor
 	// accent: on a black-and-yellow sleeve it's the black, not the yellow the cover reads as.
-	val dominant = remember(seeds, initialSeed, fallback, themingOn, coverUri) {
+	val dominant = remember(seeds, initialSeed, fallback, themingOn, bridging) {
 		if (!themingOn) fallback
 		else seeds?.dominant?.let(::Color)
-			?: initialSeed?.takeIf { coverUri != null }
+			?: initialSeed?.takeIf { bridging }
 			?: fallback
 	}
 	// The most populous COLOURFUL swatch: washed-out and near-black/near-white swatches are
@@ -340,7 +371,7 @@ fun rememberCoverColorScheme(
 	// As the cover's pixels decided ([CoverSeeds.dark]: its tone, or a black background), never the
 	// vivid swatch: a bright accent on a dark cover must not flip the whole page to light.
 	val coverIsDark = if (!followArtworkBrightness) isDark
-		else seeds?.pageIsDark() ?: isDark
+		else seeds?.pageIsDark() ?: initialDark?.takeIf { bridging } ?: isDark
 	// Seeds read off the cover's pixels (codec 4, I-057) carry the page's colour and the L* its top
 	// lands at: the field's own, so a black background gives a black page and a white one a white
 	// page (`readCover`). Only on pages that follow the artwork: the now-playing sheet keeps its own

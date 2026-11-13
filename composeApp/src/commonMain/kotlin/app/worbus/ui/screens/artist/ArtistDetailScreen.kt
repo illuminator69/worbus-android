@@ -238,12 +238,17 @@ fun ArtistDetailScreen(
 	// colour we came from, and publish ours for the next screen.
 	val ambientHolder = koinInject<AmbientColorHolder>()
 	val initialSeed = remember { ambientHolder.last }
+	val initialDark = remember { ambientHolder.lastDark }
+	// B-404: until Room has given the artist, the page wears the colours of the page it came from, not
+	// the neutral surface it then recoloured from.
 	val coverColors = rememberCoverColorScheme(
 		artistState.data?.artist?.coverArtId,
 		isDark = appIsDark,
-		initialSeed = initialSeed
+		initialSeed = initialSeed,
+		coverPending = artistState is UiState.Loading && artistState.data == null,
+		initialDark = initialDark
 	)
-	LaunchedEffect(coverColors.seed) { ambientHolder.last = coverColors.seed }
+	LaunchedEffect(coverColors.seed, coverColors.isDark) { ambientHolder.publish(coverColors.seed, coverColors.isDark) }
 	// STABLE (per-artist) ambient colours drive the theme, the containers and the text colour —
 	// so the crossfade below never re-derives the scheme or flips LocalContentColor per frame.
 	// Same split as CollectionDetailScreen.
@@ -558,7 +563,7 @@ fun ArtistDetailScreen(
 										contentDescription = null,
 										onSelect = { viewModel.selectAlbum(album) },
 										onClick = dropUnlessResumed {
-											backStack.add(Screen.CollectionDetail(album.id, "artist"))
+											backStack.add(Screen.CollectionDetail(album.id, "artist", coverArtId = album.coverArtId))
 										}
 									)
 								}
@@ -653,7 +658,7 @@ fun ArtistDetailScreen(
 			onFillGaps = gapEntry?.takeIf { artistSheetOffersFillGaps(hasGap = true, downloads = downloads) }?.let {
 				{
 					viewModel.clearAlbumSelection()
-					backStack.add(Screen.CollectionDetail(album.id, "artist", openGaps = true))
+					backStack.add(Screen.CollectionDetail(album.id, "artist", openGaps = true, coverArtId = album.coverArtId))
 				}
 			},
 			onFixAlbumMatch = {

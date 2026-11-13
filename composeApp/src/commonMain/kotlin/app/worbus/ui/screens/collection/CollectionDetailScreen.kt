@@ -104,6 +104,7 @@ import app.worbus.ui.util.AmbientColorHolder
 import app.worbus.ui.util.coverAmbientGradient
 import app.worbus.ui.util.onAmbientColor
 import app.worbus.ui.util.rememberCoverColorScheme
+import app.worbus.ui.util.pageCoverArtId
 import app.worbus.ui.util.withoutTop
 import kotlin.time.Duration
 import app.worbus.ui.components.snackbars.ErrorSnackBar
@@ -113,7 +114,9 @@ fun CollectionDetailScreen(
 	collectionId: String,
 	tab: String,
 	/** Opened from an album sheet's "Fill gaps": the gaps box starts unfolded. */
-	openGaps: Boolean = false
+	openGaps: Boolean = false,
+	/** B-404: the cover of the tile that opened the page ([Screen.CollectionDetail.coverArtId]). */
+	openedCoverArtId: String? = null
 ) {
 	val preferenceManager = koinInject<PreferenceManager>()
 
@@ -209,12 +212,20 @@ fun CollectionDetailScreen(
 	// colour we came from, and publish ours for the next screen.
 	val ambientHolder = koinInject<AmbientColorHolder>()
 	val initialSeed = remember { ambientHolder.last }
+	val initialDark = remember { ambientHolder.lastDark }
+	// B-404: the page's colours on its first frame. Room gives the album a few frames in, so the cover
+	// the opener knew stands until then (the seed store answers it in composition), and while neither is
+	// known the page wears the colours of the page it came from: it used to slide in on the neutral
+	// surface and recolour once the album was read, "a flash of the background before the album's colour".
+	val recordRead = collection != null || collectionState !is UiState.Loading
 	val coverColors = rememberCoverColorScheme(
-		collection?.coverArtId,
+		pageCoverArtId(recordRead, collection?.coverArtId, openedCoverArtId),
 		isDark = appIsDark,
-		initialSeed = initialSeed
+		initialSeed = initialSeed,
+		coverPending = !recordRead,
+		initialDark = initialDark
 	)
-	LaunchedEffect(coverColors.seed) { ambientHolder.last = coverColors.seed }
+	LaunchedEffect(coverColors.seed, coverColors.isDark) { ambientHolder.publish(coverColors.seed, coverColors.isDark) }
 	// The seed is always valid (neutral surface until extraction completes), so
 	// easing toward the real cover colour gives a smooth Apple-Music-style bleed-in
 	// with no late colour pop — background + hero fade ease together off `animatedSeed`.
@@ -443,7 +454,7 @@ fun CollectionDetailScreen(
 			// The blurred cover art under this page's own gradient — the shared
 			// [CoverAmbientBackground], which the browsing pages use too.
 			if (coverColors.themed) CoverAmbientBackground(
-				coverArtId = collection?.coverArtId,
+				coverArtId = pageCoverArtId(recordRead, collection?.coverArtId, openedCoverArtId),
 				seed = coverColors.seed,
 				isDark = coverColors.isDark
 			)

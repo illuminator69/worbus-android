@@ -126,7 +126,13 @@ sealed interface Screen : NavKey {
 		val collectionId: String,
 		val tab: String,
 		/** Opened to fill its gaps (the album sheet's "Fill gaps"): the gaps box starts unfolded. */
-		val openGaps: Boolean = false
+		val openGaps: Boolean = false,
+		/**
+		 * B-404: the cover of the tile or row that opened the page, when the opener knew it. The page
+		 * wears its colours from its first frame (the seed store is read in composition) instead of
+		 * waiting for Room to give it the album, which slid the page in neutral and recoloured it after.
+		 */
+		val coverArtId: String? = null
 	) : Screen
 
 	@Immutable

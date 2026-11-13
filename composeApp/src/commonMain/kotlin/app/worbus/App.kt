@@ -630,7 +630,7 @@ private fun entryProvider(
 			PlaybackSpeedScreen()
 		}
 		entry<Screen.CollectionDetail>(metadata = detailPane("root") + coverPage) { key ->
-			CollectionDetailScreen(key.collectionId, key.tab, key.openGaps)
+			CollectionDetailScreen(key.collectionId, key.tab, key.openGaps, key.coverArtId)
 		}
 		entry<Screen.SongDetailScreen>(metadata = detailPane("root")) { key ->
 			SongDetailScreen(key.songId, key.coverArtId)

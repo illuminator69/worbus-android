@@ -38,7 +38,7 @@ fun rememberDiscographyOpener(viewModel: ArtistDetailViewModel, artistId: String
 	}
 	return { entry ->
 		when {
-			entry.album != null -> backStack.add(Screen.CollectionDetail(entry.album.id, "artist"))
+			entry.album != null -> backStack.add(Screen.CollectionDetail(entry.album.id, "artist", coverArtId = entry.album.coverArtId))
 			entry.pendingSync -> {
 				val albumId = viewModel.openPendingSync(entry)
 				if (albumId != null) backStack.add(Screen.CollectionDetail(albumId, "artist"))

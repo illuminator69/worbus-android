@@ -188,7 +188,7 @@ fun MixDetailScreen(mixId: String) {
 	val initialSeed = remember { ambientHolder.last }
 	val cover = mix?.coverArtId?.ifBlank { null }
 	val coverColors = rememberCoverColorScheme(cover, isDark = appIsDark, initialSeed = initialSeed)
-	LaunchedEffect(coverColors.seed) { ambientHolder.last = coverColors.seed }
+	LaunchedEffect(coverColors.seed, coverColors.isDark) { ambientHolder.publish(coverColors.seed, coverColors.isDark) }
 	val (washTop, washBottom) = coverAmbientGradient(coverColors.seed, coverColors.isDark)
 	val themed = coverColors.themed && cover != null
 	val stableTop = if (themed) washTop else MaterialTheme.colorScheme.surface

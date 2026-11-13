@@ -5,6 +5,7 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.PathEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -45,19 +46,27 @@ fun sheetHideMotionSpec(motion: PageMotion) = tween<Float>(
 
 /**
  * navi-connect I-042: a cover's shared-element flight between a list and its page, timed by the
- * animation style so it lands with the page (PageMotion.sharedBoundsMs).
+ * animation style so it lands with the page. B-404 (the owner, 2026-11-13): the album slide's time and
+ * curve ([coverSlideTiming]); it was 500 ms (Quick 350) on EmphasizedDecelerate, so the cover still
+ * flew after the page had landed.
  */
 @Composable
 fun rememberCoverBoundsTransform(): BoundsTransform {
-	val durationMs = pageMotionOf(koinInject<PreferenceManager>().animationStyle).sharedBoundsMs
-	return remember(durationMs) {
+	val timing = coverSlideTiming(pageMotionOf(koinInject<PreferenceManager>().animationStyle))
+	return remember(timing) {
 		BoundsTransform { _, _ ->
 			tween(
-				durationMillis = durationMs,
-				easing = EmphasizedDecelerateEasing
+				durationMillis = timing.durationMs,
+				easing = timing.easing.curve()
 			)
 		}
 	}
+}
+
+/** The curve a [PageEasing] names. */
+fun PageEasing.curve(): Easing = when (this) {
+	PageEasing.Emphasized -> EmphasizedEasing
+	PageEasing.EmphasizedDecelerate -> EmphasizedDecelerateEasing
 }
 
 object Material3Transitions {
@@ -88,7 +97,9 @@ object Material3Transitions {
 		PageChange.SharedAxis ->
 			if (pop) popEnter(motion)(density) togetherWith popExit(motion)(density)
 			else enter(motion)(density) togetherWith exit(motion)(density)
-		PageChange.Slide -> slide(motion, sign = if (pop) -1 else 1)
+		// Settings' regular slide (B-403) is EaseOutQuart; the album slide (B-404) is its own timing.
+		PageChange.Slide -> slide(motion.slideMs, EaseOutQuart, sign = if (pop) -1 else 1)
+		PageChange.CoverSlide -> coverSlideTiming(motion).let { slide(it.durationMs, it.easing.curve(), sign = if (pop) -1 else 1) }
 	}
 
 	/**
@@ -97,9 +108,9 @@ object Material3Transitions {
 	 * the other page, and the old page moves from the first frame. [sign] 1 is a push (in from the
 	 * right), -1 a pop (in from the left). Upstream's predictive-back slide, as one animation.
 	 */
-	private fun slide(motion: PageMotion, sign: Int): ContentTransform =
-		slideInHorizontally(animationSpec = tween(durationMillis = motion.slideMs, easing = EaseOutQuart)) { sign * it } togetherWith
-			slideOutHorizontally(animationSpec = tween(durationMillis = motion.slideMs, easing = EaseOutQuart)) { -sign * it }
+	private fun slide(durationMs: Int, easing: Easing, sign: Int): ContentTransform =
+		slideInHorizontally(animationSpec = tween(durationMillis = durationMs, easing = easing)) { sign * it } togetherWith
+			slideOutHorizontally(animationSpec = tween(durationMillis = durationMs, easing = easing)) { -sign * it }
 
 	/**
 	 * A root-tab switch (Ruling 7, 2026-11-10): a fade-through, no slide. The old tab fades out, then
@@ -132,10 +143,7 @@ object Material3Transitions {
 	val SharedXAxisPopExitTransition: (Density) -> ExitTransition = popExit(DefaultPageMotion)
 
 	private fun pageEnter(motion: PageMotion, density: Density, sign: Int): EnterTransition {
-		val easing = when (motion.enterEasing) {
-			PageEasing.Emphasized -> EmphasizedEasing
-			PageEasing.EmphasizedDecelerate -> EmphasizedDecelerateEasing
-		}
+		val easing = motion.enterEasing.curve()
 		// B-378: the fade waits for the outgoing page's to end (pageFadeWindows); the slide does not.
 		return fadeIn(
 			animationSpec = tween(durationMillis = motion.enterFadeMs, delayMillis = motion.enterFadeDelayMs, easing = easing)
@@ -160,10 +168,7 @@ object Material3Transitions {
 			slideOutHorizontally(
 				animationSpec = tween(
 					durationMillis = motion.exitSlideMs,
-					easing = when (motion.enterEasing) {
-						PageEasing.Emphasized -> EmphasizedEasing
-						PageEasing.EmphasizedDecelerate -> EmphasizedDecelerateEasing
-					}
+					easing = motion.enterEasing.curve()
 				)
 			) {
 				sign * with(density) { motion.exitSlideDp.dp.roundToPx() }

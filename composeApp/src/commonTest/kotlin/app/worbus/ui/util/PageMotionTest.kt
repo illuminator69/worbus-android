@@ -25,7 +25,6 @@ class PageMotionTest {
 			exitFadeMs = 175,
 			exitSlideMs = 500,
 			exitSlideDp = 30,
-			sharedBoundsMs = 500,
 			sheetShowMs = 400,
 			sheetHideMs = 600,
 			// B-403 (the owner, 2026-11-13): a tab's fade-through and the regular slide.
@@ -46,7 +45,6 @@ class PageMotionTest {
 			"enterSlide" to (quick.enterSlideMs to old.enterSlideMs),
 			"exitFade" to (quick.exitFadeMs to old.exitFadeMs),
 			"exitSlide" to (quick.exitSlideMs to old.exitSlideMs),
-			"sharedBounds" to (quick.sharedBoundsMs to old.sharedBoundsMs),
 			"sheetShow" to (quick.sheetShowMs to old.sheetShowMs),
 			"sheetHide" to (quick.sheetHideMs to old.sheetHideMs),
 			"tabExitFade" to (quick.tabExitFadeMs to old.tabExitFadeMs),

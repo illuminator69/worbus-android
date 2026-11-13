@@ -376,7 +376,7 @@ fun SearchScreen(
 						},
 						onArtist = { backStack.add(Screen.ArtistDetail(it.id)) },
 						onArtistMenu = { artistListViewModel.selectArtist(it) },
-						onAlbum = { backStack.add(Screen.CollectionDetail(it.id, "search")) },
+						onAlbum = { backStack.add(Screen.CollectionDetail(it.id, "search", coverArtId = it.coverArtId)) },
 						onAlbumMenu = { albumListViewModel.selectAlbum(it) },
 						onSong = { player.playNow(it) },
 						onSongMenu = { viewModel.selectSong(it) },
@@ -387,7 +387,7 @@ fun SearchScreen(
 								player.addToQueueSingle(song)
 							}
 						},
-						onPlaylist = { backStack.add(Screen.CollectionDetail(it.id, "search")) },
+						onPlaylist = { backStack.add(Screen.CollectionDetail(it.id, "search", coverArtId = it.coverArtId)) },
 						onPlaylistMenu = { selectedPlaylist = it }
 					)
 					if (!offline) {

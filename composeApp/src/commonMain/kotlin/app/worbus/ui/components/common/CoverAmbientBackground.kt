@@ -1,5 +1,7 @@
 package app.worbus.ui.components.common
 
+import androidx.compose.runtime.LaunchedEffect
+import app.worbus.ui.util.AmbientColorHolder
 import app.worbus.ui.util.WASH_MS
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -204,6 +206,12 @@ fun BrowsingAmbient(content: @Composable () -> Unit) {
 	// draws none of its own: it fades and slides OVER the same colours, and nothing neutral shows
 	// through while it does.
 	val backdropDrawn = LocalAppWash.current
+	// B-404: this page's colours are what the next page bridges from while its own load (a cover page
+	// used to bridge from whichever cover page was open last, or from nothing).
+	val ambientHolder = koinInject<AmbientColorHolder>()
+	LaunchedEffect(showWash, cover.seed, cover.isDark) {
+		if (showWash) ambientHolder.publish(cover.seed, cover.isDark) else ambientHolder.publish(null, null)
+	}
 	Box(Modifier.fillMaxSize()) {
 		if (showWash && !backdropDrawn) CoverAmbientBackground(coverArtId, cover.seed, cover.isDark)
 		CompositionLocalProvider(LocalCoverAmbientBottom provides ambientBottom.takeIf { showWash }) {

@@ -76,7 +76,7 @@ fun PlaylistListScreenListItem(
 			art = { LibraryRowCover(playlist.coverArtId, playlist.name) },
 			onClick = dropUnlessResumed {
 				scope.launch {
-					backStack.add(Screen.CollectionDetail(playlist.id, ""))
+					backStack.add(Screen.CollectionDetail(playlist.id, "", coverArtId = playlist.coverArtId))
 				}
 			},
 			onLongClick = onSelect

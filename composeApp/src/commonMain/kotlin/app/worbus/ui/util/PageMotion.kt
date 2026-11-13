@@ -25,7 +25,6 @@ data class PageMotion(
 	val exitFadeMs: Int,
 	val exitSlideMs: Int,
 	val exitSlideDp: Int,
-	val sharedBoundsMs: Int,
 	val sheetShowMs: Int,
 	val sheetHideMs: Int,
 	/**
@@ -65,7 +64,6 @@ val DefaultPageMotion = PageMotion(
 	exitFadeMs = 175,
 	exitSlideMs = 500,
 	exitSlideDp = 30,
-	sharedBoundsMs = 500,
 	sheetShowMs = 400,
 	sheetHideMs = 600,
 	tabExitFadeMs = 90,
@@ -83,7 +81,6 @@ val QuickPageMotion = PageMotion(
 	exitFadeMs = 85,
 	exitSlideMs = 250,
 	exitSlideDp = 30,
-	sharedBoundsMs = 350,
 	sheetShowMs = 300,
 	sheetHideMs = 250,
 	tabExitFadeMs = 60,
@@ -118,6 +115,12 @@ enum class PageKind {
 	 * wears the backdrop's (`Washed`) and is one too, as the other end of album <-> artist.
 	 */
 	Cover,
+
+	/**
+	 * Review m4: a scene of more than one pane with a cover page on top (a tablet's list beside an album).
+	 * Never the album slide: it would carry the list pane off with the album.
+	 */
+	Panes,
 	Other
 }
 
@@ -126,25 +129,46 @@ enum class PageChange {
 	/** B-378's slide and fade: both pages slide, the old one fades out over the first third, then the new one in. */
 	SharedAxis,
 
-	/** The regular slide: both pages move the whole width together, nothing fades. */
-	Slide
+	/** The regular slide (B-403, Settings): both pages move the whole width together on EaseOutQuart, nothing fades. */
+	Slide,
+
+	/**
+	 * The album slide (B-404, the owner's ruling of 2026-11-13): into or out of a cover page, from anywhere.
+	 * Both pages move the whole width together, nothing fades, in the artist page's time ([PageMotion.slideMs])
+	 * on the discography page's easing ([PageMotion.enterEasing]): [coverSlideTiming].
+	 */
+	CoverSlide
 }
 
 /**
  * B-403 (the owner, 2026-11-13): Settings and its pages use the regular slide, with no fade, going in,
- * between them and leaving. B-404 (the owner, 2026-11-13): between two cover pages, album <-> artist,
- * B-378's fade-through (W1, 87129261: the old page out over the first 175 ms, the new one in only
- * after it) left neither page drawn for a moment, so the backdrop behind the pages showed between the
- * two covers' colours ("fades to white before the colours switch"); that change slides too, the one
- * page's colours pushing the other's off with no fade. Both pages move the whole width: nothing is
- * drawn over the other page's text, and the old page never vanishes at once. Everything else keeps
- * the slide and fade.
+ * between them and leaving.
+ *
+ * B-404 (the owner's re-walk, 2026-11-13): opening an album ran two different motions. From the artist
+ * page (cover to cover) it was the regular slide, 300 ms on EaseOutQuart; from the full discography (a
+ * washed page to a cover page) B-378's slide and fade, 500 ms on the Emphasized curve, whose fade-through
+ * left neither page drawn for a moment. The owner: "inconsistent behavior which should never happen";
+ * everywhere the album slide runs it takes the artist page's speed and the discography's easing. So every
+ * change into or out of a cover page, whatever the other page is, is one motion, [PageChange.CoverSlide]:
+ * no fade, so no backdrop between the two pages. Settings keeps its own slide (B-403 passed), and a
+ * tablet's two panes keep the slide and fade (review m4).
  */
 fun pageChangeOf(from: PageKind, to: PageKind): PageChange = when {
 	from == PageKind.Settings || to == PageKind.Settings -> PageChange.Slide
-	from == PageKind.Cover && to == PageKind.Cover -> PageChange.Slide
+	from == PageKind.Panes || to == PageKind.Panes -> PageChange.SharedAxis
+	from == PageKind.Cover || to == PageKind.Cover -> PageChange.CoverSlide
 	else -> PageChange.SharedAxis
 }
+
+/** A whole-width slide's time and curve. */
+data class SlideTiming(val durationMs: Int, val easing: PageEasing)
+
+/**
+ * The album slide's time and curve (B-404): the artist page's time, the discography page's easing. The
+ * cover's flight from a tile to the album page ([rememberCoverBoundsTransform]) takes the same, so the
+ * cover lands as the page does.
+ */
+fun coverSlideTiming(motion: PageMotion): SlideTiming = SlideTiming(motion.slideMs, motion.enterEasing)
 
 private const val PAGE_KIND_KEY = "app.worbus.pageKind"
 
@@ -156,12 +180,12 @@ fun pageKindOf(metadata: Map<String, Any>?): PageKind = metadata?.get(PAGE_KIND_
 
 /**
  * What a scene is, from its entries' metadata, the page on top last. Review m4: a scene of more than one
- * pane (a tablet's list beside a cover page) is not a cover page: B-404's slide would carry the list pane
- * off with it, so such a change keeps the slide and fade.
+ * pane (a tablet's list beside a cover page) is not a cover page but [PageKind.Panes]: B-404's slide would
+ * carry the list pane off with it, so such a change keeps the slide and fade.
  */
 fun pageKindOfScene(entries: List<Map<String, Any>>): PageKind {
 	val top = pageKindOf(entries.lastOrNull())
-	return if (top == PageKind.Cover && entries.size > 1) PageKind.Other else top
+	return if (top == PageKind.Cover && entries.size > 1) PageKind.Panes else top
 }
 
 /** The fold's time under [motion], or null for the motion scheme's springs. */

@@ -54,21 +54,34 @@ class PageChangeTest {
 
 /*
  * B-404 (the owner's walk, 2026-11-13): the album <-> artist transition faded to white before the
- * colours switched. B-378's fade-through (W1, 87129261) fades the album page out over the first
- * 175 ms and the artist page in only after it, and both pages draw their own cover's colours over the
- * backdrop: between the two fades the backdrop showed. The owner: revert the fade for that change.
+ * colours switched (B-378's fade-through left neither page drawn). The re-walk (2026-11-13, `011b738d`):
+ * opening an album from the artist page (cover to cover: the regular slide, 300 ms, EaseOutQuart) and
+ * from the full discography (a washed page to a cover page: B-378's slide and fade, 500 ms, Emphasized)
+ * were two motions. The owner's ruling: everywhere this album slide runs, the artist page's speed with the
+ * discography's easing.
  */
 class CoverPageChangeTest {
 	@Test
-	fun albumAndArtistPagesSlideBetweenEachOther() {
-		assertEquals(PageChange.Slide, pageChangeOf(PageKind.Cover, PageKind.Cover))
+	fun everyWayIntoOrOutOfACoverPageIsTheOneAlbumSlide() {
+		assertEquals(PageChange.CoverSlide, pageChangeOf(PageKind.Cover, PageKind.Cover), "artist page -> album")
+		assertEquals(PageChange.CoverSlide, pageChangeOf(PageKind.Other, PageKind.Cover), "discography, library, search, home -> album")
+		assertEquals(PageChange.CoverSlide, pageChangeOf(PageKind.Cover, PageKind.Other), "album -> any other page, and Back")
+		assertEquals(PageChange.Slide, pageChangeOf(PageKind.Cover, PageKind.Settings), "Settings' rule first")
+		assertEquals(PageChange.SharedAxis, pageChangeOf(PageKind.Other, PageKind.Other), "no cover page: B-378's")
 	}
 
 	@Test
-	fun aCoverPageAndAnyOtherPageKeepTheSlideAndFade() {
-		assertEquals(PageChange.SharedAxis, pageChangeOf(PageKind.Other, PageKind.Cover))
-		assertEquals(PageChange.SharedAxis, pageChangeOf(PageKind.Cover, PageKind.Other))
-		assertEquals(PageChange.Slide, pageChangeOf(PageKind.Cover, PageKind.Settings), "Settings' rule first")
+	fun theAlbumSlideTakesTheArtistPagesTimeAndTheDiscographysEasing() {
+		for (style in AnimationStyle.entries) {
+			val m = pageMotionOf(style)
+			val timing = coverSlideTiming(m)
+			// The artist page's slide (the regular slide's time) ...
+			assertEquals(m.slideMs, timing.durationMs, "$style: time")
+			// ... on the discography page's curve (the incoming page's easing of B-378's slide and fade).
+			assertEquals(m.enterEasing, timing.easing, "$style: easing")
+		}
+		assertEquals(SlideTiming(300, PageEasing.Emphasized), coverSlideTiming(pageMotionOf(AnimationStyle.Expressive)))
+		assertEquals(SlideTiming(250, PageEasing.EmphasizedDecelerate), coverSlideTiming(pageMotionOf(AnimationStyle.Quick)))
 	}
 }
 
@@ -83,14 +96,15 @@ class CoverSceneTest {
 	@Test
 	fun aOnePaneCoverSceneIsACoverPage() {
 		assertEquals(PageKind.Cover, pageKindOfScene(listOf(cover)))
-		assertEquals(PageChange.Slide, pageChangeOf(pageKindOfScene(listOf(cover)), pageKindOfScene(listOf(cover))))
+		assertEquals(PageChange.CoverSlide, pageChangeOf(pageKindOfScene(listOf(cover)), pageKindOfScene(listOf(cover))))
 	}
 
 	@Test
 	fun aListBesideACoverPageKeepsTheSlideAndFade() {
 		val twoPane = pageKindOfScene(listOf(list, cover))
-		assertEquals(PageKind.Other, twoPane)
+		assertEquals(PageKind.Panes, twoPane)
 		assertEquals(PageChange.SharedAxis, pageChangeOf(twoPane, pageKindOfScene(listOf(cover))))
+		assertEquals(PageChange.SharedAxis, pageChangeOf(pageKindOfScene(listOf(list)), twoPane))
 		assertEquals(PageKind.Settings, pageKindOfScene(listOf(list, pageKindMetadata(PageKind.Settings))), "Settings' two panes still slide")
 	}
 }
