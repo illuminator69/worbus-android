@@ -141,4 +141,17 @@ class DiscographyFilterTest {
 		val none = listOf(DiscographySection("album", listOf(missing("x", "2001"), missing("y", "2010"))), DiscographySection("ep", listOf(missing("z", "2020"))))
 		assertEquals(listOf("y", "x"), popularReleases(none).map { it.key })
 	}
+
+	/*
+	 * B-405 review m1: the discography is a lazy list, which throws on a repeated key where the old Column
+	 * drew the row twice. Two lb-bot rows with one rgid used to become two entries keyed alike.
+	 */
+	@Test
+	fun aRepeatedKeyIsListedOnce() {
+		val twice = listOf(DiscographySection("album", listOf(missing("rg", "2001"), missing("rg", "2001"), missing("other", "2000"))))
+		assertEquals(listOf("other", "rg"), discographyView(twice, DiscographyFilter()).sections.single().entries.map { it.key }.sorted())
+		val flat = discographyView(twice, DiscographyFilter(ownership = Ownership.MISSING))
+		assertEquals(listOf("other", "rg"), flat.sections.single().entries.map { it.key }.sorted())
+		assertEquals(2, flat.matched)
+	}
 }

@@ -1201,8 +1201,9 @@ class ArtistDetailViewModel(
 		// album for it, and the tile fell out of both lists. A `missing` row that
 		// matched an owned album is still absorbed into it above rather than
 		// dropped, which is what stops the same record rendering twice.
+		// Review m1: `add`, so two lb-bot rows with one rgid make one entry (one key), not two.
 		val absent = releases
-			.filter { it.rgid.isNotBlank() && it.rgid !in usedRgids }
+			.filter { it.rgid.isNotBlank() && usedRgids.add(it.rgid) }
 			.map { release ->
 				DiscographyEntry(
 					key = release.rgid,

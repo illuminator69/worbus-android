@@ -63,10 +63,12 @@ fun discographyView(sections: List<DiscographySection>, filter: DiscographyFilte
 		.ifEmpty { sections.filter { it.entries.isNotEmpty() } }
 	val comparator = comparatorFor(filter.sort)
 	if (filter.ownership == Ownership.ALL) {
-		val sorted = typed.map { section -> section.copy(entries = section.entries.sortedWith(comparator)) }
+		// Review m1: one row per key in a section (the lazy list throws on a repeated key; the old Column drew it twice).
+		val sorted = typed.map { section -> section.copy(entries = section.entries.distinctBy { it.key }.sortedWith(comparator)) }
 		return DiscographyView(sorted, flat = false, matched = sorted.sumOf { it.entries.size }, total = total)
 	}
 	val matches = typed.flatMap { it.entries }
+		.distinctBy { it.key }
 		.filter { ownershipOf(it) == filter.ownership }
 		.sortedWith(comparator)
 	return DiscographyView(
