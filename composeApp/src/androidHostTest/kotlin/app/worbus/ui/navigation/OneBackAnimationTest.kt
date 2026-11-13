@@ -2,6 +2,7 @@ package app.worbus.ui.navigation
 
 import app.worbus.sourceFile
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /*
@@ -28,13 +29,17 @@ class OneBackAnimationTest {
 		assertTrue("popTransitionSpec = {" in navSpecs && "predictivePopTransitionSpec = {" in navSpecs, navSpecs.take(400))
 	}
 
+	/** The transform a spec builds: the arguments of its `Material3Transitions.page(` call. */
+	private fun call(spec: String) = spec.substringAfter("Material3Transitions.page(", "").substringBefore("\n\t\t\t\t\t\t\t\t\t\t)").trim()
+
+	private val transitions = sourceFile("src/commonMain/kotlin/app/worbus/ui/util/Material3Transitions.kt").readText()
+
 	@Test
-	fun aDraggedBackRunsTheSameSlideAndFadeAsTheButton() {
-		assertTrue("Material3Transitions.popEnter" in pop && "Material3Transitions.popExit" in pop, pop)
-		assertTrue(
-			"Material3Transitions.popEnter" in predictive && "Material3Transitions.popExit" in predictive,
-			"the predictive pop is the pop:\n$predictive"
-		)
+	fun aDraggedBackRunsTheSameTransformAsTheButton() {
+		// B-403 kept it: the two pop specs are ONE call, the motion picked by the two pages
+		// (pageChangeOf), so Settings' slide is the button's, the quick gesture's and the drag's alike.
+		assertTrue(call(pop).isNotBlank() && "pop = true" in call(pop), pop)
+		assertEquals(call(pop), call(predictive), "the predictive pop is the pop")
 		assertTrue("PREDICTIVE_POP_MS" !in predictive && "slideInHorizontally" !in predictive, "no second back animation:\n$predictive")
 	}
 
@@ -42,5 +47,11 @@ class OneBackAnimationTest {
 	fun noBackLeavesThePreviousPageAtOnce() {
 		assertTrue("EnterTransition.None" !in predictive && "ExitTransition.None" !in predictive, predictive)
 		assertTrue("EnterTransition.None" !in pop && "ExitTransition.None" !in pop, pop)
+		// The transform itself: no `None` side, and the slide moves both pages the whole width with no fade.
+		val page = transitions.substringAfter("fun page(").substringBefore("\n\t/**")
+		assertTrue(".None" !in page, page)
+		val slide = transitions.substringAfter("private fun slide(").substringBefore("\n\t/**")
+		assertTrue("fade" !in slide && ".None" !in slide, slide)
+		assertTrue("{ sign * it }" in slide && "{ -sign * it }" in slide, "both pages travel the whole width:\n$slide")
 	}
 }

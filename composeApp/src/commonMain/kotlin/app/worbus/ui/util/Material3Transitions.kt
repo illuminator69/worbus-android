@@ -1,6 +1,7 @@
 package app.worbus.ui.util
 
 import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
@@ -10,6 +11,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.EaseOutQuart
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Path
@@ -77,18 +80,40 @@ object Material3Transitions {
 	}
 
 	/**
-	 * A root-tab switch (Ruling 7, 2026-11-10): the same staggered fade-through as a page push, no
-	 * slide. The old tab fades out over the first third, then the new one fades in over the rest
-	 * ([pageFadeWindows]); the two were faded at once, their text drawn over each other (B-378's
-	 * overlap on a tab switch).
+	 * Every page change NavDisplay runs, push or pop, and the predictive drag (which drives the same
+	 * transform by its progress, B-378's one back animation): [change] picks the motion
+	 * ([pageChangeOf]), [pop] its direction.
+	 */
+	fun page(change: PageChange, pop: Boolean, motion: PageMotion, density: Density): ContentTransform = when (change) {
+		PageChange.SharedAxis ->
+			if (pop) popEnter(motion)(density) togetherWith popExit(motion)(density)
+			else enter(motion)(density) togetherWith exit(motion)(density)
+		PageChange.Slide -> slide(motion, sign = if (pop) -1 else 1)
+	}
+
+	/**
+	 * B-403: the regular slide. The new page comes in from one edge as the old one leaves by the other,
+	 * both the whole width and on one curve, so they stay side by side: no fade, nothing drawn over
+	 * the other page, and the old page moves from the first frame. [sign] 1 is a push (in from the
+	 * right), -1 a pop (in from the left). Upstream's predictive-back slide, as one animation.
+	 */
+	private fun slide(motion: PageMotion, sign: Int): ContentTransform =
+		slideInHorizontally(animationSpec = tween(durationMillis = motion.slideMs, easing = EaseOutQuart)) { sign * it } togetherWith
+			slideOutHorizontally(animationSpec = tween(durationMillis = motion.slideMs, easing = EaseOutQuart)) { -sign * it }
+
+	/**
+	 * A root-tab switch (Ruling 7, 2026-11-10): a fade-through, no slide. The old tab fades out, then
+	 * the new one fades in ([tabFadeWindows]); the two were faded at once, their text drawn over each
+	 * other (B-378's overlap on a tab switch). B-403 (the owner, 2026-11-13): it took a page push's
+	 * 500 ms, too long for a tab; 300 ms now (Quick 200), Material's fade-through.
 	 */
 	fun tabEnter(motion: PageMotion): EnterTransition {
-		val w = pageFadeWindows(motion)
+		val w = tabFadeWindows(motion)
 		return fadeIn(animationSpec = tween(durationMillis = w.enterEndMs - w.enterStartMs, delayMillis = w.enterStartMs))
 	}
 
 	fun tabExit(motion: PageMotion): ExitTransition {
-		val w = pageFadeWindows(motion)
+		val w = tabFadeWindows(motion)
 		return fadeOut(
 			animationSpec = tween(
 				durationMillis = w.exitEndMs - w.exitStartMs,

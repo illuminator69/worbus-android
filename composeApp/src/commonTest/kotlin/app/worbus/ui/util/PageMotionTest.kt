@@ -27,7 +27,11 @@ class PageMotionTest {
 			exitSlideDp = 30,
 			sharedBoundsMs = 500,
 			sheetShowMs = 400,
-			sheetHideMs = 600
+			sheetHideMs = 600,
+			// B-403 (the owner, 2026-11-13): a tab's fade-through and the regular slide.
+			tabExitFadeMs = 90,
+			tabEnterFadeMs = 210,
+			slideMs = 300
 		)
 		assertEquals(today, pageMotionOf(AnimationStyle.Expressive))
 		assertEquals(today, pageMotionOf(AnimationStyle.Standard))
@@ -44,7 +48,10 @@ class PageMotionTest {
 			"exitSlide" to (quick.exitSlideMs to old.exitSlideMs),
 			"sharedBounds" to (quick.sharedBoundsMs to old.sharedBoundsMs),
 			"sheetShow" to (quick.sheetShowMs to old.sheetShowMs),
-			"sheetHide" to (quick.sheetHideMs to old.sheetHideMs)
+			"sheetHide" to (quick.sheetHideMs to old.sheetHideMs),
+			"tabExitFade" to (quick.tabExitFadeMs to old.tabExitFadeMs),
+			"tabEnterFade" to (quick.tabEnterFadeMs to old.tabEnterFadeMs),
+			"slide" to (quick.slideMs to old.slideMs)
 		)
 		for ((name, durations) in pairs) {
 			val (q, o) = durations

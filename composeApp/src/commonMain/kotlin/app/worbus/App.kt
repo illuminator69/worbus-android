@@ -169,6 +169,11 @@ import app.worbus.ui.ColourArrivalEffects
 import app.worbus.ui.util.Material3Transitions
 import app.worbus.ui.util.PageMotion
 import app.worbus.ui.util.pageMotionOf
+import app.worbus.ui.util.PageKind
+import app.worbus.ui.util.pageChangeOf
+import app.worbus.ui.util.pageKindMetadata
+import app.worbus.ui.util.pageKindOf
+import androidx.navigation3.scene.Scene
 import app.worbus.ui.util.rememberLibraryTabBackground
 import app.worbus.ui.components.common.AppWash
 import app.worbus.ui.components.common.BrowsingAmbient
@@ -458,32 +463,27 @@ fun App() {
 									},
 									entryProvider = entries,
 									// navi-connect I-042: page timing follows the animation style (PageMotion.kt).
+									// B-403: which motion is the two pages' (pageChangeOf): Settings slides.
 									transitionSpec = {
-										val motion = pageMotionOf(preferenceManager.animationStyle)
-										Material3Transitions.enter(motion)(
-											density
-										) togetherWith Material3Transitions.exit(motion)(
-											density
+										Material3Transitions.page(
+											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
+											pop = false, pageMotionOf(preferenceManager.animationStyle), density
 										)
 									},
 									popTransitionSpec = {
-										val motion = pageMotionOf(preferenceManager.animationStyle)
-										Material3Transitions.popEnter(motion)(
-											density
-										) togetherWith Material3Transitions.popExit(motion)(
-											density
+										Material3Transitions.page(
+											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
+											pop = true, pageMotionOf(preferenceManager.animationStyle), density
 										)
 									},
 									// B-378 (the owner, 2026-11-09): ONE back animation. A dragged Back drives
-									// the same slide and fade as the button by its progress; it was a
+									// the same transform as the button by its progress; it was a
 									// full-width slide of its own, or, with predictive animations off, no
 									// transition at all (the page under the finger was simply gone).
 									predictivePopTransitionSpec = {
-										val motion = pageMotionOf(preferenceManager.animationStyle)
-										Material3Transitions.popEnter(motion)(
-											density
-										) togetherWith Material3Transitions.popExit(motion)(
-											density
+										Material3Transitions.page(
+											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
+											pop = true, pageMotionOf(preferenceManager.animationStyle), density
 										)
 									}
 								)
@@ -540,6 +540,8 @@ private fun entryProvider(
 			ContentTransform(Material3Transitions.tabEnter(motion()), Material3Transitions.tabExit(motion()))
 		}
 	else listPane("root") + ListPageSceneStrategy.listPage()
+	// B-403: Settings and its pages slide, going in, between them and leaving (pageChangeOf).
+	val settingsPage = pageKindMetadata(PageKind.Settings)
 	val imageViewMetadata = transitionSpec { ContentTransform(fadeIn(), ExitTransition.None) }
 		.plus(popTransitionSpec { ContentTransform(EnterTransition.None, fadeOut()) })
 		.plus(predictivePopTransitionSpec { ContentTransform(EnterTransition.None, fadeOut()) })
@@ -712,61 +714,61 @@ private fun entryProvider(
 		}
 
 		// settings
-		entry<Screen.Settings.Root>(metadata = listPane("settings")) {
+		entry<Screen.Settings.Root>(metadata = listPane("settings") + settingsPage) {
 			Washed { SettingsScreen() }
 		}
-		entry<Screen.Settings.Appearance>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.Appearance>(metadata = detailPane("settings") + settingsPage) {
 			Washed { SettingsAppearanceScreen() }
 		}
-		entry<Screen.Settings.BottomAppBar>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.BottomAppBar>(metadata = detailPane("settings") + settingsPage) {
 			Washed { BottomBarScreen() }
 		}
-		entry<Screen.Settings.NowPlaying>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.NowPlaying>(metadata = detailPane("settings") + settingsPage) {
 			Washed { SettingsNowPlayingScreen() }
 		}
-		entry<Screen.Settings.Playback>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.Playback>(metadata = detailPane("settings") + settingsPage) {
 			Washed { SettingsPlaybackScreen() }
 		}
-		entry<Screen.Settings.Effects>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.Effects>(metadata = detailPane("settings") + settingsPage) {
 			Washed { AudioEffectsScreen() }
 		}
-		entry<Screen.Settings.Developer>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.Developer>(metadata = detailPane("settings") + settingsPage) {
 			Washed { SettingsDeveloperScreen() }
 		}
 		entry<Screen.GenreDetail> { key ->
 			Washed { GenreDetailScreen(key.genreName) }
 		}
-		entry<Screen.Settings.AppIcon>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.AppIcon>(metadata = detailPane("settings") + settingsPage) {
 			Washed { SettingsAppIconScreen() }
 		}
-		entry<Screen.Settings.Equaliser> {
+		entry<Screen.Settings.Equaliser>(metadata = settingsPage) {
 			Washed { SettingsEqualiserScreen() }
 		}
-		entry<Screen.Settings.About>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.About>(metadata = detailPane("settings") + settingsPage) {
 			Washed { SettingsAboutScreen() }
 		}
-		entry<Screen.Settings.DataStorage>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.DataStorage>(metadata = detailPane("settings") + settingsPage) {
 			Washed { SettingsDataStorageScreen() }
 		}
-		entry<Screen.Settings.PendingActions>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.PendingActions>(metadata = detailPane("settings") + settingsPage) {
 			Washed { PendingActionsScreen() }
 		}
-		entry<Screen.Settings.Fonts> {
+		entry<Screen.Settings.Fonts>(metadata = settingsPage) {
 			Washed { FontsScreen() }
 		}
-		entry<Screen.Settings.Themes> {
+		entry<Screen.Settings.Themes>(metadata = settingsPage) {
 			Washed { SettingsThemesScreen() }
 		}
-		entry<Screen.Settings.CustomHeaders> {
+		entry<Screen.Settings.CustomHeaders>(metadata = settingsPage) {
 			Washed { SettingsCustomHeadersScreen() }
 		}
-		entry<Screen.Settings.StreamingQuality>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.StreamingQuality>(metadata = detailPane("settings") + settingsPage) {
 			Washed { SettingsQualityDataScreen() }
 		}
-		entry<Screen.Settings.Logs> {
+		entry<Screen.Settings.Logs>(metadata = settingsPage) {
 			Washed { SettingsLogsScreen() }
 		}
-		entry<Screen.Settings.NaviConnect>(metadata = detailPane("settings")) {
+		entry<Screen.Settings.NaviConnect>(metadata = detailPane("settings") + settingsPage) {
 			Washed { ServerScreen() }
 		}
 		entry<Screen.SmartPlaylistEditor> { key ->
@@ -789,3 +791,6 @@ private fun entryProvider(
 private fun Washed(content: @Composable () -> Unit) {
 	BrowsingAmbient(content = content)
 }
+
+/** What the page on top of [this] scene is, for the motion to it or from it (B-403). */
+private fun Scene<*>.pageKind() = pageKindOf(entries.lastOrNull()?.metadata)
