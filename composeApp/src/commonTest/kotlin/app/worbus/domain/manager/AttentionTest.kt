@@ -240,6 +240,9 @@ class AttentionTest {
 		assertEquals(16 + 25, toFixSectionCount(attentionPage(AttentionRead.Ok(cut), cut, 1L, emptyList(), null) as AttentionPage.Rows))
 		// Downloading off: no folder is listed, and none is counted (toFixCount's rule).
 		assertEquals(16, toFixSectionCount(page(null, downloadsOn = false)))
+		// Review m9: counts that lack `folders` never count fewer than are listed.
+		val noFolderCount = a.copy(counts = AttentionCounts(imports = 16))
+		assertEquals(16 + 25, toFixSectionCount(attentionPage(AttentionRead.Ok(noFolderCount), noFolderCount, 1L, emptyList(), null) as AttentionPage.Rows))
 	}
 
 	// --- refresh -----------------------------------------------------------------------------------

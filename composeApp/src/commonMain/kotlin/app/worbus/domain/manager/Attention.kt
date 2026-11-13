@@ -252,7 +252,8 @@ sealed interface AttentionPage {
  * one row standing for 16 imports was 1.
  */
 fun toFixSectionCount(page: AttentionPage.Rows): Int =
-	page.imports + page.foldersCounted + (page.artistsToCheck?.takeIf { it > 0 } ?: 0)
+	// Review m9: never fewer folders than are listed (an lb-bot whose counts lack `folders` reads 0).
+	page.imports + maxOf(page.foldersCounted, page.folders.size) + (page.artistsToCheck?.takeIf { it > 0 } ?: 0)
 
 /**
  * The page, from the last read, the last good answer ([last], read at [lastAt]) and the ledger.
