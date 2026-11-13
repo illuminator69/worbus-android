@@ -184,7 +184,7 @@ fun ExternalAlbumScreen(
 	// The fills this device knows of; the box reads its own row out of them by release-group.
 	val ledger by lbBot.ledger.collectAsState()
 	val downloads by lbBot.downloads.collectAsState()
-	val downloadsAdminOnly by lbBot.downloadsAdminOnly.collectAsState()
+	val downloadsAccess by lbBot.downloadsAccess.collectAsState()
 
 	// The library turns out to hold this release-group after all — only lb-bot's
 	// index knows which Navidrome album that is, so this can only be answered once
@@ -318,15 +318,8 @@ fun ExternalAlbumScreen(
 			}
 			item(key = "request") {
 				RequestBox(
-					support = when {
-						!lbBot.isConfigured -> Support.ABSENT
-						// B-408: the server can, this user may not (not an admin): said as that.
-						!downloads.isOn && downloadsAdminOnly -> Support.ADMIN_ONLY
-						// Worbus P1: lb-bot cannot download here (its advert, or its own 409).
-						!downloads.isOn -> Support.DOWNLOADS_OFF
-						!lbBot.supportsSourcePicker -> Support.NEEDS_HUB_RESTART
-						else -> Support.YES
-					},
+					// B-408: "only an admin can" for a non-admin of a server that can; nothing before the welcome.
+					support = requestSupport(lbBot.isConfigured, downloadsAccess, lbBot.supportsSourcePicker),
 					fill = ledger.firstOrNull { it.key == rgid },
 					indexed = state.indexed,
 					request = state.request,

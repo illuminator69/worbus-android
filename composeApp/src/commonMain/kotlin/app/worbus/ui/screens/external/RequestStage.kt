@@ -1,5 +1,7 @@
 package app.worbus.ui.screens.external
 
+import app.worbus.domain.manager.DownloadsAccess
+
 import worbus.composeapp.generated.resources.Res
 import worbus.composeapp.generated.resources.request_step_count
 import worbus.composeapp.generated.resources.request_step_downloading
@@ -43,6 +45,21 @@ sealed interface SourceSearch {
  * server can download, and this user may not (lb-bot's route table keeps downloading to admins).
  */
 enum class Support { ABSENT, NEEDS_HUB_RESTART, YES, DOWNLOADS_OFF, ADMIN_ONLY }
+
+/**
+ * The request box's [Support], from whether lb-bot is set up here, what this user may do
+ * ([DownloadsAccess], B-408) and whether the hub proxies the source picker. Review m3: before the server
+ * has said who the user is, the box is not drawn, so an admin is never told they are not one.
+ */
+fun requestSupport(configured: Boolean, access: DownloadsAccess, sourcePicker: Boolean): Support = when {
+	!configured -> Support.ABSENT
+	access == DownloadsAccess.ROLE_UNKNOWN -> Support.ABSENT
+	access == DownloadsAccess.ADMIN_ONLY -> Support.ADMIN_ONLY
+	// Worbus P1: lb-bot cannot download here (its advert, or its own 409).
+	access == DownloadsAccess.SERVER_OFF -> Support.DOWNLOADS_OFF
+	!sourcePicker -> Support.NEEDS_HUB_RESTART
+	else -> Support.YES
+}
 
 data class RequestInput(
 	val support: Support,

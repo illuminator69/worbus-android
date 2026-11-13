@@ -12,13 +12,18 @@ import app.worbus.domain.models.MixKind
  */
 
 /** What this device's user may do: admin actions, and the primary user's listening. */
-data class HubRoles(val admin: Boolean, val primary: Boolean) {
+data class HubRoles(
+	val admin: Boolean,
+	val primary: Boolean,
+	/** B-408 review m3: false only for [NOTHING_YET], before the server has said who this user is. */
+	val known: Boolean = true
+) {
 	companion object {
 		/** An older hub, or the legacy shared token (the primary user, R2): today's behaviour. */
 		val EVERYTHING = HubRoles(admin = true, primary = true)
 
 		/** Signed in, and the hub has not said who yet: nothing gated is offered until it does. */
-		val NOTHING_YET = HubRoles(admin = false, primary = false)
+		val NOTHING_YET = HubRoles(admin = false, primary = false, known = false)
 	}
 }
 
@@ -50,12 +55,33 @@ fun primaryGated(offered: Boolean, roles: HubRoles): Boolean = offered && roles.
  */
 fun downloadsFor(roles: HubRoles, mode: LbDownloads): LbDownloads = if (roles.admin) mode else LbDownloads.OFF
 
+/** B-408: what the album page's request box can say about getting this album. */
+enum class DownloadsAccess {
+	/** This user may get albums here. */
+	ON,
+
+	/** The server cannot get albums: "this server isn't set up to get albums", to everyone. */
+	SERVER_OFF,
+
+	/** The server can, and this user is not an admin: "only an admin of this server can get albums". */
+	ADMIN_ONLY,
+
+	/** Review m3: signed in, and the server has not said yet whether this user is an admin: say nothing. */
+	ROLE_UNKNOWN
+}
+
 /**
- * B-408: [downloadsFor] is off for this user only because they are not an admin: the server itself can
- * download (on, or an older peer that did not say). What a page says differs: "only an admin can",
- * never "this server isn't set up" for a server that is.
+ * B-408: [downloadsFor] is off for a non-admin whatever the server can do, and an album page read that as
+ * the server's. A server that can download (on, or an older peer that did not say) with a user who is not
+ * an admin is [DownloadsAccess.ADMIN_ONLY]; and until the welcome says who the user is (review m3,
+ * [HubRoles.NOTHING_YET]) neither is claimed: an admin on a cold start was told they were not one.
  */
-fun downloadsAdminOnlyFor(roles: HubRoles, mode: LbDownloads): Boolean = !roles.admin && mode.isOn
+fun downloadsAccessFor(roles: HubRoles, mode: LbDownloads): DownloadsAccess = when {
+	!mode.isOn -> DownloadsAccess.SERVER_OFF
+	roles.admin -> DownloadsAccess.ON
+	!roles.known -> DownloadsAccess.ROLE_UNKNOWN
+	else -> DownloadsAccess.ADMIN_ONLY
+}
 
 /** Your mix (the seedless station, the hub's "Your mix") is read from the primary user's listening. */
 fun yourMixOffered(engine: Boolean, roles: HubRoles): Boolean = engine && roles.primary

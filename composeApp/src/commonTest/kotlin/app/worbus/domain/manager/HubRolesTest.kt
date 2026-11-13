@@ -269,10 +269,23 @@ class HubRolesTest {
 	fun downloadsOffForANonAdminIsNotTheServerBeingOff() {
 		val user = hubRolesOf(bob, signedIn = true)
 		val admin = hubRolesOf(alice, signedIn = true)
-		assertTrue(downloadsAdminOnlyFor(user, LbDownloads.ON), "a server that can: the user may not")
-		assertTrue(downloadsAdminOnlyFor(user, LbDownloads.UNKNOWN), "an older peer reads as on")
-		assertFalse(downloadsAdminOnlyFor(user, LbDownloads.OFF), "a server that cannot is that, for everyone")
-		assertFalse(downloadsAdminOnlyFor(admin, LbDownloads.ON))
-		assertFalse(downloadsAdminOnlyFor(admin, LbDownloads.OFF))
+		assertEquals(DownloadsAccess.ADMIN_ONLY, downloadsAccessFor(user, LbDownloads.ON), "a server that can: the user may not")
+		assertEquals(DownloadsAccess.ADMIN_ONLY, downloadsAccessFor(user, LbDownloads.UNKNOWN), "an older peer reads as on")
+		assertEquals(DownloadsAccess.SERVER_OFF, downloadsAccessFor(user, LbDownloads.OFF), "a server that cannot is that, for everyone")
+		assertEquals(DownloadsAccess.ON, downloadsAccessFor(admin, LbDownloads.ON))
+		assertEquals(DownloadsAccess.SERVER_OFF, downloadsAccessFor(admin, LbDownloads.OFF))
+	}
+
+	/*
+	 * B-408 review m3: signed in, before the welcome has said who the user is (a cold start, a reconnect),
+	 * the roles are NOTHING_YET, which read as "not an admin": an admin was told only an admin could.
+	 */
+	@Test
+	fun beforeTheServerSaysWhoTheUserIsNothingIsClaimed() {
+		val notYet = hubRolesOf(null, signedIn = true)
+		assertEquals(DownloadsAccess.ROLE_UNKNOWN, downloadsAccessFor(notYet, LbDownloads.ON))
+		assertEquals(DownloadsAccess.SERVER_OFF, downloadsAccessFor(notYet, LbDownloads.OFF), "a server that cannot says so to everyone")
+		// A user the server has named as not an admin is known.
+		assertEquals(DownloadsAccess.ADMIN_ONLY, downloadsAccessFor(hubRolesOf(bob, signedIn = true), LbDownloads.ON))
 	}
 }

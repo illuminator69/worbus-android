@@ -465,9 +465,9 @@ class LbBotManager(
 	val downloads: StateFlow<LbDownloads> = combine(downloadsMode.value, _roles) { mode, roles -> downloadsFor(roles, mode) }
 		.stateIn(scope, SharingStarted.Eagerly, downloadsFor(_roles.value, downloadsMode.current))
 
-	/** B-408: [downloads] is off for this user only because they are not an admin ([downloadsAdminOnlyFor]). */
-	val downloadsAdminOnly: StateFlow<Boolean> = combine(downloadsMode.value, _roles) { mode, roles -> downloadsAdminOnlyFor(roles, mode) }
-		.stateIn(scope, SharingStarted.Eagerly, downloadsAdminOnlyFor(_roles.value, downloadsMode.current))
+	/** B-408: what the album page's request box may say about getting an album ([downloadsAccessFor]). */
+	val downloadsAccess: StateFlow<DownloadsAccess> = combine(downloadsMode.value, _roles) { mode, roles -> downloadsAccessFor(roles, mode) }
+		.stateIn(scope, SharingStarted.Eagerly, downloadsAccessFor(_roles.value, downloadsMode.current))
 
 	/** [downloads] as the one question most surfaces ask (Worbus P2: off for a non-admin, [downloadsFor]). */
 	val downloadsOn: Boolean get() = downloadsFor(_roles.value, downloadsMode.current).isOn
