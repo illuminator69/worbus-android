@@ -44,7 +44,7 @@ class ToFixArtistsRowCopyTest {
 
 	@Test
 	fun libraryMatchesHoldsItAndTheOldKeyOpensIt() {
-		assertTrue("MatchesSection.TO_FIX -> toFixItems(toFix)" in matches)
+		assertTrue("MatchesSection.TO_FIX -> toFix?.let { toFixItems(it) }" in matches)
 		assertTrue("Washed { LibraryMatchesScreen(opening = MatchesSection.TO_FIX) }" in app)
 	}
 }

@@ -324,11 +324,11 @@ class LbBotManager(
 	private var attentionInFlight = false
 
 	/**
-	 * The number behind the avatar's dot and the menu's badge: lb-bot's to-fix count while an
-	 * answer is known, else P1's count of this device's own ledger ([attentionBadge]).
+	 * The number behind the avatar's dot and the menu's badge: the To fix section's own number over the
+	 * same state and ledger ([attentionBadge], B-406 review M4).
 	 */
 	val attentionBadge: StateFlow<Int> = combine(_attention, _ledger, downloadsMode.value) { state, ledger, downloads ->
-		attentionBadge(state.last, needsAttentionCount(ledger), downloadsOn = downloads.isOn)
+		attentionBadge(state, ledger, downloadsOn = downloads.isOn)
 	}.stateIn(scope, SharingStarted.Eagerly, 0)
 
 	/** Whether the hub carries the attention route: an older one is "older", not "nothing to fix". */

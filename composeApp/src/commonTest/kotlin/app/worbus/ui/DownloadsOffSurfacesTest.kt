@@ -10,6 +10,7 @@ import app.worbus.domain.manager.LbFillEntry
 import app.worbus.domain.manager.attentionBadge
 import app.worbus.domain.manager.toFixCount
 import app.worbus.domain.manager.AttentionRead
+import app.worbus.domain.manager.AttentionState
 import app.worbus.domain.manager.LISTENING_KIND_ALBUM
 import app.worbus.domain.manager.LbDownloads
 import app.worbus.domain.manager.LbGap
@@ -229,11 +230,10 @@ class DownloadsOffSurfacesTest {
 		// The page's headline counts the same way (this answer: one folder, nothing else).
 		assertEquals(0, attentionRows(downloadsOn = false).toFix)
 		assertEquals(1, attentionRows(downloadsOn = true).toFix)
-		val read = (attentionRead(200, attention) as AttentionRead.Ok).attention
-		assertEquals(0, attentionBadge(read, ledgerCount = 7, downloadsOn = false))
-		assertEquals(1, attentionBadge(read, ledgerCount = 7, downloadsOn = true))
-		// No read: this device's own count, in both modes.
-		assertEquals(7, attentionBadge(null, ledgerCount = 7, downloadsOn = false))
+		val ok = attentionRead(200, attention) as AttentionRead.Ok
+		val state = AttentionState(last = ok.attention, lastAt = 1L, readAt = 1L, status = ok)
+		assertEquals(0, attentionBadge(state, emptyList(), downloadsOn = false))
+		assertEquals(1, attentionBadge(state, emptyList(), downloadsOn = true))
 	}
 
 	@Test

@@ -87,11 +87,53 @@ class AttentionTest {
 		assertEquals(20, toFixCount(AttentionCounts(3, 1, 16, 16, 300)))
 	}
 
+	private fun read(a: LbAttention) = AttentionState(last = a, lastAt = 1L, readAt = 1L, status = AttentionRead.Ok(a))
+	private val twoFailed = listOf(entry("x"), entry("y", outcome = LbBotManager.OUTCOME_NEEDS_PICK))
+
 	@Test
 	fun aReadWinsOverTheLedgerAndNoReadFallsBackToIt() {
-		assertEquals(20, attentionBadge(ok(), ledgerCount = 2))
-		assertEquals(2, attentionBadge(null, ledgerCount = 2))
-		assertEquals(0, attentionBadge(ok().copy(counts = AttentionCounts()), ledgerCount = 2))
+		// lb-bot's 20 to fix + its 14 picks; the device's two rows are not lb-bot's (B-406 review M4: listed
+		// under "Only on this phone", and counted with the rest).
+		assertEquals(20 + 14 + 2, attentionBadge(read(ok()), twoFailed))
+		assertEquals(20 + 14, attentionBadge(read(ok()), emptyList()))
+		assertEquals(2, attentionBadge(AttentionState(), twoFailed), "nothing read: this device's own count")
+		val nothing = ok().copy(counts = AttentionCounts(), albums = emptyList(), folders = emptyList())
+		assertEquals(0, attentionBadge(read(nothing), emptyList()))
+	}
+
+	/*
+	 * B-406 review M4: with lb-bot not answering, the menu's badge counted this phone's 2 failed fills while
+	 * the To fix chip had no number and the page opened elsewhere; and with lb-bot answering, albums waiting
+	 * on a pick and this phone's own rows were listed under "To fix (0)". One number, every surface.
+	 */
+	@Test
+	fun theChipTheHeadlineAndTheBadgeAreOneNumber() {
+		val ledger = listOf(entry("x"), entry("y"))
+		// lb-bot unreachable since the start, or an older hub: the device's rows, counted, as the badge counts them.
+		for (status in listOf(AttentionRead.Unavailable, AttentionRead.Older)) {
+			val state = AttentionState(status = status)
+			val page = attentionPage(status, null, null, ledger, null) as AttentionPage.Rows
+			assertEquals(2, toFixTotal(page), "$status")
+			assertEquals(toFixTotal(page), attentionBadge(state, ledger), "$status")
+		}
+		// Only a pick waiting: listed, so counted, and the badge says so.
+		val picksOnly = ok().copy(
+			counts = AttentionCounts(picks = 1),
+			albums = listOf(AttentionAlbum(kind = "gap", key = "g", groupId = "g", state = "picking")),
+			folders = emptyList()
+		)
+		val page = attentionPage(AttentionRead.Ok(picksOnly), picksOnly, 1L, emptyList(), null) as AttentionPage.Rows
+		assertEquals(1, toFixTotal(page), "not To fix (0) over a row")
+		assertEquals(1, attentionBadge(read(picksOnly), emptyList()))
+		// An lb-bot whose counts lack `picks` never counts fewer than it lists.
+		val noPickCount = picksOnly.copy(counts = AttentionCounts())
+		assertEquals(1, toFixTotal(attentionPage(AttentionRead.Ok(noPickCount), noPickCount, 1L, emptyList(), null) as AttentionPage.Rows))
+		// Only this phone's own row, lb-bot answered nothing for it.
+		val none = picksOnly.copy(counts = AttentionCounts(), albums = emptyList())
+		val deviceOnly = attentionPage(AttentionRead.Ok(none), none, 1L, listOf(entry("z")), null) as AttentionPage.Rows
+		assertEquals(1, deviceOnly.deviceOnly.size)
+		assertEquals(1, toFixTotal(deviceOnly))
+		assertEquals(1, attentionBadge(read(none), listOf(entry("z"))))
 	}
 
 	// --- folders -----------------------------------------------------------------------------------
@@ -278,7 +320,7 @@ class AttentionTest {
 		assertEquals(AttentionRead.Unavailable, failed.status)
 		val older = nextAttentionState(good, AttentionRead.Older, 30L)
 		assertNull(older.last)
-		assertEquals(2, attentionBadge(older.last, ledgerCount = 2))
+		assertEquals(2, attentionBadge(older, twoFailed))
 	}
 
 	@Test

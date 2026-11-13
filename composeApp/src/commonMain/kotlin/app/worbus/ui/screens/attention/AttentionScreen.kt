@@ -99,6 +99,7 @@ import app.worbus.domain.manager.importsRow
 import app.worbus.domain.manager.isPrivateHubAddress
 import app.worbus.domain.manager.lbPageLink
 import app.worbus.domain.manager.toFixSectionCount
+import app.worbus.domain.manager.toFixTotal
 import app.worbus.domain.manager.PreferenceManager
 import app.worbus.domain.manager.asLedgerRow
 import app.worbus.domain.manager.attentionEmptyShown
@@ -233,8 +234,12 @@ fun rememberToFixUi(snackbar: SnackbarHostState): ToFixUi {
 	)
 }
 
-/** The chip's count: lb-bot's to-fix number, the headline's and the avatar's, once an answer is known. */
-fun toFixChipCount(page: AttentionPage): Int? = (page as? AttentionPage.Rows)?.toFix
+/**
+ * B-406 review M4: the To fix number the chip says and the page chooses its section by: the section's own
+ * ([toFixTotal], which the headline says too), and while nothing is read yet the avatar's badge ([badge]),
+ * which is the same rule over the same state: one number, never one per surface.
+ */
+fun toFixNumber(page: AttentionPage, badge: Int): Int = (page as? AttentionPage.Rows)?.let(::toFixTotal) ?: badge
 
 /** The section's rows, as items of the holding page's list. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -345,14 +350,16 @@ fun LazyListScope.toFixItems(ui: ToFixUi) {
 private fun AttentionHead(page: AttentionPage.Rows, modifier: Modifier = Modifier) {
 	val unreachable = page.notices.any { it is AttentionNotice.Unreachable }
 	Column(modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp, bottom = 4.dp)) {
-		val count = page.toFix
+		// B-406 review M4: the chip's and the badge's number (`toFixTotal`), with or without an answer.
+		val count = toFixTotal(page)
 		// "Nothing to fix" is said only for an answer lb-bot just gave; a number from an older
-		// answer is still said, with the notice saying when it was read.
+		// answer is still said, with the notice saying when it was read. Without an answer, the phone's
+		// own rows are counted and the notice says lb-bot's list could not be read.
 		val headline = when {
-			count == null -> null
-			count == 0 && unreachable -> null
-			count == 0 -> stringResource(Res.string.attention_nothing_to_fix)
-			else -> stringResource(Res.string.attention_to_fix, count)
+			count > 0 -> stringResource(Res.string.attention_to_fix, count)
+			page.toFix == null -> null
+			unreachable -> null
+			else -> stringResource(Res.string.attention_nothing_to_fix)
 		}
 		if (headline != null) {
 			Text(headline, style = MaterialTheme.typography.titleMedium)

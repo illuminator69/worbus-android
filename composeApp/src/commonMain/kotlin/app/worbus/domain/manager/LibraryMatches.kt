@@ -7,7 +7,11 @@ package app.worbus.domain.manager
  * and Room so they can be run in a test (`LibraryMatchesTest`). The sentences the rows say are
  * where they were, in `LbBotData.kt` and `MatchesToCheck.kt`.
  *
- * Worbus for desktop's Library Matches page is the twin: the same four sections under the same names.
+ * Worbus for desktop's Library Matches page is the twin for To check, Artists, Albums and Merged names.
+ * Android has a fifth, To fix (B-406, the owner's ruling of 2026-11-13: the Needs attention page that
+ * was); the desktop's half of that move is its own lane's, and until it lands the two differ there. Its
+ * number counts the albums waiting on a pick and this phone's own rows too (`toFixTotal`, review M4),
+ * where the desktop and lb-bot's web UI count lb-bot's to-fix only.
  */
 
 /**
@@ -49,6 +53,20 @@ internal fun matchesSectionToShow(
 	toCheckCount > 0 && MatchesSection.TO_CHECK in offered -> MatchesSection.TO_CHECK
 	else -> MatchesSection.ARTISTS
 }
+
+/**
+ * B-406 review M3: whether the page's own first choice ([matchesSectionToShow] with nothing chosen) is
+ * made on numbers that are known, so the page keeps it for the visit (`chosen`). Until then it may still
+ * move: To fix wins as soon as its number is above zero ([toFixCount], the avatar's badge before the
+ * section's first read); otherwise the To check list must have been read ([toCheckRead]: anything but
+ * still reading), since it decides between To check and Artists.
+ *
+ * It followed the live counts for the whole visit: a Retry or a Dismiss that took the to-fix number to 0
+ * swapped the whole list to To check under the snackbar it had just raised ("acting on a row must not
+ * move you off it").
+ */
+internal fun matchesFirstChoiceFinal(offered: List<MatchesSection>, toFixCount: Int, toCheckRead: Boolean): Boolean =
+	(MatchesSection.TO_FIX in offered && toFixCount > 0) || toCheckRead
 
 /** A section's chip: its name, and its count once the list has been loaded ([count] non-null). */
 internal fun matchesSectionLabel(section: MatchesSection, count: Int?): String {

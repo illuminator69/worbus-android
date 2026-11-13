@@ -1,6 +1,7 @@
 package app.worbus.ui.screens.matches
 
-import app.worbus.ui.screens.attention.toFixChipCount
+import app.worbus.ui.screens.attention.toFixNumber
+import app.worbus.domain.manager.matchesFirstChoiceFinal
 import app.worbus.ui.screens.attention.toFixItems
 import app.worbus.ui.screens.attention.rememberToFixUi
 import androidx.compose.material3.SnackbarHostState
@@ -131,7 +132,12 @@ fun LibraryMatchesScreen(
 	// this page's To fix chip. Offered to an admin, to whom lb-bot answers it.
 	val roles by lbBot.roles.collectAsStateWithLifecycle()
 	val snackbar = remember { SnackbarHostState() }
-	val toFix = rememberToFixUi(snackbar)
+	// B-406 review L8: lb-bot answers its to-fix list to admins only, so for anyone else nothing of it is
+	// read (the forced `/lb/attention` read, its collectors and the row actions' view model).
+	val toFix = if (roles.admin) rememberToFixUi(snackbar) else null
+	// Review M4: before the section's first read, its number is the avatar's badge (the same rule).
+	val attentionBadge by lbBot.attentionBadge.collectAsStateWithLifecycle()
+	val toFixNumber = toFix?.let { toFixNumber(it.page, attentionBadge) }
 	val backStack = LocalNavStack.current
 	val hubSaysNoLbBot by viewModel.hubSaysNoLbBot.collectAsStateWithLifecycle()
 
@@ -167,7 +173,10 @@ fun LibraryMatchesScreen(
 
 	val offered = matchesSections(toCheck = matches.shown, albums = albumRows.shown, merges = mergeRows.shown, toFix = roles.admin)
 	var chosen by rememberSaveable { mutableStateOf(opening) }
-	val section = matchesSectionToShow(chosen, offered, if (matchesKnown) matches.rows.size else 0, toFixChipCount(toFix.page) ?: 0)
+	val section = matchesSectionToShow(chosen, offered, if (matchesKnown) matches.rows.size else 0, toFixNumber ?: 0)
+	// B-406 review M3: the page's first choice, once made on known numbers, is kept for the visit.
+	val firstChoiceFinal = matchesFirstChoiceFinal(offered, toFixNumber ?: 0, toCheckRead = matches.data != LbPanelData.READING)
+	LaunchedEffect(section, firstChoiceFinal) { if (chosen == null && firstChoiceFinal) chosen = section }
 
 	val openArtist: (String) -> (() -> Unit)? = { id ->
 		// Only a link when Room has the artist: an id is not a page that exists.
@@ -192,7 +201,7 @@ fun LibraryMatchesScreen(
 						label = { entry ->
 							val count = when (entry) {
 								// lb-bot's to-fix number: the section's headline and the avatar's badge.
-								MatchesSection.TO_FIX -> toFixChipCount(toFix.page)
+								MatchesSection.TO_FIX -> toFixNumber
 								MatchesSection.TO_CHECK -> matches.rows.size.takeIf { matchesKnown }
 								MatchesSection.ARTISTS -> overrides.rows.size.takeIf { overridesKnown }
 								// A shown list is a loaded one (`overrideListShown`).
@@ -246,9 +255,9 @@ fun LibraryMatchesScreen(
 			onRefresh = {
 				scope.launch {
 					pulling = true
-					val fix = toFix.refresh()
+					val fix = toFix?.refresh()
 					viewModel.read().join()
-					fix.join()
+					fix?.join()
 					pulling = false
 				}
 			},
@@ -259,7 +268,7 @@ fun LibraryMatchesScreen(
 			contentPadding = innerPadding.withoutTop() + PaddingValues(top = 8.dp, bottom = 24.dp)
 		) {
 			when (section) {
-				MatchesSection.TO_FIX -> toFixItems(toFix)
+				MatchesSection.TO_FIX -> toFix?.let { toFixItems(it) }
 
 				MatchesSection.TO_CHECK -> {
 					item(key = "c:note") {

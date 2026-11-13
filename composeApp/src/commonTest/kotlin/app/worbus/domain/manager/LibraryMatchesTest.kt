@@ -1,6 +1,8 @@
 package app.worbus.domain.manager
 
 import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.assertEquals
 
 /*
@@ -79,6 +81,24 @@ class LibraryMatchesTest {
 		assertEquals(MatchesSection.TO_CHECK, matchesSectionToShow(null, all, toCheckCount = 106, toFixCount = 9), "not offered: as before")
 		// The old Needs attention entry opens the page on To fix whatever it counts.
 		assertEquals(MatchesSection.TO_FIX, matchesSectionToShow(MatchesSection.TO_FIX, withFix, toCheckCount = 106, toFixCount = 0))
+	}
+
+	/*
+	 * B-406 review M3: the page followed the live counts for the whole visit. An admin opened it on To fix (1),
+	 * tapped Retry, the to-fix number dropped to 0 and the whole list swapped to To check under the snackbar.
+	 * The first choice made on known numbers is kept (the screen writes it into `chosen`).
+	 */
+	@Test
+	fun thePagesFirstChoiceIsFinalOnceItsNumbersAreKnown() {
+		val withFix = listOf(MatchesSection.TO_FIX) + all
+		assertTrue(matchesFirstChoiceFinal(withFix, toFixCount = 1, toCheckRead = false), "To fix wins whatever To check says")
+		assertFalse(matchesFirstChoiceFinal(withFix, toFixCount = 0, toCheckRead = false), "To check vs Artists not decided yet")
+		assertTrue(matchesFirstChoiceFinal(withFix, toFixCount = 0, toCheckRead = true))
+		assertTrue(matchesFirstChoiceFinal(all, toFixCount = 0, toCheckRead = true))
+		// Kept: once `chosen` holds the first choice, a count that drops does not move the page.
+		val first = matchesSectionToShow(null, withFix, toCheckCount = 106, toFixCount = 1)
+		assertEquals(MatchesSection.TO_FIX, first)
+		assertEquals(MatchesSection.TO_FIX, matchesSectionToShow(first, withFix, toCheckCount = 106, toFixCount = 0), "after Retry: stays")
 	}
 
 	@Test
