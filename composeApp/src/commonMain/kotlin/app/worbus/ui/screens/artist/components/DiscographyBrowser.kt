@@ -69,6 +69,11 @@ import app.worbus.ui.screens.artist.entryTypes
 import app.worbus.ui.screens.artist.ownershipOf
 import app.worbus.ui.screens.artist.typeChips
 import app.worbus.ui.screens.artist.viewmodels.DiscographyEntry
+import app.worbus.ui.screens.artist.DiscographyView
+import app.worbus.ui.screens.external.components.releaseRowItems
+import app.worbus.ui.util.ArrivalGate
+import app.worbus.domain.manager.LbFillEntry
+import androidx.compose.foundation.lazy.LazyListScope
 import app.worbus.ui.screens.artist.viewmodels.DiscographySection
 import app.worbus.ui.screens.external.components.ReleaseRows
 
@@ -99,39 +104,9 @@ fun DiscographyBrowser(
 	/** No plays to sort by (an artist the library lacks): the sort menu leaves "Most played" out. */
 	playsKnown: Boolean = true
 ) {
-	val chips = typeChips(sections)
-	// The menu offers only what this discography holds; one kind alone needs no menu.
-	val kinds = sections.flatMap { it.entries }.map(::ownershipOf).toSet()
 	val view = discographyView(sections, filter)
 	Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-		Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-			if (chips.size > 2) {
-				Row(
-					Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-					horizontalArrangement = Arrangement.spacedBy(8.dp)
-				) {
-					chips.forEach { chip ->
-						val name = chip.type?.let { sectionTitle(it) } ?: stringResource(Res.string.option_all)
-						PageChip(
-							selected = filter.type == chip.type,
-							label = stringResource(Res.string.discography_chip, name, chip.count),
-							onClick = { onFilter(filter.copy(type = chip.type)) }
-						)
-					}
-				}
-			}
-			Row(
-				Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				verticalAlignment = Alignment.CenterVertically
-			) {
-				if (kinds.size > 1) {
-					OwnershipChip(filter.ownership, kinds) { onFilter(filter.copy(ownership = it)) }
-				}
-				SortChip(filter.sort, playsKnown) { onFilter(filter.copy(sort = it)) }
-				if (onRescan != null) RescanChip(rescanning, onRescan)
-			}
-		}
+		DiscographyFilters(sections, filter, onFilter, onRescan, rescanning, playsKnown)
 		// Every change of chip or sort plays the rows' arrival again (the owner's note on round 2):
 		// the ownership menu already did, by swapping between the flat list and the sections, and
 		// the type chips and the sort changed the rows in place with no motion at all. A new filter
@@ -170,6 +145,109 @@ fun DiscographyBrowser(
 				)
 			}
 		}
+	}
+}
+
+/** The type chips, then the ownership menu, the sort and the rescan: the list's filters. */
+@Composable
+fun DiscographyFilters(
+	sections: List<DiscographySection>,
+	filter: DiscographyFilter,
+	onFilter: (DiscographyFilter) -> Unit,
+	onRescan: (() -> Unit)?,
+	rescanning: Boolean,
+	playsKnown: Boolean = true,
+	modifier: Modifier = Modifier
+) {
+	val chips = typeChips(sections)
+	// The menu offers only what this discography holds; one kind alone needs no menu.
+	val kinds = sections.flatMap { it.entries }.map(::ownershipOf).toSet()
+	Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+		if (chips.size > 2) {
+			Row(
+				Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+				horizontalArrangement = Arrangement.spacedBy(8.dp)
+			) {
+				chips.forEach { chip ->
+					val name = chip.type?.let { sectionTitle(it) } ?: stringResource(Res.string.option_all)
+					PageChip(
+						selected = filter.type == chip.type,
+						label = stringResource(Res.string.discography_chip, name, chip.count),
+						onClick = { onFilter(filter.copy(type = chip.type)) }
+					)
+				}
+			}
+		}
+		Row(
+			Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+			horizontalArrangement = Arrangement.spacedBy(8.dp),
+			verticalAlignment = Alignment.CenterVertically
+		) {
+			if (kinds.size > 1) {
+				OwnershipChip(filter.ownership, kinds) { onFilter(filter.copy(ownership = it)) }
+			}
+			SortChip(filter.sort, playsKnown) { onFilter(filter.copy(sort = it)) }
+			if (onRescan != null) RescanChip(rescanning, onRescan)
+		}
+	}
+}
+
+/**
+ * B-405: the list under [DiscographyFilters] as lazy items ([releaseRowItems]), for the discography page,
+ * which drew every group's first 40 rows in the first frame of its transition. [view] is
+ * `discographyView(sections, filter)`; the caller holds the ledger, the arrival gate (a new one per
+ * filter, so a change of chip or sort plays the rows' arrival again, as [DiscographyBrowser]'s
+ * `key(filter)` does) and the open groups.
+ */
+fun LazyListScope.discographyItems(
+	view: DiscographyView,
+	filter: DiscographyFilter,
+	types: Map<String, String>,
+	onOpenEntry: (DiscographyEntry) -> Unit,
+	onLongClick: ((DiscographyEntry) -> Unit)?,
+	ledger: List<LbFillEntry>,
+	gate: ArrivalGate,
+	expanded: List<String>,
+	onExpand: (String) -> Unit,
+	pills: Boolean
+) {
+	when {
+		view.flat && view.sections.isEmpty() -> item(key = "discography-none") {
+			Text(
+				stringResource(Res.string.discography_none_match),
+				style = MaterialTheme.typography.bodyMedium,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+				modifier = Modifier.padding(horizontal = 20.dp)
+			)
+		}
+		view.flat -> {
+			item(key = "discography-matched") { MatchedHeading(filter.ownership, view.matched, view.total) }
+			releaseRowItems(
+				sections = view.sections,
+				sectionTitle = { sectionTitle(it) },
+				onOpenEntry = onOpenEntry,
+				onLongClick = onLongClick,
+				ledger = ledger,
+				gate = gate,
+				expanded = expanded,
+				onExpand = onExpand,
+				headings = false,
+				typeOf = { types[it.key] ?: "album" },
+				pills = pills
+			)
+		}
+		else -> releaseRowItems(
+			sections = view.sections,
+			sectionTitle = { sectionTitle(it) },
+			onOpenEntry = onOpenEntry,
+			onLongClick = onLongClick,
+			ledger = ledger,
+			gate = gate,
+			expanded = expanded,
+			onExpand = onExpand,
+			countInHeading = true,
+			pills = pills
+		)
 	}
 }
 

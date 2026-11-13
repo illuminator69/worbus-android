@@ -54,6 +54,11 @@ import app.worbus.ui.screens.artist.viewmodels.DiscographySection
 import app.worbus.ui.util.COVER_FADE_MS
 import app.worbus.ui.util.arrive
 import app.worbus.ui.util.rememberArrivalGate
+import app.worbus.ui.util.ArrivalGate
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
 
 private val ArtSize = 56.dp
 
@@ -97,32 +102,7 @@ fun ReleaseRows(
 	Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
 		sections.forEach { section ->
 			Column {
-				if (headings) {
-					Row(
-						Modifier.padding(horizontal = 20.dp).padding(bottom = 6.dp),
-						verticalAlignment = Alignment.Bottom
-					) {
-						Text(
-							sectionTitle(section.type),
-							style = MaterialTheme.typography.titleMediumEmphasized,
-							fontWeight = FontWeight(600),
-							modifier = Modifier.weight(1f, fill = false)
-						)
-						val note = when {
-							countInHeading -> pluralStringResource(Res.plurals.count_releases, section.entries.size, section.entries.size)
-							tapHint -> stringResource(Res.string.release_tap_hint)
-							else -> null
-						}
-						if (note != null) {
-							Text(
-								note,
-								style = MaterialTheme.typography.bodySmall,
-								color = MaterialTheme.colorScheme.onSurfaceVariant,
-								modifier = Modifier.padding(start = 10.dp)
-							)
-						}
-					}
-				}
+				if (headings) ReleaseSectionHeading(section, sectionTitle, countInHeading, tapHint)
 				// B7 (audit L4b-06): the page is a scrolling Column, so every row drew at once (500
 				// releases, 500 rows and 500 cover requests). A group draws its first rows, and Show all
 				// folds the rest in; folded away, they are not composed at all.
@@ -150,17 +130,100 @@ fun ReleaseRows(
 								section.entries.drop(first).forEachIndexed { i, entry -> row(first + i, entry) }
 							}
 						}
-						if (!open) {
-							TextButton(
-								onClick = { expanded = expanded + section.type },
-								modifier = Modifier.padding(horizontal = 12.dp)
-							) {
-								Text(stringResource(Res.string.releases_show_all, section.entries.size))
-							}
-						}
+						if (!open) ShowAllButton(section.entries.size) { expanded = expanded + section.type }
 					}
 				}
 			}
+		}
+	}
+}
+
+/** A section's heading: its type, and its count or what a tap does. */
+@Composable
+private fun ReleaseSectionHeading(
+	section: DiscographySection,
+	sectionTitle: @Composable (String) -> String,
+	countInHeading: Boolean,
+	tapHint: Boolean
+) {
+	Row(
+		Modifier.padding(horizontal = 20.dp).padding(bottom = 6.dp),
+		verticalAlignment = Alignment.Bottom
+	) {
+		Text(
+			sectionTitle(section.type),
+			style = MaterialTheme.typography.titleMediumEmphasized,
+			fontWeight = FontWeight(600),
+			modifier = Modifier.weight(1f, fill = false)
+		)
+		val note = when {
+			countInHeading -> pluralStringResource(Res.plurals.count_releases, section.entries.size, section.entries.size)
+			tapHint -> stringResource(Res.string.release_tap_hint)
+			else -> null
+		}
+		if (note != null) {
+			Text(
+				note,
+				style = MaterialTheme.typography.bodySmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+				modifier = Modifier.padding(start = 10.dp)
+			)
+		}
+	}
+}
+
+/** "Show all N": folds the rest of a group in. */
+@Composable
+private fun ShowAllButton(total: Int, onClick: () -> Unit) {
+	TextButton(onClick = onClick, modifier = Modifier.padding(horizontal = 12.dp)) {
+		Text(stringResource(Res.string.releases_show_all, total))
+	}
+}
+
+/**
+ * B-405 (the owner's walk, 2026-11-13: the discography page stuttered as it opened): [ReleaseRows] as lazy
+ * items, so only the rows on screen are composed. The page drew every group's first 40 rows in one
+ * scrolling Column, all composed and measured (twice, the shared-transition lookahead's pass with the
+ * real one) in the first frame of the page's transition: for an artist of ~300 releases that frame took
+ * 300 to 850 ms on the VM AVD's release build. Same rows, headings, Show all and arrival as
+ * [ReleaseRows]; the caller holds the ledger, the arrival gate and which groups are open.
+ */
+fun LazyListScope.releaseRowItems(
+	sections: List<DiscographySection>,
+	sectionTitle: @Composable (String) -> String,
+	onOpenEntry: (DiscographyEntry) -> Unit,
+	onLongClick: ((DiscographyEntry) -> Unit)?,
+	ledger: List<LbFillEntry>,
+	gate: ArrivalGate,
+	expanded: List<String>,
+	onExpand: (String) -> Unit,
+	tapHint: Boolean = false,
+	headings: Boolean = true,
+	countInHeading: Boolean = false,
+	typeOf: ((DiscographyEntry) -> String)? = null,
+	pills: Boolean = true
+) {
+	sections.forEachIndexed { s, section ->
+		if (s > 0) item(key = "releases-gap:${section.type}") { Spacer(Modifier.height(16.dp)) }
+		if (headings) item(key = "releases-heading:${section.type}") {
+			ReleaseSectionHeading(section, sectionTitle, countInHeading, tapHint)
+		}
+		val count = visibleReleases(section.entries.size, section.type in expanded)
+		itemsIndexed(section.entries.take(count), key = { _, entry -> "release:${section.type}:${entry.key}" }) { index, entry ->
+			ReleaseRow(
+				entry = entry,
+				fill = fillFor(entry, ledger),
+				type = typeOf?.invoke(entry),
+				pills = pills,
+				index = index,
+				count = count,
+				onClick = { onOpenEntry(entry) },
+				onLongClick = onLongClick?.takeIf { entry.album != null }?.let { { it(entry) } },
+				modifier = Modifier.padding(top = if (index > 0) 2.dp else 0.dp).arrive(gate, entry.key, index)
+			)
+		}
+		if (section.entries.size > count) item(key = "releases-all:${section.type}") {
+			ShowAllButton(section.entries.size) { onExpand(section.type) }
 		}
 	}
 }

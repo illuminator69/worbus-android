@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -39,7 +37,12 @@ import app.worbus.domain.manager.LbBotManager
 import app.worbus.domain.models.settings.BottomBarVisibilityMode
 import app.worbus.ui.components.layouts.NestedTopBar
 import app.worbus.ui.components.layouts.RootBottomBar
-import app.worbus.ui.screens.artist.components.DiscographyBrowser
+import app.worbus.ui.screens.artist.components.DiscographyFilters
+import app.worbus.ui.screens.artist.components.discographyItems
+import app.worbus.ui.util.ArrivalGate
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.remember
 import app.worbus.ui.screens.artist.components.DiscographyScanAction
 import app.worbus.ui.screens.artist.components.indexFreshnessLabel
 import app.worbus.ui.screens.artist.viewmodels.ArtistDetailViewModel
@@ -68,6 +71,13 @@ fun ArtistDiscographyScreen(artistId: String) {
 	val fromIndex = discography.available && discography.indexed && discography.sections.isNotEmpty()
 	val sections = if (fromIndex) discography.sections else ownedSections(state?.albums.orEmpty())
 	var filter by rememberSaveable(stateSaver = FilterSaver) { mutableStateOf(DiscographyFilter()) }
+	val view = remember(sections, filter) { discographyView(sections, filter) }
+	val types = remember(sections) { entryTypes(sections) }
+	val ledger by koinInject<LbBotManager>().ledger.collectAsStateWithLifecycle()
+	// A new gate per filter: a change of chip or sort plays the rows' arrival again (round 2's note).
+	val gate = remember(filter) { ArrivalGate() }
+	// The groups Show all has opened, by type.
+	var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
 	val open = rememberDiscographyOpener(viewModel, artistId)
 
 	Scaffold(
@@ -105,29 +115,45 @@ fun ArtistDiscographyScreen(artistId: String) {
 			}
 			return@Scaffold
 		}
-		Column(
-			Modifier
-				.fillMaxSize()
-				.verticalScroll(rememberScrollState())
-				.padding(top = innerPadding.calculateTopPadding() + 4.dp)
-				.padding(bottom = innerPadding.calculateBottomPadding() + 24.dp)
+		// B-405: one lazy list, so only the rows on screen are composed. It was a scrolling Column holding
+		// every group's first 40 rows (DiscographyBrowser), all composed in the first frame of the page's
+		// transition: 300 to 850 ms on the VM AVD's release build for an artist of ~300 releases, the
+		// stutter the owner saw as the page opened.
+		LazyColumn(
+			modifier = Modifier.fillMaxSize(),
+			contentPadding = PaddingValues(
+				top = innerPadding.calculateTopPadding() + 4.dp,
+				bottom = innerPadding.calculateBottomPadding() + 24.dp
+			)
 		) {
-			DiscographyBrowser(
-				sections = sections,
+			item(key = "filters") {
+				DiscographyFilters(
+					sections = sections,
+					filter = filter,
+					onFilter = { filter = it },
+					// The rescan chip once there is an index; before that the scan action below offers it.
+					onRescan = if (fromIndex && artistMbid.effective.isNotBlank()) {
+						{ viewModel.indexArtist() }
+					} else null,
+					rescanning = discography.indexing,
+					modifier = Modifier.padding(bottom = 12.dp)
+				)
+			}
+			discographyItems(
+				view = view,
 				filter = filter,
-				onFilter = { filter = it },
+				types = types,
 				onOpenEntry = open,
 				onLongClick = null,
-				// The rescan chip once there is an index; before that the scan action below offers it.
-				onRescan = if (fromIndex && artistMbid.effective.isNotBlank()) {
-					{ viewModel.indexArtist() }
-				} else null,
-				rescanning = discography.indexing,
+				ledger = ledger,
+				gate = gate,
+				expanded = expanded,
+				onExpand = { expanded = expanded + it },
 				pills = fromIndex
 			)
 			// A rescan lb-bot answered "another artist holds this discography", or one that failed:
 			// said under the list, as plain lines.
-			if (fromIndex && discography.scanShared) {
+			if (fromIndex && discography.scanShared) item(key = "shared") {
 				Text(
 					stringResource(Res.string.info_discography_shared),
 					style = MaterialTheme.typography.bodySmall,
@@ -136,7 +162,7 @@ fun ArtistDiscographyScreen(artistId: String) {
 					modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
 				)
 			}
-			if (fromIndex && discography.scanError.isNotBlank()) {
+			if (fromIndex && discography.scanError.isNotBlank()) item(key = "scan-error") {
 				Text(
 					discography.scanError,
 					style = MaterialTheme.typography.bodySmall,
@@ -144,7 +170,7 @@ fun ArtistDiscographyScreen(artistId: String) {
 					modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
 				)
 			}
-			if (!fromIndex) {
+			if (!fromIndex) item(key = "scan-action") {
 				DiscographyScanAction(
 					ui = discography,
 					mbid = artistMbid.effective,
