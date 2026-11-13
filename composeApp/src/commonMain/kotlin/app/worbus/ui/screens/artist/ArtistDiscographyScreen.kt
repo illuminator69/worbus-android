@@ -39,7 +39,6 @@ import app.worbus.ui.components.layouts.NestedTopBar
 import app.worbus.ui.components.layouts.RootBottomBar
 import app.worbus.ui.screens.artist.components.DiscographyFilters
 import app.worbus.ui.screens.artist.components.discographyItems
-import app.worbus.ui.util.ArrivalGate
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.remember
@@ -74,10 +73,8 @@ fun ArtistDiscographyScreen(artistId: String) {
 	val view = remember(sections, filter) { discographyView(sections, filter) }
 	val types = remember(sections) { entryTypes(sections) }
 	val ledger by koinInject<LbBotManager>().ledger.collectAsStateWithLifecycle()
-	// A new gate per filter: a change of chip or sort plays the rows' arrival again (round 2's note).
-	val gate = remember(filter) { ArrivalGate() }
-	// The groups Show all has opened, by type.
-	var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
+	// Review M2, M3, m2: the arrival and the open groups, saved with the page and started over per filter.
+	val memory = rememberDiscographyListMemory(filter, view)
 	val open = rememberDiscographyOpener(viewModel, artistId)
 
 	Scaffold(
@@ -146,9 +143,9 @@ fun ArtistDiscographyScreen(artistId: String) {
 				onOpenEntry = open,
 				onLongClick = null,
 				ledger = ledger,
-				gate = gate,
-				expanded = expanded,
-				onExpand = { expanded = expanded + it },
+				gate = memory.gate,
+				expanded = memory.expanded,
+				onExpand = { memory.expanded = memory.expanded + it },
 				pills = fromIndex
 			)
 			// A rescan lb-bot answered "another artist holds this discography", or one that failed:
