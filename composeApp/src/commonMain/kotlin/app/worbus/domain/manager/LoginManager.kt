@@ -245,7 +245,8 @@ class LoginManager(
 		preferenceManager = preferenceManager,
 		store = preferenceManager.serverRecordStore,
 		scope = scope,
-		onPaired = { hubManager.restart() },
+		// Review m7: the last account's leave (its saved-queue cache and fill watches) ends first.
+		onPaired = { hubManager.restartAfterLeaving() },
 		words = { sentence, arg -> getString(sentenceResource(sentence), arg) },
 		keptAddress = keptAddress
 	)

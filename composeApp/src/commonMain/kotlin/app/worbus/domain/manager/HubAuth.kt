@@ -12,6 +12,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -897,6 +898,27 @@ suspend fun finishLeavingWorbusServer(
 	auth.finishSignOut(pending)
 	forgetSavedQueues()
 	forgetFillWatches()
+}
+
+/**
+ * B-409 review m7: the last account's leave ([finishLeavingWorbusServer], launched by a logout), so the
+ * next account's first connect can wait for it: the login step can now pair and restart the socket in
+ * the same session, and a slow sign-out probe would otherwise let that connect run before the saved-queue
+ * cache and the fill watches are forgotten.
+ */
+class PendingLeave {
+	@kotlin.concurrent.Volatile
+	private var leaving: Job? = null
+
+	/** The leave now running, launched by a logout. */
+	fun track(job: Job) {
+		leaving = job
+	}
+
+	/** Returns once the tracked leave has ended (at once when there is none). */
+	suspend fun awaitLeft() {
+		leaving?.join()
+	}
 }
 
 /**

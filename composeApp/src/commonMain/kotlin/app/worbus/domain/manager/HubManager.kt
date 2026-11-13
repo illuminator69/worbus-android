@@ -451,12 +451,26 @@ class HubManager(
 	 * credential is left to dial with); the rest runs on this manager's scope, which the logout does
 	 * not end.
 	 */
+	/** Review m7: the logout's leave, which [restartAfterLeaving] waits for. */
+	private val pendingLeave = PendingLeave()
+
+	/**
+	 * Review m7: [restart] once the last account's leave has ended (its saved queues and fill watches
+	 * forgotten): what a pairing made right after a login (the login's Worbus Server step) calls.
+	 */
+	fun restartAfterLeaving() {
+		scope.launch {
+			pendingLeave.awaitLeft()
+			restart()
+		}
+	}
+
 	fun leaveForLogout() {
 		val job = connectJob
 		// Review M-1: the credentials are forgotten here, before anything is launched.
 		val pending = beginLeavingWorbusServer(stopSocket = { stop() }, auth = hubAuth, activeAddress = connector.activeAddress.value)
 		updateRoles()
-		scope.launch {
+		pendingLeave.track(scope.launch {
 			finishLeavingWorbusServer(
 				pending = pending,
 				auth = hubAuth,
@@ -465,7 +479,7 @@ class HubManager(
 				forgetFillWatches = { lbBotManager.forgetWatches() }
 			)
 			updateRoles()
-		}
+		})
 	}
 
 	private val _authRefused = MutableStateFlow(false)
