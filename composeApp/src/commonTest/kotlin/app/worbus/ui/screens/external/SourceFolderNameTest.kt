@@ -15,7 +15,7 @@ class SourceFolderNameTest {
 	fun aCardIsNamedForItsFolder() {
 		assertEquals("Björk - Debut Live (1993)", sourceFolderName("@@peer\\Music\\Björk\\Björk - Debut Live (1993)", "peer"))
 		assertEquals("Debut", sourceFolderName("Music/Björk/Debut", "peer"), "forward slashes")
-		assertEquals("Debut", sourceFolderName("Debut", "peer"), "a non-admin's: lb-bot sends the last component")
+		assertEquals("Debut", sourceFolderName("Debut", "peer"), "a bare folder name")
 	}
 
 	@Test
@@ -24,6 +24,19 @@ class SourceFolderNameTest {
 		assertEquals("Debut / Disc 2", sourceFolderName("Music/Björk/Debut/Disc 2", "peer"))
 		assertEquals("Debut (Deluxe) / FLAC", sourceFolderName("Music\\Debut (Deluxe)\\FLAC", "peer"))
 		assertEquals("CD1", sourceFolderName("CD1", "peer"), "nothing above it to name")
+	}
+
+	/*
+	 * Review L9: `Album\CD1\FLAC` gave "CD1 / FLAC" (the album lost), and a share root gave "@@abcde / CD1".
+	 */
+	@Test
+	fun everyDiscOrFormatSubfolderIsWalkedPastAndAShareRootIsNoName() {
+		assertEquals("Debut Live / CD1 / FLAC", sourceFolderName("@@peer\\Music\\Debut Live\\CD1\\FLAC", "peer"))
+		assertEquals("Debut / Disc 2 / 24-bit / Scans", sourceFolderName("Music/Debut/Disc 2/24-bit/Scans", "peer"))
+		assertEquals("CD1", sourceFolderName("@@abcde\\CD1", "peer"), "the share root is not a name")
+		assertEquals("Debut", sourceFolderName("@@abcde\\Debut", "peer"))
+		assertEquals("peer", sourceFolderName("@@abcde", "peer"), "a share root alone: the peer")
+		assertEquals("CD1 / FLAC", sourceFolderName("CD1\\FLAC", "peer"), "nothing above them to name")
 	}
 
 	@Test
