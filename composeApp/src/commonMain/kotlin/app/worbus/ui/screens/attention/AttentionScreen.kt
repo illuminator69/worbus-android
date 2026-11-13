@@ -94,6 +94,7 @@ import app.worbus.domain.manager.LbFillEntry
 import app.worbus.domain.manager.importsRow
 import app.worbus.domain.manager.isPrivateHubAddress
 import app.worbus.domain.manager.lbPageLink
+import app.worbus.domain.manager.toFixSectionCount
 import app.worbus.domain.manager.PreferenceManager
 import app.worbus.domain.manager.asLedgerRow
 import app.worbus.domain.manager.attentionEmptyShown
@@ -278,7 +279,8 @@ fun AttentionScreen() {
 						item(key = "fix-header") {
 							GroupHeader(
 								stringResource(Res.string.attention_section_to_fix),
-								count = toFixRows,
+								// B-406: what the rows stand for, in the headline's units; not the rows.
+								count = toFixSectionCount(p),
 								modifier = Modifier.animateItem()
 							)
 						}

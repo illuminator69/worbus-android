@@ -218,6 +218,30 @@ class AttentionTest {
 		assertEquals(20, page.toFix)
 	}
 
+	/*
+	 * B-406 (the owner's walk, 2026-11-13, the phone): the "To fix" section read 26 over one imports row
+	 * saying "16 imports need you" and 25 folders. Its header counted ROWS (the imports row as one), not
+	 * what they stand for; it counts in the page headline's units now: lb-bot's imports and folders, plus
+	 * the artists to check while their row shows.
+	 */
+	@Test
+	fun theToFixSectionCountsWhatItsRowsStandForNotTheRows() {
+		val a = ok().copy(
+			counts = AttentionCounts(folders = 25, imports = 16),
+			folders = List(25) { AttentionFolder(id = "f$it") }
+		)
+		fun page(toCheck: Int?, downloadsOn: Boolean = true) =
+			attentionPage(AttentionRead.Ok(a), a, 1L, emptyList(), toCheck, downloadsOn) as AttentionPage.Rows
+		assertEquals(16 + 25, toFixSectionCount(page(null)))
+		assertEquals(16 + 25, toFixSectionCount(page(0)))
+		assertEquals(16 + 25 + 3, toFixSectionCount(page(3)))
+		// lb-bot's count, not the rows it listed: a cut list still says how many there are.
+		val cut = a.copy(folders = a.folders.take(10))
+		assertEquals(16 + 25, toFixSectionCount(attentionPage(AttentionRead.Ok(cut), cut, 1L, emptyList(), null) as AttentionPage.Rows))
+		// Downloading off: no folder is listed, and none is counted (toFixCount's rule).
+		assertEquals(16, toFixSectionCount(page(null, downloadsOn = false)))
+	}
+
 	// --- refresh -----------------------------------------------------------------------------------
 
 	@Test

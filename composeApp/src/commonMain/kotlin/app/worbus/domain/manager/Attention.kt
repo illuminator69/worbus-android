@@ -240,9 +240,19 @@ sealed interface AttentionPage {
 		 */
 		val deviceOnly: List<AttentionRow> = emptyList(),
 		/** Worbus P4: lb-bot's `counts.imports` from the answer shown, 0 without one. */
-		val imports: Int = 0
+		val imports: Int = 0,
+		/** B-406: lb-bot's `counts.folders` from the answer shown, 0 without one or while downloading is off. */
+		val foldersCounted: Int = 0
 	) : AttentionPage
 }
+
+/**
+ * B-406: the "To fix" section's number, in the headline's units: lb-bot's imports and folders (its
+ * counts, not the rows listed), plus the artists to check while their row shows. It counted rows, so
+ * one row standing for 16 imports was 1.
+ */
+fun toFixSectionCount(page: AttentionPage.Rows): Int =
+	page.imports + page.foldersCounted + (page.artistsToCheck?.takeIf { it > 0 } ?: 0)
 
 /**
  * The page, from the last read, the last good answer ([last], read at [lastAt]) and the ledger.
@@ -308,7 +318,8 @@ fun attentionPage(
 		toFix = answer.counts?.let { toFixCount(it, downloadsOn) },
 		notices = notices,
 		deviceOnly = deviceOnly,
-		imports = answer.counts?.imports ?: 0
+		imports = answer.counts?.imports ?: 0,
+		foldersCounted = if (downloadsOn) answer.counts?.folders ?: 0 else 0
 	)
 }
 
