@@ -2294,8 +2294,13 @@ true of invented *album art*, and not of an icon naming the kind.
   third entry, **Quick**, appended last: the enum is stored by ordinal
   (`BasePreferenceManager.getEnum`), so it is append-only and never reordered (`PageMotionTest`
   locks the order). Every duration is a field of `PageMotion` (`ui/util/PageMotion.kt`, no Compose
-  imports): `DefaultPageMotion` is what Expressive and Standard have always used and must not
-  move; `QuickPageMotion` is a starting proposal the user tunes on the phone, one number per edit.
+  imports), and every site reads it through `PreferenceManager.pageMotion()`: the style's table at the
+  **animation speed** (`motionSpeed`, 0.5× to 2× by quarters, Appearance › Motion; `atSpeed` scales every
+  time and delay, never a distance or a curve; a spring stays a spring). I-075 (the owner, 2026-11-13):
+  `QuickPageMotion` is the page motion Expressive had at `4b592a4e` (B-378/B-403/B-404's numbers) with
+  Quick's own sheets and folds; `DefaultPageMotion` (Expressive and Standard) is back to `bd39384d`'s speed
+  (every slide 500 ms on Emphasized, a tab ~330 ms) with those rounds' structure kept: staggered fades,
+  one back animation, no fade into or out of a cover page, Settings' slide.
   Components keep `MotionScheme.expressive()` under Quick (`Theme.kt`; `standard()` is the
   one-line alternative).
   Page pushes and pops: `NavDisplay`'s `transitionSpec` / `popTransitionSpec` in `App.kt` read

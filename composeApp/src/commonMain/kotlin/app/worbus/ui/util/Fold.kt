@@ -43,8 +43,7 @@ class FoldMotion internal constructor(private val ms: Int?, private val scheme: 
 /** [tall]: a block that holds a list, which moves further than a few lines do. */
 @Composable
 fun rememberFoldMotion(tall: Boolean = false): FoldMotion {
-	val style = koinInject<PreferenceManager>().animationStyle
-	val ms = foldMs(pageMotionOf(style), tall)
+	val ms = foldMs(koinInject<PreferenceManager>().pageMotion(), tall)
 	val scheme = MaterialTheme.motionScheme
 	return remember(ms, scheme) { FoldMotion(ms, scheme) }
 }

@@ -1,15 +1,22 @@
 package app.worbus.ui.util
 
+import app.worbus.domain.manager.PreferenceManager
 import app.worbus.domain.models.settings.AnimationStyle
+import kotlin.math.roundToInt
 
 /**
- * navi-connect I-042: the timing of page pushes and pops, the cover's shared-element flight and
- * bottom sheets, per [AnimationStyle]. Pure values and no Compose imports, so a host test can lock
- * them; [Material3Transitions], the three cover `BoundsTransform` sites and `ModalBottomSheet`
- * build their specs from it.
+ * navi-connect I-042: the timing of page pushes and pops, Settings' and the album's slides, a root-tab
+ * switch, the cover's shared-element flight, bottom sheets and Quick's folds, per [AnimationStyle], and
+ * scaled by the animation speed setting ([PreferenceManager.motionSpeed], I-075). Pure values and no Compose
+ * imports, so a host test can lock them; [Material3Transitions], the cover `BoundsTransform`, `Fold`,
+ * `ModalBottomSheet` and the custom radio's steps build their specs from it ([pageMotion]), so this one table
+ * is every page and tab motion's time.
  *
- * Expressive and Standard are the numbers these sites used before Quick existed — they must not
- * move. Quick's live in [QuickPageMotion]: retuning it is a one-number edit there.
+ * I-075 (the owner's ruling, 2026-11-13 evening): **Quick is the speed the owner saw on Expressive at
+ * `4b592a4e`** ([QuickPageMotion]), and **Expressive (and Standard, which has always shared its table) is
+ * back to the speed and easing of `bd39384d`**, before B-378, B-403 and B-404 ([DefaultPageMotion]), with
+ * their structural fixes kept: one back animation, the two pages' fades never overlapping, no fade (so no
+ * backdrop) into or out of a cover page, one motion for every album opener, Settings' slide with no fade.
  */
 data class PageMotion(
 	/**
@@ -35,9 +42,12 @@ data class PageMotion(
 	val tabEnterFadeMs: Int,
 	/**
 	 * B-403: the regular slide, both pages moving the whole width and no fade, for Settings and its
-	 * pages ([pageChangeOf]).
+	 * pages ([pageChangeOf]), on [slideEasing]; and B-404's album slide ([coverSlideTiming]), on
+	 * [enterEasing].
 	 */
 	val slideMs: Int,
+	/** Settings' slide's curve (B-403 chose EaseOutQuart, upstream's predictive-back slide). */
+	val slideEasing: PageEasing,
 	/**
 	 * A fold (`Fold.kt`) and what moves with it, in ms, and for one that holds a list; null is the motion
 	 * scheme's own springs, which is what Expressive and Standard use.
@@ -46,14 +56,31 @@ data class PageMotion(
 	val foldTallMs: Int? = null
 )
 
-/** Which of [Material3Transitions]' easings the incoming page uses. */
-enum class PageEasing { Emphasized, EmphasizedDecelerate }
+/** Which of [Material3Transitions]' easings a motion uses. */
+enum class PageEasing { Emphasized, EmphasizedDecelerate, EaseOutQuart }
 
 /**
- * Expressive and Standard: 500 ms from half the width. B-378 (the owner, 2026-11-09): Material's
- * shared-axis timing, both pages sliding the whole 500 ms, the outgoing page fading out over the
- * first 35 % (175 ms) and the incoming fading in over the rest, never both at once. It was a
- * 450 ms fade in from the first frame over a 250 ms fade out, the two titles drawn over each other.
+ * Expressive and Standard (I-075: the speed of `bd39384d`, the structural fixes kept). At `bd39384d` every
+ * page change, Settings' and an album's included, was one motion: the incoming page slid 500 ms from half
+ * the width on Emphasized and faded in over 450 ms from its first frame, the outgoing page faded out over
+ * 250 ms and slid 30 dp over 300 ms on EmphasizedAccelerate; a dragged Back was a separate 300 ms
+ * full-width slide on EaseOutQuart; a root tab cross-faded on the default springs (MediumLow, settled in
+ * about 330 ms); the cover flew 500 ms on EmphasizedDecelerate. So:
+ *
+ * - **The slide and fade** (any two pages that are neither Settings nor a cover page): 500 ms from half the
+ *   width on Emphasized, as at `bd39384d` and as now. B-378 changed only its structure, which stays: the
+ *   old page fades out over the first 175 ms and the new one in over the remaining 325, never both at once
+ *   (the two fades must share the 500 ms, so Material's split rather than the old 250 and 450), and both
+ *   pages slide the whole time (the old one stopped at 300 ms on EmphasizedAccelerate, by when it has
+ *   faded out anyway).
+ * - **Settings' slide and the album slide** take the old page change's 500 ms on Emphasized (B-403 and
+ *   B-404 had made them 300 ms, Settings' on EaseOutQuart). Whole width, no fade, as B-403 and B-404 made them.
+ * - **The cover's flight** lands with the album slide (B-404), so 500 ms on Emphasized (it was 500 ms on
+ *   EmphasizedDecelerate).
+ * - **A root tab** fades through (Ruling 7: never both tabs at once) over the old springs' ~330 ms, split as
+ *   Material's fade-through (30 / 70): 100 out, 230 in. B-403 made it 90 + 210.
+ * - **Back** is the pop of whichever motion runs (B-378's one back animation), so it has no time of its own.
+ * - Sheets and folds were not changed by this session: 400 / 600 ms, and the motion scheme's springs.
  */
 val DefaultPageMotion = PageMotion(
 	enterFadeMs = 325,
@@ -66,29 +93,88 @@ val DefaultPageMotion = PageMotion(
 	exitSlideDp = 30,
 	sheetShowMs = 400,
 	sheetHideMs = 600,
-	tabExitFadeMs = 90,
-	tabEnterFadeMs = 210,
-	slideMs = 300
+	tabExitFadeMs = 100,
+	tabEnterFadeMs = 230,
+	slideMs = 500,
+	slideEasing = PageEasing.Emphasized
 )
 
-/** Quick: a starting proposal (lb-bot's web UI enters in 220 ms over 18 px), tuned on the phone. */
+/**
+ * Quick (I-075, the owner's ruling): **the page motion Expressive had at `4b592a4e`**, every number this
+ * session's B-378, B-403 and B-404 set: the slide and fade 500 ms from half the width on Emphasized, both
+ * pages sliding the whole time, fades 175 then 325; Settings' slide 300 ms on EaseOutQuart; the album slide
+ * and the cover's flight 300 ms on Emphasized; a root tab 90 out then 210 in. Quick's own sheets and folds,
+ * which this session did not touch and which were already quicker than Expressive's, are kept.
+ *
+ * It was a starting proposal, half of everything (250 ms, 30 dp, EmphasizedDecelerate; Settings and the
+ * album 250; tabs 60 + 140; the flight 250).
+ */
 val QuickPageMotion = PageMotion(
-	enterFadeMs = 165,
-	enterFadeDelayMs = 85,
-	enterSlideMs = 250,
-	enterSlideDp = 30,
-	enterEasing = PageEasing.EmphasizedDecelerate,
-	exitFadeMs = 85,
-	exitSlideMs = 250,
+	enterFadeMs = 325,
+	enterFadeDelayMs = 175,
+	enterSlideMs = 500,
+	enterSlideDp = null,
+	enterEasing = PageEasing.Emphasized,
+	exitFadeMs = 175,
+	exitSlideMs = 500,
 	exitSlideDp = 30,
 	sheetShowMs = 300,
 	sheetHideMs = 250,
-	tabExitFadeMs = 60,
-	tabEnterFadeMs = 140,
-	slideMs = 250,
+	tabExitFadeMs = 90,
+	tabEnterFadeMs = 210,
+	slideMs = 300,
+	slideEasing = PageEasing.EaseOutQuart,
 	foldMs = 200,
 	foldTallMs = 280
 )
+
+/** I-075: the animation speed setting's range and steps (0.5×, 0.75× … 2×); 1× is the preset as it is. */
+const val MOTION_SPEED_MIN = 0.5f
+const val MOTION_SPEED_MAX = 2f
+const val MOTION_SPEED_DEFAULT = 1f
+
+/** The slider's in-between stops: 0.5 to 2 by 0.25 is seven values, so five between the ends. */
+const val MOTION_SPEED_STEPS = 5
+
+/** A stored speed as the slider offers it: inside the range, on a quarter, anything unreadable 1×. */
+fun motionSpeedOf(stored: Float): Float =
+	if (!stored.isFinite()) MOTION_SPEED_DEFAULT
+	else ((stored.coerceIn(MOTION_SPEED_MIN, MOTION_SPEED_MAX) * 4f).roundToInt() / 4f)
+
+/** The speed as the setting says it: "1×", "1.25×", "0.5×". */
+fun motionSpeedLabel(speed: Float): String {
+	val s = motionSpeedOf(speed)
+	val hundredths = (s * 100).roundToInt()
+	val text = if (hundredths % 100 == 0) "${hundredths / 100}" else "${hundredths / 100}." +
+		"${hundredths % 100}".padStart(2, '0').trimEnd('0')
+	return "$text×"
+}
+
+/**
+ * I-075: [this] at [speed] (2× is half of every time, 0.5× twice it). Every duration and delay scales, so
+ * the fades' windows keep their order and the album slide and the cover's flight still land together;
+ * distances and curves do not change. A fold left to the motion scheme's springs (null) stays a spring.
+ */
+fun PageMotion.atSpeed(speed: Float): PageMotion {
+	val s = motionSpeedOf(speed)
+	if (s == 1f) return this
+	fun ms(v: Int) = (v / s).roundToInt()
+	// A delayed fade scales by its ends, so a fade that ended with the slide still ends with it.
+	return copy(
+		enterFadeMs = ms(enterFadeDelayMs + enterFadeMs) - ms(enterFadeDelayMs),
+		enterFadeDelayMs = ms(enterFadeDelayMs),
+		enterSlideMs = ms(enterSlideMs),
+		exitFadeMs = ms(exitFadeMs),
+		exitSlideMs = ms(exitSlideMs),
+		sheetShowMs = ms(sheetShowMs),
+		sheetHideMs = ms(sheetHideMs),
+		tabExitFadeMs = ms(tabExitFadeMs),
+		tabEnterFadeMs = ms(tabExitFadeMs + tabEnterFadeMs) - ms(tabExitFadeMs),
+		slideMs = ms(slideMs),
+		foldMs = foldMs?.let(::ms),
+		foldTallMs = foldTallMs?.let(::ms)
+	)
+}
 
 /** When each page's fade runs, in ms from the start of a page change (B-378). */
 data class PageFadeWindows(val exitStartMs: Int, val exitEndMs: Int, val enterStartMs: Int, val enterEndMs: Int)
@@ -201,7 +287,15 @@ fun pageKindOfScene(entries: List<Map<String, Any>>): PageKind {
 /** The fold's time under [motion], or null for the motion scheme's springs. */
 fun foldMs(motion: PageMotion, tall: Boolean): Int? = if (tall) motion.foldTallMs else motion.foldMs
 
-fun pageMotionOf(style: AnimationStyle): PageMotion = when (style) {
+/**
+ * A style's motion at a speed. I-075: Standard keeps sharing Expressive's table, as it has since Quick was
+ * added (I-042): the two styles differ in the components' motion scheme (`Theme.kt`), not in page motion,
+ * and a Standard left on `4b592a4e`'s numbers would be Quick's page motion under another name.
+ */
+fun pageMotionOf(style: AnimationStyle, speed: Float = MOTION_SPEED_DEFAULT): PageMotion = when (style) {
 	AnimationStyle.Expressive, AnimationStyle.Standard -> DefaultPageMotion
 	AnimationStyle.Quick -> QuickPageMotion
-}
+}.atSpeed(speed)
+
+/** The motion the settings ask for: the animation style at the animation speed. Every motion site reads this. */
+fun PreferenceManager.pageMotion(): PageMotion = pageMotionOf(animationStyle, motionSpeed)

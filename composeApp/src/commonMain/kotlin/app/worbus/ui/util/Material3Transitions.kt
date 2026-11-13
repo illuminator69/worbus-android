@@ -13,7 +13,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.EaseOutQuart
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Path
@@ -52,7 +51,7 @@ fun sheetHideMotionSpec(motion: PageMotion) = tween<Float>(
  */
 @Composable
 fun rememberCoverBoundsTransform(): BoundsTransform {
-	val timing = coverSlideTiming(pageMotionOf(koinInject<PreferenceManager>().animationStyle))
+	val timing = coverSlideTiming(koinInject<PreferenceManager>().pageMotion())
 	return remember(timing) {
 		BoundsTransform { _, _ ->
 			tween(
@@ -67,6 +66,7 @@ fun rememberCoverBoundsTransform(): BoundsTransform {
 fun PageEasing.curve(): Easing = when (this) {
 	PageEasing.Emphasized -> EmphasizedEasing
 	PageEasing.EmphasizedDecelerate -> EmphasizedDecelerateEasing
+	PageEasing.EaseOutQuart -> androidx.compose.animation.core.EaseOutQuart
 }
 
 object Material3Transitions {
@@ -97,8 +97,8 @@ object Material3Transitions {
 		PageChange.SharedAxis ->
 			if (pop) popEnter(motion)(density) togetherWith popExit(motion)(density)
 			else enter(motion)(density) togetherWith exit(motion)(density)
-		// Settings' regular slide (B-403) is EaseOutQuart; the album slide (B-404) is its own timing.
-		PageChange.Slide -> slide(motion.slideMs, EaseOutQuart, sign = if (pop) -1 else 1)
+		// Settings' regular slide (B-403) on its own curve; the album slide (B-404) is its own timing.
+		PageChange.Slide -> slide(motion.slideMs, motion.slideEasing.curve(), sign = if (pop) -1 else 1)
 		PageChange.CoverSlide -> coverSlideTiming(motion).let { slide(it.durationMs, it.easing.curve(), sign = if (pop) -1 else 1) }
 	}
 
@@ -116,7 +116,8 @@ object Material3Transitions {
 	 * A root-tab switch (Ruling 7, 2026-11-10): a fade-through, no slide. The old tab fades out, then
 	 * the new one fades in ([tabFadeWindows]); the two were faded at once, their text drawn over each
 	 * other (B-378's overlap on a tab switch). B-403 (the owner, 2026-11-13): it took a page push's
-	 * 500 ms, too long for a tab; 300 ms now (Quick 200), Material's fade-through.
+	 * 500 ms, too long for a tab; Material's fade-through ([PageMotion.tabExitFadeMs] then
+	 * [PageMotion.tabEnterFadeMs]: I-075 Expressive 100 + 230, Quick 90 + 210).
 	 */
 	fun tabEnter(motion: PageMotion): EnterTransition {
 		val w = tabFadeWindows(motion)

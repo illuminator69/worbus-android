@@ -168,7 +168,7 @@ import app.worbus.ui.screens.song.SongDetailSheet
 import app.worbus.ui.ColourArrivalEffects
 import app.worbus.ui.util.Material3Transitions
 import app.worbus.ui.util.PageMotion
-import app.worbus.ui.util.pageMotionOf
+import app.worbus.ui.util.pageMotion
 import app.worbus.ui.util.PageKind
 import app.worbus.ui.util.pageChangeOf
 import app.worbus.ui.util.pageKindMetadata
@@ -266,7 +266,7 @@ fun App() {
 	// A tab's own page is a root (P6: Home stays under Search and the Library, so it is no longer
 	// "the stack holds one entry"). Back on one still pops only at two entries or more, below.
 	val isRoot by remember(backStack) { derivedStateOf { isRootPage(backStack.lastOrNull()) } }
-	val entries = remember(backStack, isRoot) { entryProvider(isRoot) { pageMotionOf(preferenceManager.animationStyle) } }
+	val entries = remember(backStack, isRoot) { entryProvider(isRoot) { preferenceManager.pageMotion() } }
 
 	// The individual strategies were already remembered; the enclosing list was not, so
 	// NavDisplay still received a new `sceneStrategies` value on every pass.
@@ -479,13 +479,13 @@ fun App() {
 									transitionSpec = {
 										Material3Transitions.page(
 											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
-											pop = false, pageMotionOf(preferenceManager.animationStyle), density
+											pop = false, preferenceManager.pageMotion(), density
 										)
 									},
 									popTransitionSpec = {
 										Material3Transitions.page(
 											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
-											pop = true, pageMotionOf(preferenceManager.animationStyle), density
+											pop = true, preferenceManager.pageMotion(), density
 										)
 									},
 									// B-378 (the owner, 2026-11-09): ONE back animation. A dragged Back drives
@@ -495,7 +495,7 @@ fun App() {
 									predictivePopTransitionSpec = {
 										Material3Transitions.page(
 											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
-											pop = true, pageMotionOf(preferenceManager.animationStyle), density
+											pop = true, preferenceManager.pageMotion(), density
 										)
 									}
 								)

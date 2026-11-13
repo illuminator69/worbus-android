@@ -40,6 +40,9 @@ class PreferenceManager(
 	var font by preference(FontOption.GoogleSans)
 	var fontPath by preference("")
 	var animationStyle by preference(AnimationStyle.Expressive)
+	// I-075: every page, tab and sheet motion's speed on top of the style (PageMotion.kt `atSpeed`):
+	// 0.5× to 2×, 1× the style's own times.
+	var motionSpeed by preference(1f)
 	var nowPlayingBackgroundStyle by preference(NowPlayingBackgroundStyle.Dynamic)
 	// navi-connect: real backdrop blur (Haze) for the Mood Flow frosted UI.
 	// Experimental (alpha dependency) → off by default.

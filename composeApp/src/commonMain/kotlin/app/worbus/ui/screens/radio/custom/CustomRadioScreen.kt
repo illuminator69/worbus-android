@@ -21,7 +21,7 @@ import app.worbus.ui.screens.library.LibraryChip
 import app.worbus.ui.navigation.Screen
 import app.worbus.ui.navigation.becomeStack
 import app.worbus.ui.util.Material3Transitions
-import app.worbus.ui.util.pageMotionOf
+import app.worbus.ui.util.pageMotion
 import org.koin.compose.koinInject
 
 /*
@@ -66,7 +66,7 @@ fun CustomRadioScreen() {
 		targetState = step,
 		// The two steps move as two pages do (I-042: the animation style's timing).
 		transitionSpec = {
-			val motion = pageMotionOf(preferenceManager.animationStyle)
+			val motion = preferenceManager.pageMotion()
 			if (targetState > initialState) {
 				Material3Transitions.enter(motion)(density) togetherWith Material3Transitions.exit(motion)(density)
 			} else {

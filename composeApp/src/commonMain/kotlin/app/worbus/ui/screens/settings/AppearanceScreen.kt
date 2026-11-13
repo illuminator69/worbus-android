@@ -29,6 +29,13 @@ import kotlinx.collections.immutable.toImmutableList
 import worbus.composeapp.generated.resources.Res
 import worbus.composeapp.generated.resources.option_alphabetical_scroll
 import worbus.composeapp.generated.resources.option_animation_style
+import worbus.composeapp.generated.resources.option_animation_speed
+import worbus.composeapp.generated.resources.subtitle_animation_speed
+import app.worbus.ui.util.MOTION_SPEED_MAX
+import app.worbus.ui.util.MOTION_SPEED_MIN
+import app.worbus.ui.util.MOTION_SPEED_STEPS
+import app.worbus.ui.util.motionSpeedLabel
+import app.worbus.ui.util.motionSpeedOf
 import worbus.composeapp.generated.resources.option_artist_image_shape
 import worbus.composeapp.generated.resources.option_artwork_shape
 import worbus.composeapp.generated.resources.option_choose_app_icon
@@ -266,7 +273,26 @@ fun SettingsAppearanceScreen() {
 						selectedChoice = preferenceManager.animationStyle,
 						onChoiceSelected = { preferenceManager.animationStyle = it },
 						label = { stringResource(it.displayName) },
-						shapes = SegmentedListItemDefaults.segmentedShapes(index = 0, count = 2)
+						shapes = SegmentedListItemDefaults.segmentedShapes(index = 0, count = 3)
+					)
+					// I-075 (the owner, 2026-11-13): the style's page, tab and sheet times at a speed, 0.5× to 2×.
+					SettingsSliderItem(
+						value = motionSpeedOf(preferenceManager.motionSpeed),
+						valueRange = MOTION_SPEED_MIN..MOTION_SPEED_MAX,
+						steps = MOTION_SPEED_STEPS,
+						onValueChange = { preferenceManager.motionSpeed = motionSpeedOf(it) },
+						trailingContent = { Text(motionSpeedLabel(preferenceManager.motionSpeed)) },
+						content = {
+							Column {
+								Text(stringResource(Res.string.option_animation_speed))
+								Text(
+									stringResource(Res.string.subtitle_animation_speed),
+									style = MaterialTheme.typography.bodyMedium,
+									color = MaterialTheme.colorScheme.onSurfaceVariant
+								)
+							}
+						},
+						shapes = SegmentedListItemDefaults.segmentedShapes(index = 1, count = 3)
 					)
 					// Ruling 7 (2026-11-10): no "Predictive back animations" row. B-378 made one back
 					// animation for the button and both gestures, so it no longer changed anything.
@@ -276,7 +302,7 @@ fun SettingsAppearanceScreen() {
 						onCheckedChange = { preferenceManager.expressiveBlur = it },
 						content = { Text(stringResource(Res.string.option_expressive_blur)) },
 						supportingContent = { Text(stringResource(Res.string.subtitle_expressive_blur)) },
-						shapes = SegmentedListItemDefaults.segmentedShapes(index = 1, count = 2)
+						shapes = SegmentedListItemDefaults.segmentedShapes(index = 2, count = 3)
 					)
 				}
 			}

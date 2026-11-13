@@ -16,31 +16,33 @@ import kotlin.test.assertTrue
  */
 class PageFadeTest {
 	private val styles = AnimationStyle.entries
+	// I-075: and at every animation speed the slider offers.
+	private val speeds = listOf(0.5f, 1f, 2f)
 
 	@Test
 	fun theTwoFadesNeverOverlap() {
-		for (style in styles) {
-			val w = pageFadeWindows(pageMotionOf(style))
+		for (style in styles) for (speed in speeds) {
+			val w = pageFadeWindows(pageMotionOf(style, speed))
 			assertTrue(w.exitEndMs <= w.enterStartMs, "$style: out ${w.exitStartMs}..${w.exitEndMs}, in ${w.enterStartMs}..${w.enterEndMs}")
 		}
 	}
 
 	@Test
 	fun theOldPageFadesFromTheFirstFrameOverAboutAThird() {
-		for (style in styles) {
-			val m = pageMotionOf(style)
+		for (style in styles) for (speed in speeds) {
+			val m = pageMotionOf(style, speed)
 			val w = pageFadeWindows(m)
 			assertEquals(0, w.exitStartMs, "$style")
 			val third = w.exitEndMs.toFloat() / m.enterSlideMs
 			assertTrue(third in 0.25f..0.45f, "$style: the old page fades over ${(third * 100).toInt()} % of the motion")
-			assertTrue(w.exitEndMs >= 60, "$style: never a cut (${w.exitEndMs} ms)")
+			assertTrue(w.exitEndMs >= 60, "$style at $speed: never a cut (${w.exitEndMs} ms)")
 		}
 	}
 
 	@Test
 	fun theNewPageFadesInOverTheRestAndBothMoveTheWholeTime() {
-		for (style in styles) {
-			val m = pageMotionOf(style)
+		for (style in styles) for (speed in speeds) {
+			val m = pageMotionOf(style, speed)
 			val w = pageFadeWindows(m)
 			assertEquals(m.enterSlideMs, w.enterEndMs, "$style: the fade in ends with the slide")
 			assertEquals(m.enterSlideMs, m.exitSlideMs, "$style: the old page slides as long as the new one")

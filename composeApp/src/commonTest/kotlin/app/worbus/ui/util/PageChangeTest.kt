@@ -31,11 +31,15 @@ class PageChangeTest {
 	}
 
 	@Test
-	fun theSlideIsShortAndNeverACut() {
+	fun theSlideIsNeverACutAndNeverLongerThanAPagePush() {
+		// B-403 made it 300 ms (Quick 250); I-075 (the owner, 2026-11-13 evening): Quick is that 300 ms, and
+		// Expressive and Standard are back to `bd39384d`'s page change, 500 ms.
 		for (style in styles) {
 			val m = pageMotionOf(style)
-			assertTrue(m.slideMs in 150..300, "$style: the slide takes ${m.slideMs} ms")
+			assertTrue(m.slideMs in 150..m.enterSlideMs, "$style: the slide takes ${m.slideMs} ms")
 		}
+		assertEquals(300, pageMotionOf(AnimationStyle.Quick).slideMs)
+		assertEquals(500, pageMotionOf(AnimationStyle.Expressive).slideMs)
 	}
 
 	@Test
@@ -46,7 +50,7 @@ class PageChangeTest {
 			assertEquals(0, w.exitStartMs, "$style: the old tab fades from the first frame")
 			assertTrue(w.exitEndMs <= w.enterStartMs, "$style: the two fades never overlap")
 			assertTrue(w.exitEndMs >= 50, "$style: never a cut (${w.exitEndMs} ms)")
-			assertTrue(w.enterEndMs <= 300, "$style: a tab switch takes ${w.enterEndMs} ms")
+			assertTrue(w.enterEndMs <= 330, "$style: a tab switch takes ${w.enterEndMs} ms")
 			assertTrue(w.enterEndMs < pageFadeWindows(m).enterEndMs, "$style: shorter than a page push")
 		}
 	}
@@ -80,8 +84,9 @@ class CoverPageChangeTest {
 			// ... on the discography page's curve (the incoming page's easing of B-378's slide and fade).
 			assertEquals(m.enterEasing, timing.easing, "$style: easing")
 		}
-		assertEquals(SlideTiming(300, PageEasing.Emphasized), coverSlideTiming(pageMotionOf(AnimationStyle.Expressive)))
-		assertEquals(SlideTiming(250, PageEasing.EmphasizedDecelerate), coverSlideTiming(pageMotionOf(AnimationStyle.Quick)))
+		// I-075: Quick is the 300 ms the owner saw; Expressive is `bd39384d`'s 500 ms page change.
+		assertEquals(SlideTiming(500, PageEasing.Emphasized), coverSlideTiming(pageMotionOf(AnimationStyle.Expressive)))
+		assertEquals(SlideTiming(300, PageEasing.Emphasized), coverSlideTiming(pageMotionOf(AnimationStyle.Quick)))
 	}
 }
 

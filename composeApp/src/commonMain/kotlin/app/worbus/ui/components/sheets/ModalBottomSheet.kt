@@ -210,10 +210,12 @@ fun ModalBottomSheet(
 
 	// navi-connect I-042: the times follow the animation style; the one-motion opening above
 	// is untouched.
-	val animationStyle = koinInject<PreferenceManager>().animationStyle
+	val preferences = koinInject<PreferenceManager>()
+	val animationStyle = preferences.animationStyle
+	val motionSpeed = preferences.motionSpeed
 	@Suppress("INVISIBLE_REFERENCE")
-	LaunchedEffect(animationStyle) {
-		val motion = pageMotionOf(animationStyle)
+	LaunchedEffect(animationStyle, motionSpeed) {
+		val motion = pageMotionOf(animationStyle, motionSpeed)
 		sheetState.showMotionSpec = sheetShowMotionSpec(motion)
 		sheetState.hideMotionSpec = sheetHideMotionSpec(motion)
 	}
