@@ -28,3 +28,17 @@ class SettingsSlideTest {
 		assertTrue(asked == 3, "push, pop and predictive pop each ask both pages ($asked):\n$specs")
 	}
 }
+
+/* B-404: the album and artist pages, owned and not, say they are cover pages (pageChangeOf slides between them). */
+class CoverPageEntriesTest {
+	private val app = sourceFile("src/commonMain/kotlin/app/worbus/App.kt").readText()
+
+	@Test
+	fun albumAndArtistEntriesAreCoverPages() {
+		for (screen in listOf("CollectionDetail", "ArtistDetail", "ExternalAlbum", "ExternalArtist")) {
+			val line = app.lines().single { "entry<Screen.$screen>" in it }
+			assertTrue("coverPage" in line, line)
+		}
+		assertTrue("val coverPage = pageKindMetadata(PageKind.Cover)" in app)
+	}
+}

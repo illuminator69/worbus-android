@@ -51,3 +51,23 @@ class PageChangeTest {
 		}
 	}
 }
+
+/*
+ * B-404 (the owner's walk, 2026-11-13): the album <-> artist transition faded to white before the
+ * colours switched. B-378's fade-through (W1, 87129261) fades the album page out over the first
+ * 175 ms and the artist page in only after it, and both pages draw their own cover's colours over the
+ * backdrop: between the two fades the backdrop showed. The owner: revert the fade for that change.
+ */
+class CoverPageChangeTest {
+	@Test
+	fun albumAndArtistPagesSlideBetweenEachOther() {
+		assertEquals(PageChange.Slide, pageChangeOf(PageKind.Cover, PageKind.Cover))
+	}
+
+	@Test
+	fun aCoverPageAndAnyOtherPageKeepTheSlideAndFade() {
+		assertEquals(PageChange.SharedAxis, pageChangeOf(PageKind.Other, PageKind.Cover))
+		assertEquals(PageChange.SharedAxis, pageChangeOf(PageKind.Cover, PageKind.Other))
+		assertEquals(PageChange.Slide, pageChangeOf(PageKind.Cover, PageKind.Settings), "Settings' rule first")
+	}
+}

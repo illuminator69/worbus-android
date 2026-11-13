@@ -542,6 +542,8 @@ private fun entryProvider(
 	else listPane("root") + ListPageSceneStrategy.listPage()
 	// B-403: Settings and its pages slide, going in, between them and leaving (pageChangeOf).
 	val settingsPage = pageKindMetadata(PageKind.Settings)
+	// B-404: an album's and an artist's pages (owned or not) slide between each other, no fade.
+	val coverPage = pageKindMetadata(PageKind.Cover)
 	val imageViewMetadata = transitionSpec { ContentTransform(fadeIn(), ExitTransition.None) }
 		.plus(popTransitionSpec { ContentTransform(EnterTransition.None, fadeOut()) })
 		.plus(predictivePopTransitionSpec { ContentTransform(EnterTransition.None, fadeOut()) })
@@ -626,7 +628,7 @@ private fun entryProvider(
 		entry<Screen.PlaybackSpeed>(metadata = BottomSheetSceneStrategy.bottomSheet()) {
 			PlaybackSpeedScreen()
 		}
-		entry<Screen.CollectionDetail>(metadata = detailPane("root")) { key ->
+		entry<Screen.CollectionDetail>(metadata = detailPane("root") + coverPage) { key ->
 			CollectionDetailScreen(key.collectionId, key.tab, key.openGaps)
 		}
 		entry<Screen.SongDetailScreen>(metadata = detailPane("root")) { key ->
@@ -675,7 +677,7 @@ private fun entryProvider(
 		entry<Screen.SavedQueues> {
 			Washed { SavedQueuesScreen() }
 		}
-		entry<Screen.ArtistDetail> { key ->
+		entry<Screen.ArtistDetail>(metadata = coverPage) { key ->
 			ArtistDetailScreen(key.artist)
 		}
 
@@ -704,12 +706,12 @@ private fun entryProvider(
 		// Not overloads of the two above: those take Navidrome ids and load from
 		// Room, and keeping them strict is what makes their not-in-the-DB error
 		// path correct. An lb-bot artist or release-group has no Navidrome row.
-		entry<Screen.ExternalArtist> { key ->
+		entry<Screen.ExternalArtist>(metadata = coverPage) { key ->
 			// P4: an unowned artist has no cover of its own, so it wears the playing song's.
 			Washed { ExternalArtistScreen(key.artistMbid, key.name) }
 		}
 
-		entry<Screen.ExternalAlbum> { key ->
+		entry<Screen.ExternalAlbum>(metadata = coverPage) { key ->
 			ExternalAlbumScreen(key.rgid, key.artistMbid, key.artistName, key.title, key.artistId, key.fromLink, key.findSources)
 		}
 

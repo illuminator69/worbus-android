@@ -105,12 +105,15 @@ fun tabFadeWindows(motion: PageMotion): PageFadeWindows =
 	PageFadeWindows(0, motion.tabExitFadeMs, motion.tabExitFadeMs, motion.tabExitFadeMs + motion.tabEnterFadeMs)
 
 /**
- * What a page is, as far as the motion between two pages goes (B-403). An entry says it in its
+ * What a page is, as far as the motion between two pages goes (B-403, B-404). An entry says it in its
  * metadata ([pageKindMetadata]); an entry that says nothing is [PageKind.Other].
  */
 enum class PageKind {
 	/** Settings and every page under it. */
 	Settings,
+
+	/** A page that wears its own cover's colours: an album's or an artist's, owned or not (B-404). */
+	Cover,
 	Other
 }
 
@@ -125,11 +128,17 @@ enum class PageChange {
 
 /**
  * B-403 (the owner, 2026-11-13): Settings and its pages use the regular slide, with no fade, going in,
- * between them and leaving. Both pages move the whole width: nothing is drawn over the other page's
- * text, and the old page never vanishes at once. Everything else keeps the slide and fade.
+ * between them and leaving. B-404 (the owner, 2026-11-13): between two cover pages, album <-> artist,
+ * B-378's fade-through (W1, 87129261: the old page out over the first 175 ms, the new one in only
+ * after it) left neither page drawn for a moment, so the backdrop behind the pages showed between the
+ * two covers' colours ("fades to white before the colours switch"); that change slides too, the one
+ * page's colours pushing the other's off with no fade. Both pages move the whole width: nothing is
+ * drawn over the other page's text, and the old page never vanishes at once. Everything else keeps
+ * the slide and fade.
  */
 fun pageChangeOf(from: PageKind, to: PageKind): PageChange = when {
 	from == PageKind.Settings || to == PageKind.Settings -> PageChange.Slide
+	from == PageKind.Cover && to == PageKind.Cover -> PageChange.Slide
 	else -> PageChange.SharedAxis
 }
 
