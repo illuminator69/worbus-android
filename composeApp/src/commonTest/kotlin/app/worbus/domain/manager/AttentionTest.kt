@@ -234,7 +234,8 @@ class AttentionTest {
 			attentionPage(AttentionRead.Ok(a), a, 1L, emptyList(), toCheck, downloadsOn) as AttentionPage.Rows
 		assertEquals(16 + 25, toFixSectionCount(page(null)))
 		assertEquals(16 + 25, toFixSectionCount(page(0)))
-		assertEquals(16 + 25 + 3, toFixSectionCount(page(3)))
+		// B-406 re-walk: the artists to check are Library Matches' To check chip, not a row of this group.
+		assertEquals(16 + 25, toFixSectionCount(page(3)))
 		// lb-bot's count, not the rows it listed: a cut list still says how many there are.
 		val cut = a.copy(folders = a.folders.take(10))
 		assertEquals(16 + 25, toFixSectionCount(attentionPage(AttentionRead.Ok(cut), cut, 1L, emptyList(), null) as AttentionPage.Rows))

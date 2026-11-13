@@ -247,13 +247,14 @@ sealed interface AttentionPage {
 }
 
 /**
- * B-406: the "To fix" section's number, in the headline's units: lb-bot's imports and folders (its
- * counts, not the rows listed), plus the artists to check while their row shows. It counted rows, so
- * one row standing for 16 imports was 1.
+ * B-406: the "Downloaded, to file" group's number, in the headline's units: lb-bot's imports and folders
+ * (its counts, not the rows listed). It counted rows, so one row standing for 16 imports was 1. The
+ * artists to check were counted too while their row showed; since the re-walk's ruling they are Library
+ * Matches' own To check chip and not listed in the To fix section at all.
  */
 fun toFixSectionCount(page: AttentionPage.Rows): Int =
 	// Review m9: never fewer folders than are listed (an lb-bot whose counts lack `folders` reads 0).
-	page.imports + maxOf(page.foldersCounted, page.folders.size) + (page.artistsToCheck?.takeIf { it > 0 } ?: 0)
+	page.imports + maxOf(page.foldersCounted, page.folders.size)
 
 /**
  * The page, from the last read, the last good answer ([last], read at [lastAt]) and the ledger.

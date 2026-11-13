@@ -1,5 +1,9 @@
 package app.worbus.ui.screens.attention
 
+import worbus.composeapp.generated.resources.attention_section_to_file
+import androidx.compose.foundation.lazy.items
+import kotlinx.coroutines.Job
+import androidx.compose.runtime.Stable
 import app.worbus.ui.components.common.ROW_PLACEHOLDERS
 import app.worbus.ui.components.common.RowPlaceholder
 import org.jetbrains.compose.resources.StringResource
@@ -139,21 +143,44 @@ import app.worbus.ui.components.sheets.lbUnavailableRes
 import app.worbus.ui.components.sheets.rememberLbTooOld
 
 /**
- * Needs attention (P6): lb-bot's own "to fix", the count behind the avatar's dot, in two sections.
+ * The **To fix** section of Library Matches (B-406, the owner's ruling of 2026-11-13). It was the page
+ * "Needs attention" (P6), a menu entry of its own, which the owner found redundant: lb-bot's own "to fix",
+ * the count behind the avatar's dot, now a chip of Library Matches beside To check.
  *
- * *Albums*: failed gaps and failed whole-album requests, then the albums waiting on a pick. A tap
- * unfolds a row in place into the fill vocabulary's words; a row this device's ledger holds carries
- * the vocabulary's buttons (Retry, Try another source, Allow MP3, Add to wishlist, Dismiss through
- * the Downloads page's handlers), a row only lb-bot knows carries Open album alone. *To fix*: folders
- * waiting to be filed, as what they were identified as and how many files (never a name or a path),
- * each with "Open in lb-bot" only, since filing moves and retags files; then the artists to check,
- * which open Library Matches. Nothing here writes anything new to lb-bot.
+ * What it lists, as the page did: lb-bot's headline ("9 to fix") and notices; *Albums*, failed gaps and
+ * failed whole-album requests, then the albums waiting on a pick (a tap unfolds a row into the fill
+ * vocabulary's words; a row this device's ledger holds carries the vocabulary's buttons through the
+ * Downloads page's handlers, a row only lb-bot knows Open album alone); *Downloaded, to file*: the imports
+ * lb-bot could not finish and the folders waiting to be filed, each with "Open in lb-bot" only, since
+ * filing moves and retags files; this phone's own rows lb-bot no longer lists; and the link to lb-bot's
+ * own list. The artists to check are not repeated here: they are the page's To check chip. Nothing here
+ * writes anything new to lb-bot.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Stable
+class ToFixUi(
+	val page: AttentionPage,
+	val now: State<Long>,
+	val open: Set<String>,
+	val onToggle: (String) -> Unit,
+	val wishlistAvailable: (AttentionRow) -> Boolean,
+	val downloadsOn: Boolean,
+	val webUrl: String,
+	val activeAddress: String?,
+	val onAction: (FillButton, LbFillEntry, AttentionRow) -> Unit,
+	val onOpenAlbum: (AttentionRow) -> Unit,
+	val onOpenUri: (String) -> Unit,
+	/** Read lb-bot's to-fix again (on a pull). */
+	val refresh: () -> Job
+)
+
+/**
+ * The section's state, gathered once by the page that holds it: lb-bot's to-fix (read on opening), the
+ * row actions (the Downloads page's own, so they run to completion if the page is left), and which rows
+ * are unfolded (kept across a refresh and a rotation). Action messages go to [snackbar].
+ */
 @Composable
-fun AttentionScreen() {
+fun rememberToFixUi(snackbar: SnackbarHostState): ToFixUi {
 	val viewModel = koinViewModel<AttentionViewModel>()
-	// The row actions are the Downloads page's own (they run to completion if the page is left).
 	val actions = koinViewModel<DownloadCenterViewModel>()
 	val page by viewModel.page.collectAsStateWithLifecycle()
 	val webUrl by viewModel.webUrl.collectAsStateWithLifecycle()
@@ -161,22 +188,14 @@ fun AttentionScreen() {
 	val wishlisted by actions.wishlisted.collectAsStateWithLifecycle()
 	val downloadsOn by viewModel.downloadsOn.collectAsStateWithLifecycle()
 	val backStack = LocalNavStack.current
-	val preferenceManager = koinInject<PreferenceManager>()
-	val platformContext = LocalPlatformContext.current
 	val uriHandler = LocalUriHandler.current
-	val scope = rememberCoroutineScope()
 	val now = rememberFillClock()
-
-	var refreshing by remember { mutableStateOf(false) }
-	// Which rows are unfolded, by row id: kept across a refresh and a rotation.
 	var open by rememberSaveable { mutableStateOf(setOf<String>()) }
 
-	val snackbar = remember { SnackbarHostState() }
 	LaunchedEffect(Unit) { actions.actionMessages.collect { snackbar.showSnackbar(it) } }
 	LaunchedEffect(Unit) { viewModel.refresh() }
 
-	val openLb = { path: String -> if (webUrl.isNotBlank()) runCatching { uriHandler.openUri("$webUrl/#/$path") } }
-	val openAlbum = { row: AttentionRow ->
+	val openAlbum: (AttentionRow) -> Unit = { row ->
 		val a = row.album
 		when {
 			// A gap is an album the library partly has: its own page, with the gaps box open.
@@ -188,161 +207,132 @@ fun AttentionScreen() {
 			else -> Unit
 		}
 	}
-
-	Scaffold(
-		topBar = { NestedTopBar(title = { Text(stringResource(Res.string.title_needs_attention)) }) },
-		bottomBar = {
-			val scrollManager = LocalBottomBarScrollManager.current
-			if (!platformContext.isLandscape() &&
-				preferenceManager.bottomBarVisibilityMode == BottomBarVisibilityMode.AllScreens
-			) {
-				RootBottomBar(scrolled = scrollManager.isTriggered)
+	return ToFixUi(
+		page = page,
+		now = now,
+		open = open,
+		onToggle = { id -> open = if (id in open) open - id else open + id },
+		wishlistAvailable = { row -> actions.wishlistSupported && row.entry?.key !in wishlisted },
+		downloadsOn = downloadsOn,
+		webUrl = webUrl,
+		activeAddress = activeAddress,
+		onAction = { button, entry, row ->
+			when (button) {
+				FillButton.RETRY -> actions.retryFill(entry.key)
+				FillButton.TRY_ANOTHER -> actions.retryAnotherSource(entry.key)
+				FillButton.CANCEL -> actions.cancelFill(entry.key)
+				FillButton.ALLOW_MP3 -> actions.allowMp3AndRetry(entry)
+				FillButton.WISHLIST -> actions.addToWishlist(entry)
+				FillButton.DISMISS -> actions.dismissFill(entry.key)
+				FillButton.OPEN_ALBUM -> openAlbum(row)
 			}
 		},
-		snackbarHost = { SnackbarHost(snackbar) }
-	) { innerPadding ->
-		PullToRefreshBox(
-			isRefreshing = refreshing,
-			onRefresh = {
-				scope.launch {
-					refreshing = true
-					viewModel.refresh().join()
-					refreshing = false
+		onOpenAlbum = openAlbum,
+		onOpenUri = { uri -> runCatching { uriHandler.openUri(uri) } },
+		refresh = { viewModel.refresh() }
+	)
+}
+
+/** The chip's count: lb-bot's to-fix number, the headline's and the avatar's, once an answer is known. */
+fun toFixChipCount(page: AttentionPage): Int? = (page as? AttentionPage.Rows)?.toFix
+
+/** The section's rows, as items of the holding page's list. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+fun LazyListScope.toFixItems(ui: ToFixUi) {
+	val openLb = { path: String -> if (ui.webUrl.isNotBlank()) ui.onOpenUri("${ui.webUrl}/#/$path") }
+	when (val p = ui.page) {
+		// Waiting rows under the title's place, then lb-bot's rows (audit L1-05).
+		AttentionPage.Loading -> items(ROW_PLACEHOLDERS, key = { "fix:placeholder:$it" }) {
+			RowPlaceholder(Modifier.padding(bottom = SegmentedListItemDefaults.SegmentedGap))
+		}
+		is AttentionPage.Rows -> {
+			item(key = "fix:head") {
+				AttentionHead(p, Modifier.animateItem())
+			}
+			// Re-walk NM2: only of a list lb-bot answered; a failed read says its one notice alone.
+			if (attentionEmptyShown(p)) {
+				item(key = "fix:empty") {
+					ContentUnavailable(
+						modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp).animateItem(),
+						icon = Icons.Outlined.Check,
+						label = stringResource(Res.string.attention_empty)
+					)
 				}
-			},
-			modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
-		) {
-			when (val p = page) {
-				// Waiting rows under the title's place, then lb-bot's rows (audit L1-05).
-				AttentionPage.Loading -> Column(
-					Modifier.fillMaxSize().padding(innerPadding.withoutTop()).padding(horizontal = 16.dp, vertical = 8.dp),
-					verticalArrangement = Arrangement.spacedBy(SegmentedListItemDefaults.SegmentedGap)
-				) {
-					repeat(ROW_PLACEHOLDERS) { RowPlaceholder() }
+			}
+			val albumRows: LazyListScope.(String, StringResource, List<AttentionRow>) -> Unit = { key, title, rows ->
+				if (rows.isNotEmpty()) {
+					item(key = "fix:$key-header") {
+						GroupHeader(stringResource(title), count = rows.size, modifier = Modifier.animateItem())
+					}
+					itemsIndexed(rows, key = { _, row -> "fix:${row.id}" }) { index, row ->
+						AlbumRow(
+							row = row,
+							now = ui.now,
+							shapes = segmentedShapes(index, rows.size),
+							open = row.id in ui.open,
+							onToggle = { ui.onToggle(row.id) },
+							wishlistAvailable = ui.wishlistAvailable(row),
+							downloadsOn = ui.downloadsOn,
+							onAction = { button, entry -> ui.onAction(button, entry, row) },
+							onOpenAlbum = { ui.onOpenAlbum(row) },
+							modifier = Modifier
+								.padding(bottom = SegmentedListItemDefaults.SegmentedGap)
+								.animateItem()
+						)
+					}
 				}
-				is AttentionPage.Rows -> LazyColumn(
-					modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-					contentPadding = innerPadding.withoutTop() + PaddingValues(top = 4.dp, bottom = 24.dp),
-					verticalArrangement = Arrangement.spacedBy(SegmentedListItemDefaults.SegmentedGap)
-				) {
-					item(key = "head") {
-						AttentionHead(p, Modifier.animateItem())
+			}
+			albumRows("albums", Res.string.attention_section_albums, p.albums)
+			// Worbus P4: lb-bot's failed imports, one row linking to lb-bot's own list (design §6.5).
+			val imports = importsRow(p, lbPageLink(ui.webUrl, ui.activeAddress, ::isPrivateHubAddress))
+			val importRows = if (imports != null) 1 else 0
+			val fileRows = importRows + p.folders.size
+			if (fileRows > 0) {
+				item(key = "fix:files-header") {
+					GroupHeader(
+						stringResource(Res.string.attention_section_to_file),
+						// B-406: what the rows stand for (lb-bot's imports and folders), not the rows.
+						count = toFixSectionCount(p),
+						modifier = Modifier.animateItem()
+					)
+				}
+				if (imports != null) {
+					item(key = "fix:imports") {
+						ImportsRowItem(
+							row = imports,
+							shapes = segmentedShapes(0, fileRows),
+							onOpen = ui.onOpenUri,
+							modifier = Modifier
+								.padding(bottom = SegmentedListItemDefaults.SegmentedGap)
+								.animateItem()
+						)
 					}
-					val toCheck = p.artistsToCheck?.takeIf { it > 0 }
-					// Re-walk NM2: only of a list lb-bot answered; a failed read says its one notice alone.
-					if (attentionEmptyShown(p)) {
-						item(key = "empty") {
-							ContentUnavailable(
-								modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp).animateItem(),
-								icon = Icons.Outlined.Check,
-								label = stringResource(Res.string.attention_empty)
-							)
-						}
-					}
-					val albumRows: LazyListScope.(String, StringResource, List<AttentionRow>) -> Unit = { key, title, rows ->
-						if (rows.isNotEmpty()) {
-							item(key = "$key-header") {
-								GroupHeader(stringResource(title), count = rows.size, modifier = Modifier.animateItem())
-							}
-							itemsIndexed(rows, key = { _, row -> row.id }) { index, row ->
-								AlbumRow(
-									row = row,
-									now = now,
-									shapes = segmentedShapes(index, rows.size),
-									open = row.id in open,
-									onToggle = { open = if (row.id in open) open - row.id else open + row.id },
-									wishlistAvailable = actions.wishlistSupported && row.entry?.key !in wishlisted,
-									downloadsOn = downloadsOn,
-									onAction = { button, entry ->
-										when (button) {
-											FillButton.RETRY -> actions.retryFill(entry.key)
-											FillButton.TRY_ANOTHER -> actions.retryAnotherSource(entry.key)
-											FillButton.CANCEL -> actions.cancelFill(entry.key)
-											FillButton.ALLOW_MP3 -> actions.allowMp3AndRetry(entry)
-											FillButton.WISHLIST -> actions.addToWishlist(entry)
-											FillButton.DISMISS -> actions.dismissFill(entry.key)
-											FillButton.OPEN_ALBUM -> openAlbum(row)
-										}
-									},
-									onOpenAlbum = { openAlbum(row) },
-									modifier = Modifier.animateItem()
-								)
-							}
-						}
-					}
-					albumRows("albums", Res.string.attention_section_albums, p.albums)
-					// Worbus P4: lb-bot's failed imports, one row linking to lb-bot's own list (design §6.5).
-					val imports = importsRow(p, lbPageLink(webUrl, activeAddress, ::isPrivateHubAddress))
-					val importRows = if (imports != null) 1 else 0
-					val toFixRows = importRows + p.folders.size + (if (toCheck != null) 1 else 0)
-					if (toFixRows > 0) {
-						item(key = "fix-header") {
-							GroupHeader(
-								stringResource(Res.string.attention_section_to_fix),
-								// B-406: what the rows stand for, in the headline's units; not the rows.
-								count = toFixSectionCount(p),
-								modifier = Modifier.animateItem()
-							)
-						}
-						if (imports != null) {
-							item(key = "imports") {
-								ImportsRowItem(
-									row = imports,
-									shapes = segmentedShapes(0, toFixRows),
-									onOpen = { link -> runCatching { uriHandler.openUri(link) } },
-									modifier = Modifier.animateItem()
-								)
-							}
-						}
-						itemsIndexed(p.folders, key = { _, f -> "folder:${f.id}" }) { index, folder ->
-							FolderRow(
-								folder = folder,
-								shapes = segmentedShapes(importRows + index, toFixRows),
-								open = "folder:${folder.id}" in open,
-								onToggle = {
-									val id = "folder:${folder.id}"
-									open = if (id in open) open - id else open + id
-								},
-								canOpenInLbBot = webUrl.isNotBlank(),
-								onOpenInLbBot = { openLb("place/${folder.id}") },
-								modifier = Modifier.animateItem()
-							)
-						}
-						if (toCheck != null) {
-							item(key = "artists-to-check") {
-								SegmentedListItem(
-									onClick = { backStack.add(Screen.LibraryMatches) },
-									modifier = Modifier.animateItem(),
-									shapes = segmentedShapes(toFixRows - 1, toFixRows),
-									colors = fillRowColors(),
-									contentPadding = SongRowDefaults.ContentPadding,
-									verticalAlignment = Alignment.CenterVertically,
-									leadingContent = {
-										Box(Modifier.size(LibraryRowDefaults.ArtSize), contentAlignment = Alignment.Center) {
-											Icon(Icons.Brand.Musicbrainz, contentDescription = null)
-										}
-									},
-									supportingContent = {
-										Text(stringResource(Res.string.attention_artists_to_check_hint), maxLines = 2)
-									}
-								) {
-									Text(pluralStringResource(Res.plurals.attention_artists_to_check, toCheck, toCheck))
-								}
-							}
-						}
-					}
-					// L4b-02: this phone's own rows lb-bot no longer lists, apart from lb-bot's and its count.
-					albumRows("device-only", Res.string.attention_device_only, p.deviceOnly)
-					if (webUrl.isNotBlank()) {
-						item(key = "open-lb") {
-							TextButton(
-								onClick = { openLb("needs/fix") },
-								modifier = Modifier.padding(top = 8.dp).animateItem()
-							) {
-								Icon(Icons.Outlined.Link, contentDescription = null, modifier = Modifier.size(18.dp))
-								Text(stringResource(Res.string.action_open_in_lbbot), modifier = Modifier.padding(start = 8.dp))
-							}
-						}
+				}
+				itemsIndexed(p.folders, key = { _, f -> "fix:folder:${f.id}" }) { index, folder ->
+					val id = "folder:${folder.id}"
+					FolderRow(
+						folder = folder,
+						shapes = segmentedShapes(importRows + index, fileRows),
+						open = id in ui.open,
+						onToggle = { ui.onToggle(id) },
+						canOpenInLbBot = ui.webUrl.isNotBlank(),
+						onOpenInLbBot = { openLb("place/${folder.id}") },
+						modifier = Modifier
+							.padding(bottom = SegmentedListItemDefaults.SegmentedGap)
+							.animateItem()
+					)
+				}
+			}
+			// L4b-02: this phone's own rows lb-bot no longer lists, apart from lb-bot's and its count.
+			albumRows("device-only", Res.string.attention_device_only, p.deviceOnly)
+			if (ui.webUrl.isNotBlank()) {
+				item(key = "fix:open-lb") {
+					TextButton(
+						onClick = { openLb("needs/fix") },
+						modifier = Modifier.padding(top = 8.dp).animateItem()
+					) {
+						Icon(Icons.Outlined.Link, contentDescription = null, modifier = Modifier.size(18.dp))
+						Text(stringResource(Res.string.action_open_in_lbbot), modifier = Modifier.padding(start = 8.dp))
 					}
 				}
 			}

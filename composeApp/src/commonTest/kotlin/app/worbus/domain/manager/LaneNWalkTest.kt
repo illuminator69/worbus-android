@@ -106,6 +106,6 @@ class LaneNWalkTest {
 		val badged = menuGroupSlots(tools(admin = true), every.copy(entries = every.entries.map {
 			if (it is AvatarMenuEntry.Link) it.copy(badge = null) else it
 		}))
-		assertEquals(3, (badged.first { it.entry.id == AvatarMenuIds.ATTENTION }.entry as AvatarMenuEntry.Link).badge)
+		assertEquals(3, (badged.first { it.entry.id == AvatarMenuIds.LIBRARY_MATCHES }.entry as AvatarMenuEntry.Link).badge)
 	}
 }

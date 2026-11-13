@@ -12,24 +12,39 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /*
- * B-406 VM walk (2026-11-13, RESULTS-owner-walk-vmcheck-2026-11-13.md item 14): the "To fix" header counts the
- * artists-to-check row (the contract: imports + folders, plus the artists to check while that row shows), and the
- * row itself said "Worth a look in Library Matches. Not counted." The row and the header must agree.
+ * B-406 (the owner's re-walk ruling, 2026-11-13): "To fix" is a chip of Library Matches, and the separate
+ * Needs attention page and its menu entry are gone. Nothing reachable before is lost:
+ * - the folders and imports to file, the failed albums and the albums waiting on a pick, and this phone's
+ *   own rows are the To fix chip's items (`toFixItems`);
+ * - the artists to check are Library Matches' own To check chip, so the To fix section no longer repeats
+ *   them as a row, and its "Downloaded, to file" count no longer counts them;
+ * - the old Needs attention key (a saved back stack, a link) opens Library Matches on To fix.
  */
 class ToFixArtistsRowCopyTest {
-	private val strings = sourceFile("src/commonMain/composeResources/values/strings.xml").readText()
-
-	private fun string(name: String) =
-		Regex("""<string name="$name">(.*?)</string>""").find(strings)?.groupValues?.get(1) ?: error("no $name")
+	private val section = sourceFile("src/commonMain/kotlin/app/worbus/ui/screens/attention/AttentionScreen.kt").readText()
+	private val app = sourceFile("src/commonMain/kotlin/app/worbus/App.kt").readText()
+	private val matches = sourceFile("src/commonMain/kotlin/app/worbus/ui/screens/matches/LibraryMatchesScreen.kt").readText()
 
 	@Test
-	fun theArtistsRowDoesNotSayItIsNotCounted() {
+	fun theFilesGroupCountsImportsAndFoldersOnly() {
 		val answer = LbAttention(version = 1, counts = AttentionCounts(imports = 2, folders = 3))
 		val page = attentionPage(AttentionRead.Ok(answer), answer, 1L, emptyList(), artistsToCheck = 2) as AttentionPage.Rows
-		// The header counts the row's two artists ...
-		assertEquals(2 + 3 + 2, toFixSectionCount(page))
-		// ... so the row must not say they are not counted.
-		val hint = string("attention_artists_to_check_hint")
-		assertTrue("not counted" !in hint.lowercase(), "the artists row says: $hint")
+		assertEquals(2 + 3, toFixSectionCount(page))
+	}
+
+	@Test
+	fun theSectionListsWhatThePageListedButTheArtists() {
+		val items = section.substringAfter("fun LazyListScope.toFixItems(").substringBefore("\n}\n")
+		for (part in listOf("AttentionHead(", "albumRows(\"albums\"", "ImportsRowItem(", "FolderRow(", "albumRows(\"device-only\"", "openLb(\"needs/fix\")")) {
+			assertTrue(part in items, "the To fix section lists $part")
+		}
+		assertTrue("artists-to-check" !in items && "Screen.LibraryMatches" !in items, "the artists to check are the To check chip")
+		assertTrue("fun AttentionScreen(" !in section, "no page of its own")
+	}
+
+	@Test
+	fun libraryMatchesHoldsItAndTheOldKeyOpensIt() {
+		assertTrue("MatchesSection.TO_FIX -> toFixItems(toFix)" in matches)
+		assertTrue("Washed { LibraryMatchesScreen(opening = MatchesSection.TO_FIX) }" in app)
 	}
 }

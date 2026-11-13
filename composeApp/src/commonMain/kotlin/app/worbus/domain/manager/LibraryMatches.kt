@@ -10,17 +10,23 @@ package app.worbus.domain.manager
  * Worbus for desktop's Library Matches page is the twin: the same four sections under the same names.
  */
 
-/** The page's sections, in the order they are offered. */
-enum class MatchesSection { TO_CHECK, ARTISTS, ALBUMS, MERGES }
+/**
+ * The page's sections, in the order they are offered. B-406 (the owner's ruling, 2026-11-13): **To fix**,
+ * lb-bot's own to-fix list (failed albums, albums waiting on a pick, downloaded folders and imports to
+ * file), which was the separate "Needs attention" page.
+ */
+enum class MatchesSection { TO_FIX, TO_CHECK, ARTISTS, ALBUMS, MERGES }
 
 /**
  * The sections on offer. **Artists is always one**: the override list is what the page is gated
  * on. The other three ride the same body and each may be absent from it — an lb-bot that
  * predates the list, or a hub that does not carry its route — and an absent list is no section,
- * not an empty one.
+ * not an empty one. To fix is offered to an admin ([toFix]): lb-bot answers its to-fix list to
+ * admins only, so for anyone else it would be a list that never loads.
  */
-internal fun matchesSections(toCheck: Boolean, albums: Boolean, merges: Boolean): List<MatchesSection> =
+internal fun matchesSections(toCheck: Boolean, albums: Boolean, merges: Boolean, toFix: Boolean = false): List<MatchesSection> =
 	listOfNotNull(
+		MatchesSection.TO_FIX.takeIf { toFix },
 		MatchesSection.TO_CHECK.takeIf { toCheck },
 		MatchesSection.ARTISTS,
 		MatchesSection.ALBUMS.takeIf { albums },
@@ -29,14 +35,17 @@ internal fun matchesSections(toCheck: Boolean, albums: Boolean, merges: Boolean)
 
 /**
  * The section shown. The user's own choice while it is still on offer; otherwise the first with
- * something to do — **To check when it has rows, else Artists**.
+ * something to do — **To fix when lb-bot counts something to fix (B-406), else To check when it has
+ * rows, else Artists**.
  */
 internal fun matchesSectionToShow(
 	chosen: MatchesSection?,
 	offered: List<MatchesSection>,
-	toCheckCount: Int
+	toCheckCount: Int,
+	toFixCount: Int = 0
 ): MatchesSection = when {
 	chosen != null && chosen in offered -> chosen
+	toFixCount > 0 && MatchesSection.TO_FIX in offered -> MatchesSection.TO_FIX
 	toCheckCount > 0 && MatchesSection.TO_CHECK in offered -> MatchesSection.TO_CHECK
 	else -> MatchesSection.ARTISTS
 }
@@ -44,6 +53,7 @@ internal fun matchesSectionToShow(
 /** A section's chip: its name, and its count once the list has been loaded ([count] non-null). */
 internal fun matchesSectionLabel(section: MatchesSection, count: Int?): String {
 	val name = when (section) {
+		MatchesSection.TO_FIX -> "To fix"
 		MatchesSection.TO_CHECK -> "To check"
 		MatchesSection.ARTISTS -> "Artists"
 		MatchesSection.ALBUMS -> "Albums"

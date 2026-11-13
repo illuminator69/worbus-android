@@ -42,17 +42,17 @@ class HubRolesTest {
 		// welcome.user says alice is an admin: her admin actions are there.
 		var roles = hubRolesOf(alice, signedIn = true)
 		assertTrue(adminGated(true, roles))
-		assertTrue(AvatarMenuIds.ATTENTION in tools(roles))
+		assertTrue(AvatarMenuIds.LIBRARY_MATCHES in tools(roles))
 		// The hub demotes her while the socket is idle: `{"t":"user", …}` replaces the user in place.
 		val demoted = hubUserFrameOf(frame("""{"t":"user","user":{"name":"alice","admin":false,"primary":false}}"""))
 		assertEquals(HubUser("alice", false, false), demoted)
 		roles = hubRolesOf(demoted, signedIn = true)
 		assertFalse(adminGated(true, roles), "Fix album match and the like go")
-		assertFalse(AvatarMenuIds.ATTENTION in tools(roles))
+		assertFalse(AvatarMenuIds.LIBRARY_MATCHES in tools(roles))
 		assertEquals(LbDownloads.OFF, downloadsFor(roles, LbDownloads.ON))
 		// And back: promoted, they return.
 		roles = hubRolesOf(hubUserFrameOf(frame("""{"t":"user","user":{"name":"alice","admin":true,"primary":false}}""")), signedIn = true)
-		assertTrue(AvatarMenuIds.ATTENTION in tools(roles))
+		assertTrue(AvatarMenuIds.LIBRARY_MATCHES in tools(roles))
 		// A malformed frame changes nothing (the caller ignores a null).
 		assertNull(hubUserFrameOf(frame("""{"t":"user","user":{"name":"alice"}}""")))
 	}
@@ -62,7 +62,6 @@ class HubRolesTest {
 		val roles = hubRolesOf(bob, signedIn = true)
 		val menu = tools(roles)
 		// Library tools: one assertion per gated row.
-		assertFalse(AvatarMenuIds.ATTENTION in menu, "Needs attention")
 		assertFalse(AvatarMenuIds.SOURCE_HISTORY in menu, "Source history")
 		assertFalse(AvatarMenuIds.LIBRARY_MATCHES in menu, "Library Matches")
 		assertFalse(AvatarMenuIds.DUPLICATES in menu, "Duplicates and trash")
@@ -135,7 +134,7 @@ class HubRolesTest {
 		assertEquals(LbAccess.OPEN, effect.access, "lb-bot itself is still open to them")
 		// What demotion does on screen: the actions are absent.
 		val after = HubRoles.EVERYTHING.copy(admin = false)
-		assertFalse(AvatarMenuIds.ATTENTION in tools(after))
+		assertFalse(AvatarMenuIds.LIBRARY_MATCHES in tools(after))
 		// primary_only is not admin_only, and is as silent (review I-2).
 		assertFalse(lbRefusalEffect(LbAccess.OPEN, 403, "primary_only").demoteAdmin)
 		assertTrue(lbRefusalEffect(LbAccess.OPEN, 403, "primary_only").silent)

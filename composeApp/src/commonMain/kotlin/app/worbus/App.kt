@@ -137,7 +137,7 @@ import app.worbus.ui.navigation.isRootPage
 import app.worbus.ui.navigation.navSavedStateConfiguration
 import app.worbus.ui.navigation.normalizedStack
 import app.worbus.ui.screens.downloads.DownloadsSection
-import app.worbus.ui.screens.attention.AttentionScreen
+import app.worbus.domain.manager.MatchesSection
 import app.worbus.ui.screens.wishlist.SourceHistoryOrWishlist
 import app.worbus.ui.screens.wishlist.WishlistScreen
 import app.worbus.domain.manager.SourceHistorySection
@@ -665,8 +665,10 @@ private fun entryProvider(
 				}
 			}
 		}
+		// B-406 (the owner's ruling, 2026-11-13): "Needs attention" is Library Matches' To fix chip. The key
+		// stays, so a saved back stack or a link that names it opens the page on that chip.
 		entry<Screen.Attention> {
-			Washed { AttentionScreen() }
+			Washed { LibraryMatchesScreen(opening = MatchesSection.TO_FIX) }
 		}
 		entry<Screen.SourceHistory> { key ->
 			// Worbus P1: while downloading is off, a saved stack's Source history opens the Wishlist.

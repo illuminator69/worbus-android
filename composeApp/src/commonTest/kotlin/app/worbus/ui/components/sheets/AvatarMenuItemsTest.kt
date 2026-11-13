@@ -31,7 +31,7 @@ class AvatarMenuItemsTest {
 		// What needs no downloading stays, in its order, with no gap.
 		assertEquals(
 			listOf(
-				AvatarMenuIds.ATTENTION, AvatarMenuIds.WISHLIST, AvatarMenuIds.LIBRARY_MATCHES,
+				AvatarMenuIds.LIBRARY_MATCHES, AvatarMenuIds.WISHLIST,
 				AvatarMenuIds.DUPLICATES, AvatarMenuIds.LOGS
 			),
 			tools
@@ -43,7 +43,7 @@ class AvatarMenuItemsTest {
 		val tools = menu(webUrl = "http://lb:8899", downloadsOn = true).group(AvatarMenuIds.LIBRARY_TOOLS).entries.ids()
 		assertEquals(
 			listOf(
-				AvatarMenuIds.ATTENTION, AvatarMenuIds.SOURCE_HISTORY, AvatarMenuIds.WISHLIST, AvatarMenuIds.LIBRARY_MATCHES,
+				AvatarMenuIds.LIBRARY_MATCHES, AvatarMenuIds.SOURCE_HISTORY, AvatarMenuIds.WISHLIST,
 				AvatarMenuIds.DUPLICATES, AvatarMenuIds.SOURCE_RULES, AvatarMenuIds.LOGS
 			),
 			tools
@@ -101,7 +101,7 @@ class AvatarMenuItemsTest {
 		assertFalse(AvatarMenuIds.ATTENTION in top)
 		assertFalse(AvatarMenuIds.SOURCE_HISTORY in top)
 		assertEquals(
-			listOf(AvatarMenuIds.ATTENTION, AvatarMenuIds.SOURCE_HISTORY, AvatarMenuIds.WISHLIST, AvatarMenuIds.LIBRARY_MATCHES),
+			listOf(AvatarMenuIds.LIBRARY_MATCHES, AvatarMenuIds.SOURCE_HISTORY, AvatarMenuIds.WISHLIST),
 			menu().group(AvatarMenuIds.LIBRARY_TOOLS).entries.ids()
 		)
 	}
@@ -110,27 +110,33 @@ class AvatarMenuItemsTest {
 	fun theRareToolsAreThereOnlyWithAWebUrlInOrder() {
 		assertEquals(
 			listOf(
-				AvatarMenuIds.ATTENTION, AvatarMenuIds.SOURCE_HISTORY, AvatarMenuIds.WISHLIST, AvatarMenuIds.LIBRARY_MATCHES,
+				AvatarMenuIds.LIBRARY_MATCHES, AvatarMenuIds.SOURCE_HISTORY, AvatarMenuIds.WISHLIST,
 				AvatarMenuIds.DUPLICATES, AvatarMenuIds.SOURCE_RULES, AvatarMenuIds.LOGS
 			),
 			menu(webUrl = "http://lb:8899").group(AvatarMenuIds.LIBRARY_TOOLS).entries.ids()
 		)
-		assertEquals(4, menu(webUrl = "  ").group(AvatarMenuIds.LIBRARY_TOOLS).entries.size)
+		assertEquals(3, menu(webUrl = "  ").group(AvatarMenuIds.LIBRARY_TOOLS).entries.size)
 		val items = menu(webUrl = "http://lb:8899")
 		assertEquals("library/cleanup", items.external(AvatarMenuIds.DUPLICATES).path)
 		assertEquals("system/sources", items.external(AvatarMenuIds.SOURCE_RULES).path)
 		assertEquals("system/logs", items.external(AvatarMenuIds.LOGS).path)
 	}
 
+	/*
+	 * B-406 (the owner's re-walk ruling, 2026-11-13): "Needs attention" felt like a redundant menu; its list is
+	 * Library Matches' To fix chip. Library Matches takes its place at the top of Library tools, with its count.
+	 */
 	@Test
-	fun needsAttentionShowsItsCount() {
-		assertEquals(20, menu(attention = 20).link(AvatarMenuIds.ATTENTION).badge)
-		assertEquals(1, menu(attention = 1).link(AvatarMenuIds.ATTENTION).badge)
+	fun needsAttentionIsNoMenuOfItsOwnLibraryMatchesCarriesItsCount() {
+		assertFalse(AvatarMenuIds.ATTENTION in menu(attention = 20).flat().ids(), "no Needs attention row")
+		assertEquals(20, menu(attention = 20).link(AvatarMenuIds.LIBRARY_MATCHES).badge)
+		assertEquals(1, menu(attention = 1).link(AvatarMenuIds.LIBRARY_MATCHES).badge)
+		assertEquals(AvatarMenuIds.LIBRARY_MATCHES, menu().group(AvatarMenuIds.LIBRARY_TOOLS).entries.first().id)
 	}
 
 	@Test
 	fun nothingNeedingAttentionShowsNoBadgeRatherThanAZero() {
-		assertNull(menu(attention = 0).link(AvatarMenuIds.ATTENTION).badge)
+		assertNull(menu(attention = 0).link(AvatarMenuIds.LIBRARY_MATCHES).badge)
 		assertNull(menu(attention = 0).link(AvatarMenuIds.SOURCE_HISTORY).badge)
 	}
 
@@ -174,7 +180,6 @@ class AvatarMenuItemsTest {
 	@Test
 	fun everyRowGoesWhereTheBoardSays() {
 		val items = menu()
-		assertEquals(Screen.Attention, items.link(AvatarMenuIds.ATTENTION).destination)
 		assertEquals(Screen.SourceHistory(), items.link(AvatarMenuIds.SOURCE_HISTORY).destination)
 		assertEquals(Screen.Statistics(nested = true), items.link(AvatarMenuIds.STATISTICS).destination)
 		assertEquals(Screen.SavedQueues, items.link(AvatarMenuIds.SAVED_QUEUES).destination)

@@ -1,5 +1,10 @@
 package app.worbus.ui.screens.matches
 
+import app.worbus.ui.screens.attention.toFixChipCount
+import app.worbus.ui.screens.attention.toFixItems
+import app.worbus.ui.screens.attention.rememberToFixUi
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -113,9 +118,20 @@ import app.worbus.ui.screens.matches.viewmodels.LibraryMatchesViewModel
  * and "the copy loaded last" are still said as they were.
  */
 @Composable
-fun LibraryMatchesScreen() {
+fun LibraryMatchesScreen(
+	/**
+	 * B-406: the section it opens on before the user picks one: To fix for the old "Needs attention"
+	 * entry (a saved back stack, a link). Null is the page's own rule ([matchesSectionToShow]).
+	 */
+	opening: MatchesSection? = null
+) {
 	val viewModel = koinViewModel<LibraryMatchesViewModel>()
 	val lbBot = koinInject<LbBotManager>()
+	// B-406 (the owner's ruling, 2026-11-13): lb-bot's to-fix list, the "Needs attention" page that was, is
+	// this page's To fix chip. Offered to an admin, to whom lb-bot answers it.
+	val roles by lbBot.roles.collectAsStateWithLifecycle()
+	val snackbar = remember { SnackbarHostState() }
+	val toFix = rememberToFixUi(snackbar)
 	val backStack = LocalNavStack.current
 	val hubSaysNoLbBot by viewModel.hubSaysNoLbBot.collectAsStateWithLifecycle()
 
@@ -149,9 +165,9 @@ fun LibraryMatchesScreen() {
 	val overridesKnown = known(overrides.data)
 	val matchesKnown = known(matches.data)
 
-	val offered = matchesSections(toCheck = matches.shown, albums = albumRows.shown, merges = mergeRows.shown)
-	var chosen by rememberSaveable { mutableStateOf<MatchesSection?>(null) }
-	val section = matchesSectionToShow(chosen, offered, if (matchesKnown) matches.rows.size else 0)
+	val offered = matchesSections(toCheck = matches.shown, albums = albumRows.shown, merges = mergeRows.shown, toFix = roles.admin)
+	var chosen by rememberSaveable { mutableStateOf(opening) }
+	val section = matchesSectionToShow(chosen, offered, if (matchesKnown) matches.rows.size else 0, toFixChipCount(toFix.page) ?: 0)
 
 	val openArtist: (String) -> (() -> Unit)? = { id ->
 		// Only a link when Room has the artist: an id is not a page that exists.
@@ -175,6 +191,8 @@ fun LibraryMatchesScreen() {
 						selected = section,
 						label = { entry ->
 							val count = when (entry) {
+								// lb-bot's to-fix number: the section's headline and the avatar's badge.
+								MatchesSection.TO_FIX -> toFixChipCount(toFix.page)
 								MatchesSection.TO_CHECK -> matches.rows.size.takeIf { matchesKnown }
 								MatchesSection.ARTISTS -> overrides.rows.size.takeIf { overridesKnown }
 								// A shown list is a loaded one (`overrideListShown`).
@@ -196,7 +214,8 @@ fun LibraryMatchesScreen() {
 			if (!platformContext.isLandscape() && preferVisible) {
 				RootBottomBar(scrolled = scrollManager.isTriggered)
 			}
-		}
+		},
+		snackbarHost = { SnackbarHost(snackbar) }
 	) { innerPadding ->
 		// No hub, or one without lb-bot: this whole layer is off, and the page says which, with
 		// the way to the settings that set it up, rather than showing empty lists.
@@ -227,7 +246,9 @@ fun LibraryMatchesScreen() {
 			onRefresh = {
 				scope.launch {
 					pulling = true
+					val fix = toFix.refresh()
 					viewModel.read().join()
+					fix.join()
 					pulling = false
 				}
 			},
@@ -238,6 +259,8 @@ fun LibraryMatchesScreen() {
 			contentPadding = innerPadding.withoutTop() + PaddingValues(top = 8.dp, bottom = 24.dp)
 		) {
 			when (section) {
+				MatchesSection.TO_FIX -> toFixItems(toFix)
+
 				MatchesSection.TO_CHECK -> {
 					item(key = "c:note") {
 						Column(Modifier.padding(bottom = 8.dp)) {

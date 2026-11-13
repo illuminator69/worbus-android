@@ -57,6 +57,36 @@ class LibraryMatchesTest {
 		assertEquals("Artists", matchesSectionLabel(MatchesSection.ARTISTS, null))
 	}
 
+	// --- B-406: To fix, the "Needs attention" page that was -------------------------------------
+
+	/*
+	 * The owner's re-walk ruling (2026-11-13): the "To fix" downloaded-folder items belong on Library Matches,
+	 * and the "Needs attention" menu felt redundant. lb-bot's to-fix list (failed albums, albums waiting on a
+	 * pick, folders and imports to file) is this page's first chip, offered to an admin (lb-bot answers it to
+	 * admins only), and the page opens on it while lb-bot counts something to fix.
+	 */
+	@Test
+	fun toFixIsTheFirstSectionForAnAdmin() {
+		assertEquals(listOf(MatchesSection.TO_FIX) + all, matchesSections(toCheck = true, albums = true, merges = true, toFix = true))
+		assertEquals(all, matchesSections(toCheck = true, albums = true, merges = true, toFix = false), "not for anyone else")
+	}
+
+	@Test
+	fun thePageOpensOnToFixWhileThereIsSomethingToFix() {
+		val withFix = listOf(MatchesSection.TO_FIX) + all
+		assertEquals(MatchesSection.TO_FIX, matchesSectionToShow(null, withFix, toCheckCount = 106, toFixCount = 9))
+		assertEquals(MatchesSection.TO_CHECK, matchesSectionToShow(null, withFix, toCheckCount = 106, toFixCount = 0), "nothing to fix: as before")
+		assertEquals(MatchesSection.TO_CHECK, matchesSectionToShow(null, all, toCheckCount = 106, toFixCount = 9), "not offered: as before")
+		// The old Needs attention entry opens the page on To fix whatever it counts.
+		assertEquals(MatchesSection.TO_FIX, matchesSectionToShow(MatchesSection.TO_FIX, withFix, toCheckCount = 106, toFixCount = 0))
+	}
+
+	@Test
+	fun theToFixChipCountsLbBotsToFixNumber() {
+		assertEquals("To fix (9)", matchesSectionLabel(MatchesSection.TO_FIX, 9))
+		assertEquals("To fix", matchesSectionLabel(MatchesSection.TO_FIX, null), "no answer yet: no number")
+	}
+
 	// --- what a row draws, and whether it is a link ------------------------------------------
 
 	private val artists = mapOf("ar-1" to "ar-ar-1_0", "ar-2" to null)

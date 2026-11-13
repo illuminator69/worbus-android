@@ -207,8 +207,8 @@ internal sealed interface AvatarMenuEntry {
 
 /**
  * The menu, top to bottom (P6, the owner's ruling of 2026-10-21). lb-bot's operator half lives in
- * **Library tools**: Needs attention (with lb-bot's to-fix count), Source history (requests,
- * transfers, the wishlist), Library Matches (which holds artist matching and the overrides), then
+ * **Library tools**: Library Matches (lb-bot's to-fix list, artist matching and the overrides, with
+ * lb-bot's to-fix count since B-406), Source history (requests, transfers, the wishlist), the Wishlist, then
  * the rare tools that open lb-bot's web UI, drawn only when the hub says where it is ([webUrl]).
  * Nothing that needs lb-bot is drawn without it, so there is no gap and no dead row.
  */
@@ -255,9 +255,12 @@ internal fun avatarMenuItems(
 						Screen.Wishlist
 					)
 				) else listOfNotNull(
+					// B-406 (the owner's ruling, 2026-11-13): Needs attention was a page of its own, which the
+					// owner found redundant. Its list is Library Matches' To fix chip, so Library Matches comes
+					// first and carries lb-bot's to-fix count.
 					AvatarMenuEntry.Link(
-						AvatarMenuIds.ATTENTION, Icons.Outlined.Error, Res.string.title_needs_attention,
-						Screen.Attention, badge = attentionCount.takeIf { it > 0 }
+						AvatarMenuIds.LIBRARY_MATCHES, Icons.Brand.Musicbrainz,
+						Res.string.title_library_matches, Screen.LibraryMatches, badge = attentionCount.takeIf { it > 0 }
 					),
 					if (downloadsOn) AvatarMenuEntry.Link(
 						AvatarMenuIds.SOURCE_HISTORY, Icons.Outlined.History, Res.string.title_source_history,
@@ -267,10 +270,6 @@ internal fun avatarMenuItems(
 					AvatarMenuEntry.Link(
 						AvatarMenuIds.WISHLIST, Icons.Outlined.LibraryAdd, Res.string.title_wishlist,
 						Screen.Wishlist
-					),
-					AvatarMenuEntry.Link(
-						AvatarMenuIds.LIBRARY_MATCHES, Icons.Brand.Musicbrainz,
-						Res.string.title_library_matches, Screen.LibraryMatches
 					),
 					if (web) AvatarMenuEntry.External(
 						AvatarMenuIds.DUPLICATES, Icons.Outlined.Copy, Res.string.title_duplicates_trash,
@@ -535,8 +534,9 @@ private fun MenuEntry(
 		is AvatarMenuEntry.Link -> MenuRow(
 			icon = entry.icon,
 			label = stringResource(entry.label),
-			// The attention row's glyph is the one colour on the menu: it is the one thing that asks.
-			iconTint = if (entry.id == AvatarMenuIds.ATTENTION) MaterialTheme.colorScheme.warning
+			// The row carrying lb-bot's to-fix count (B-406: Library Matches) is the one colour on the menu,
+			// while it counts something: it is the one thing that asks.
+			iconTint = if (entry.badge != null) MaterialTheme.colorScheme.warning
 			else MaterialTheme.colorScheme.onSurfaceVariant,
 			inFold = inFold,
 			onClick = dropUnlessResumed { onNavigate(entry.destination) },
