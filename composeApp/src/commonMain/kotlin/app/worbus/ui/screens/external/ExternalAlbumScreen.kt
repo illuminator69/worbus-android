@@ -105,6 +105,7 @@ import app.worbus.ui.components.common.PillTone
 import app.worbus.ui.components.common.FillText
 import app.worbus.ui.components.common.StatePill
 import app.worbus.ui.screens.collection.components.collectionDetailScreenAboutRow
+import app.worbus.ui.screens.collection.components.rememberAboutTeaser
 import app.worbus.ui.screens.external.components.RequestBox
 import app.worbus.ui.screens.album.findItRow
 import app.worbus.icons.outlined.Favorite
@@ -178,6 +179,8 @@ fun ExternalAlbumScreen(
 	}
 	val backStack = LocalNavStack.current
 	val state by viewModel.state.collectAsStateWithLifecycle()
+	// lb-bot's About, folded in when it lands (as on the owned album page), and kept once shown.
+	val aboutText = rememberAboutTeaser(rgid, notes = null, meta = state.meta)
 	val previewsAvailable by viewModel.previewsAvailable.collectAsStateWithLifecycle()
 	val previewBusy by viewModel.previewBusy.collectAsStateWithLifecycle()
 	val previewMissing by viewModel.previewMissing.collectAsStateWithLifecycle()
@@ -365,8 +368,8 @@ fun ExternalAlbumScreen(
 			// lb-bot's About, the only one an unowned album can have. No answer is no row and
 			// no gap; an article that arrives later comes in under the box.
 			collectionDetailScreenAboutRow(
+				text = aboutText,
 				meta = state.meta,
-				fallbackNotes = null,
 				onOpen = viewModel::openAbout
 			)
 			// Worbus P1: where the record can be found (lb-bot's `findIt`), its own section under the

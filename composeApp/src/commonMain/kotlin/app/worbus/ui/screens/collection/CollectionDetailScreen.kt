@@ -95,6 +95,7 @@ import app.worbus.ui.screens.collection.components.CollectionDetailScreenSongRow
 import app.worbus.ui.screens.collection.components.CollectionDetailScreenTopBar
 import app.worbus.ui.components.sheets.AboutSheet
 import app.worbus.ui.screens.collection.components.collectionDetailScreenAboutRow
+import app.worbus.ui.screens.collection.components.rememberAboutTeaser
 import app.worbus.ui.screens.collection.components.collectionDetailScreenMoreByArtistRow
 import app.worbus.ui.screens.collection.components.collectionDetailScreenSimilarAlbumsRow
 import app.worbus.ui.screens.collection.viewmodels.CollectionDetailViewModel
@@ -152,6 +153,8 @@ fun CollectionDetailScreen(
 	// answer and null forever when lb-bot is absent, in which case neither renders
 	// — §7: the surface is invisible, never an error.
 	val meta by viewModel.meta.collectAsStateWithLifecycle()
+	// The About slot's text, kept once shown (it arrives after the page's first frame and folds in).
+	val aboutText = rememberAboutTeaser(collectionId, (albumInfoState as? UiState.Success)?.data?.notes, meta)
 	val aboutRefreshable by viewModel.aboutRefreshable.collectAsStateWithLifecycle()
 	val similar by viewModel.similar.collectAsStateWithLifecycle()
 	val aboutOpen by viewModel.aboutOpen.collectAsStateWithLifecycle()
@@ -556,8 +559,8 @@ fun CollectionDetailScreen(
 				// fallback here, and lb-bot's Wikipedia text is the preferred
 				// source because it comes with an attribution and an article.
 				collectionDetailScreenAboutRow(
+					text = aboutText,
 					meta = meta,
-					fallbackNotes = (albumInfoState as? UiState.Success)?.data?.notes,
 					onOpen = { viewModel.openAbout() }
 				)
 
