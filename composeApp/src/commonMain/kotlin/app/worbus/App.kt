@@ -58,6 +58,10 @@ import androidx.navigation3.ui.NavDisplay.popTransitionSpec
 import androidx.navigation3.ui.NavDisplay.predictivePopTransitionSpec
 import androidx.navigation3.ui.NavDisplay.transitionSpec
 import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.runtime.snapshotFlow
+import app.worbus.domain.manager.ShellController
+import app.worbus.ui.util.coverSlideTiming
+import app.worbus.ui.util.curve
 import worbus.composeapp.generated.resources.Res
 import worbus.composeapp.generated.resources.action_open_in_lbbot
 import worbus.composeapp.generated.resources.info_link_unresolved
@@ -266,6 +270,10 @@ fun App() {
 	// A tab's own page is a root (P6: Home stays under Search and the Library, so it is no longer
 	// "the stack holds one entry"). Back on one still pops only at two entries or more, below.
 	val isRoot by remember(backStack) { derivedStateOf { isRootPage(backStack.lastOrNull()) } }
+	// B-434: a bar tap fades through whatever page it leaves (TabTapMotion); the mark ends with the next change
+	// that is not the tap's.
+	val shell = koinInject<ShellController>()
+	LaunchedEffect(backStack) { snapshotFlow { backStack.toList() }.collect { shell.tabTaps.stackChanged(it) } }
 	val entries = remember(backStack, isRoot) { entryProvider(isRoot) { preferenceManager.pageMotion() } }
 
 	// The individual strategies were already remembered; the enclosing list was not, so
@@ -476,14 +484,17 @@ fun App() {
 									entryProvider = entries,
 									// navi-connect I-042: page timing follows the animation style (PageMotion.kt).
 									// B-403: which motion is the two pages' (pageChangeOf): Settings slides.
+									// B-434: a bar tap fades through, push or pop, whatever page it leaves (TabTapMotion).
 									transitionSpec = {
-										Material3Transitions.page(
+										if (shell.tabTaps.isTabTap(backStack)) Material3Transitions.tab(preferenceManager.pageMotion())
+										else Material3Transitions.page(
 											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
 											pop = false, preferenceManager.pageMotion(), density
 										)
 									},
 									popTransitionSpec = {
-										Material3Transitions.page(
+										if (shell.tabTaps.isTabTap(backStack)) Material3Transitions.tab(preferenceManager.pageMotion())
+										else Material3Transitions.page(
 											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
 											pop = true, preferenceManager.pageMotion(), density
 										)
@@ -545,11 +556,11 @@ private fun entryProvider(
 	// timed as a page push's fades; the two tabs used to cross-fade at once.
 	val navtabMetadata = if (isRoot)
 		listPane("root") + ListPageSceneStrategy.listPage() + transitionSpec {
-			ContentTransform(Material3Transitions.tabEnter(motion()), Material3Transitions.tabExit(motion()))
+			Material3Transitions.tab(motion())
 		} + popTransitionSpec {
-			ContentTransform(Material3Transitions.tabEnter(motion()), Material3Transitions.tabExit(motion()))
+			Material3Transitions.tab(motion())
 		} + predictivePopTransitionSpec {
-			ContentTransform(Material3Transitions.tabEnter(motion()), Material3Transitions.tabExit(motion()))
+			Material3Transitions.tab(motion())
 		}
 	else listPane("root") + ListPageSceneStrategy.listPage()
 	// B-403: Settings and its pages slide, going in, between them and leaving (pageChangeOf).
@@ -557,9 +568,14 @@ private fun entryProvider(
 	// B-404: the cover pages (an album's or playlist's, an artist's, owned or not, a mix's: review m4) slide
 	// between each other, no fade.
 	val coverPage = pageKindMetadata(PageKind.Cover)
-	val imageViewMetadata = transitionSpec { ContentTransform(fadeIn(), ExitTransition.None) }
-		.plus(popTransitionSpec { ContentTransform(EnterTransition.None, fadeOut()) })
-		.plus(predictivePopTransitionSpec { ContentTransform(EnterTransition.None, fadeOut()) })
+	// B-435 (motion lane, 2026-11-14): the viewer fades on its cover's flight's time and curve
+	// (`coverSlideTiming`, the album slide's), so it follows the style and the speed and lands with the flight.
+	// It faded on Compose's default spring, which the speed did not reach: at 2× the cover had landed before the
+	// page had faded in.
+	fun viewerFade() = coverSlideTiming(motion()).let { tween<Float>(it.durationMs, easing = it.easing.curve()) }
+	val imageViewMetadata = transitionSpec { ContentTransform(fadeIn(viewerFade()), ExitTransition.None) }
+		.plus(popTransitionSpec { ContentTransform(EnterTransition.None, fadeOut(viewerFade())) })
+		.plus(predictivePopTransitionSpec { ContentTransform(EnterTransition.None, fadeOut(viewerFade())) })
 
 	return androidx.navigation3.runtime.entryProvider {
 		// tabs

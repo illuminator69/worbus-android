@@ -133,7 +133,38 @@ fun onShellTabTapped(
 	shellController.onTabTapped(tab)
 	when (shellTap(tab, backStack.lastOrNull())) {
 		ShellTap.ScrollToTop -> rootViewModel.requestScrollToTop()
-		is ShellTap.Navigate -> stackAfterTap(backStack, tab)?.let { backStack.becomeStack(it) }
+		is ShellTap.Navigate -> stackAfterTap(backStack, tab)?.let {
+			// B-434: the page change this makes is a tab switch, whichever way NavDisplay reads it.
+			shellController.tabTaps.tapped(it)
+			backStack.becomeStack(it)
+		}
 		ShellTap.OpenNew -> shellController.openNew()
+	}
+}
+
+/**
+ * B-434 (motion lane, 2026-11-14): a tap on the bar is a tab switch, and it fades through (Ruling 7) whatever page
+ * it leaves. NavDisplay takes a push's motion from the page it goes to and a pop's from the page it leaves, and the
+ * tab fade-through was the tab pages' own (`navtabMetadata` in `App.kt`). A tap that only POPS, Home from an album
+ * opened from Home (`[Home, Album]` to `[Home]`), left a page with no such motion and ran the album slide, while
+ * Search from the same page (a push onto Search's page) faded through: one gesture, two motions.
+ *
+ * So the tap marks the stack it makes ([tapped]), `App.kt`'s NavDisplay runs the fade-through for a change to
+ * exactly that stack ([isTabTap]), and the mark goes with the next change that is not the tap's ([stackChanged]):
+ * Back to the same stack later is the ordinary pop again.
+ */
+class TabTapMotion {
+	private var tapped: List<NavKey>? = null
+
+	fun tapped(stack: List<NavKey>) {
+		tapped = stack.toList()
+	}
+
+	/** Whether the page change to [stack] is the bar tap's. */
+	fun isTabTap(stack: List<NavKey>): Boolean = tapped != null && tapped == stack.toList()
+
+	/** The stack changed to [stack]; a change that is not the tap's ends the mark. */
+	fun stackChanged(stack: List<NavKey>) {
+		if (tapped != stack.toList()) tapped = null
 	}
 }

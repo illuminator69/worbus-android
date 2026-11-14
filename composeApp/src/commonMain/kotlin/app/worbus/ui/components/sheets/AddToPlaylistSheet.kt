@@ -1,5 +1,8 @@
 package app.worbus.ui.components.sheets
 
+import app.worbus.ui.util.atMotionSpeed
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -176,13 +179,18 @@ private fun PlaylistChoiceRow(
 				maxLines = 1
 			)
 		}
+		val fade = spring<Float>(stiffness = Spring.StiffnessMediumLow).atMotionSpeed()
+		val scale = spring<Float>(stiffness = Spring.StiffnessMediumLow).atMotionSpeed()
 		AnimatedContent(
 			targetState = when {
 				choice.busy -> 0
 				choice.holdsSong -> 2
 				else -> 1
 			},
-			transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.8f)) togetherWith (fadeOut() + scaleOut(targetScale = 0.8f)) },
+			// B-435 (motion lane, 2026-11-14): the default springs, at the animation speed.
+			transitionSpec = {
+				(fadeIn(fade) + scaleIn(scale, initialScale = 0.8f)) togetherWith (fadeOut(fade) + scaleOut(scale, targetScale = 0.8f))
+			},
 			label = "playlistChoice"
 		) { shown ->
 			Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
