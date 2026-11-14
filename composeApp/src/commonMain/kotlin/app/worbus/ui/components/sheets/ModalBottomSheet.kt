@@ -52,6 +52,7 @@ import app.worbus.domain.manager.PreferenceManager
 import app.worbus.ui.theme.NavicTheme
 import app.worbus.ui.util.CoverAmbient
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
@@ -138,14 +139,11 @@ fun ModalBottomSheet(
 	MaterialExpressiveTheme(colorScheme = outerColors, motionScheme = sheetMotion, shapes = outerShapes, typography = outerType) {
 	androidx.compose.material3.ModalBottomSheet(
 		onDismissRequest = onDismissRequest,
-		modifier = modifier.pointerInput(Unit) {
-			awaitPointerEventScope {
-				while (true) {
-					val event = awaitPointerEvent(PointerEventPass.Initial)
-					touched = event.changes.any { it.pressed }
-				}
-			}
-		}.semantics {
+		// Nothing that takes touches here: M3 1.5 applies this modifier BEFORE `draggableAnchors` moves the sheet down
+		// to its resting place, so it lies over [0, sheet height] from the TOP of the window, above the scrim in hit
+		// testing. The B-121 touch watch sat here and took every tap above a tall sheet (B-442: the album sheet,
+		// 1881 of 2992 px on the AVD, could not be closed by a tap above it). It is on the handle and the content.
+		modifier = modifier.semantics {
 			sheetTitle?.let { sheetTitle ->
 				paneTitle = sheetTitle
 			}
@@ -161,7 +159,7 @@ fun ModalBottomSheet(
 		contentColor = ambient?.onAmbient ?: contentColor,
 		tonalElevation = tonalElevation,
 		scrimColor = scrimColor,
-		dragHandle = dragHandle,
+		dragHandle = dragHandle?.let { handle -> @Composable { Box(Modifier.watchTouch { touched = it }) { handle() } } },
 		// For the ambient wash, M3 insets only the TOP: the drag handle then sits below the
 		// status bar, as on every Material sheet. With no inset at all (as before B-121) a sheet
 		// tall enough to reach the top drew its handle inside the status-bar band, where a pull
@@ -183,6 +181,7 @@ fun ModalBottomSheet(
 			// B-435 (motion lane, 2026-11-14): the height's spring at the animation speed.
 			val heightSpeed = koinInject<PreferenceManager>().motionSpeed
 			val eased = if (animateContentHeight) Modifier.easedHeight(ease = !touched, speed = heightSpeed) else Modifier
+			val watched = Modifier.watchTouch { touched = it }
 			if (ambient != null) {
 				val insets = contentWindowInsets()
 				NavicTheme(ambient.scheme, contentColor = ambient.onAmbient) {
@@ -207,6 +206,7 @@ fun ModalBottomSheet(
 							// Apply the rest of the content insets here, so the gradient reaches the
 							// true bottom/side edges and no container-coloured border shows.
 							.windowInsetsPadding(insets.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
+							.then(watched)
 							.then(eased),
 						content = content
 					)
@@ -218,10 +218,12 @@ fun ModalBottomSheet(
 					modifier = Modifier
 						.fillMaxWidth()
 						.weight(1f, fill = false)
+						.then(watched)
 						.then(eased),
 					content = content
 				)
 			} else {
+				// Nothing eased, so nothing to watch.
 				content()
 			}
 		} },
@@ -240,6 +242,19 @@ internal fun sheetMotionScheme(base: MotionScheme): MotionScheme = SheetMotionSc
 
 private class SheetMotionScheme(private val base: MotionScheme) : MotionScheme by base {
 	override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = base.defaultSpatialSpec()
+}
+
+/**
+ * B-121: reports whether a finger is down on this node, watched on the Initial pass and never consumed, so the sheet's
+ * own drag and the content's scrolling see every event as before.
+ */
+private fun Modifier.watchTouch(onPressed: (Boolean) -> Unit): Modifier = pointerInput(Unit) {
+	awaitPointerEventScope {
+		while (true) {
+			val event = awaitPointerEvent(PointerEventPass.Initial)
+			onPressed(event.changes.any { it.pressed })
+		}
+	}
 }
 
 /**
