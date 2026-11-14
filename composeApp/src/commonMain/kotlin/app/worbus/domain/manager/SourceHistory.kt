@@ -373,9 +373,13 @@ fun sourceHistoryGroups(
 	)
 }
 
+/** When a device row last moved: its settle, else the later of its start and its last answer. */
+internal fun deviceClock(e: LbFillEntry): Long =
+	if (e.settled && e.finishedAt > 0L) e.finishedAt else maxOf(e.startedAt, e.lastCheckedAt)
+
 /**
- * Requests' two groups, and (review M1) the Need you chip's rows: every request drawn as failed or waiting on
- * a pick, from any client ([HistoryRow.needsYou]), which Requests also lists under Earlier.
+ * Requests' two groups, and the rows drawn as failed or waiting on a pick ([HistoryRow.needsYou]). Source history's
+ * Need you chip is [sourceHistoryGroups]' (the desktop's rule, [needYouItems]), not this list.
  */
 data class HistoryGroups(
 	val running: List<HistoryRow>,
