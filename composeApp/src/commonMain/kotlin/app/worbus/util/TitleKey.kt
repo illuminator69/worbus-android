@@ -14,9 +14,10 @@ private val BRACKET_SUFFIX = Regex("""[\[({].*?[])}]""")
  * and `화양연화 pt.1` were both `pt1`). Marks are kept too: NFD splits a kana's voiced mark (ガ = カ + U+3099) as it
  * splits an accent, and only the Latin accents ([COMBINING_MARKS]) are folded.
  *
- * Not yet the desktop's rule (stage 2 review M5): Worbus for desktop's album `titleKey` (`discography-model.ts`) still
- * keeps `[a-z0-9]`, so the two clients pair non-Latin titles differently until it follows (backlog B-455). B-313's
- * any-script rule there is its artist-name normaliser (`album-match.ts`), which drops marks (ガ = カ there).
+ * The desktop's rule too (B-455, Worbus for desktop `dea93d115`, its stage 2 branch): its album `titleKey` (`discography-model.ts`) keeps
+ * letters and marks in any script and folds only U+0300-036F, so the two clients pair album titles the same way.
+ * (B-313's any-script rule there is a different function, its artist-name normaliser in `album-match.ts`, which drops
+ * marks.)
  */
 private val NON_ALPHANUMERIC = Regex("[^\\p{L}\\p{M}\\p{Nd}]+")
 
