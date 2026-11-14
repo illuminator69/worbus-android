@@ -191,6 +191,9 @@ fun LibraryMatchesScreen(
 	val toFixRead = toFix != null && toFix.page !is AttentionPage.Loading
 	val firstChoiceFinal = matchesFirstChoiceFinal(offered, toFixNumber ?: 0, toCheckRead, toFixRead, rolesSettled)
 	LaunchedEffect(section, firstChoiceFinal) { if (chosen == null && firstChoiceFinal) chosen = section }
+	// What the body draws: null is the rows' skeleton (stage 2 review M1, below), and then no chip is checked either, so
+	// the check does not land on a section the page then leaves (the walk saw it on Artists, then To fix).
+	val sectionShown = matchesPageSection(section, chosen, offered, toFixNumber ?: 0, toCheckRead, toFixRead, rolesSettled)
 
 	val openArtist: (String) -> (() -> Unit)? = { id ->
 		// Only a link when Room has the artist: an id is not a page that exists.
@@ -210,11 +213,11 @@ fun LibraryMatchesScreen(
 				// The four sections are the page's own, so they sit under its title as upstream's
 				// search categories do.
 				if (layerLine == null && offered.size > 1) {
-					PageChips(
+					PageChips<MatchesSection?>(
 						options = offered,
-						selected = section,
+						selected = sectionShown,
 						label = { entry ->
-							val count = when (entry) {
+							val count = when (entry!!) {
 								// lb-bot's to-fix number: the section's headline and the avatar's badge.
 								MatchesSection.TO_FIX -> toFixNumber
 								MatchesSection.TO_CHECK -> matches.rows.size.takeIf { matchesKnown }
@@ -290,7 +293,6 @@ fun LibraryMatchesScreen(
 		// B-444 had brought back a section drawn early, To check, then a cross-fade to To fix when a slow
 		// `/lb/attention` answered), and the first section shown comes in at once. Only a change from one section
 		// to another fades through.
-		val sectionShown = matchesPageSection(section, chosen, offered, toFixNumber ?: 0, toCheckRead, toFixRead, rolesSettled)
 		ContentSwap(sectionShown, Modifier.fillMaxSize(), animate = { from, _ -> from != null }, label = "matchesSection") { section ->
 		if (section == null) LazyColumn(
 			modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
