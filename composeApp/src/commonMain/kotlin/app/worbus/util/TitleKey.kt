@@ -9,10 +9,16 @@ expect fun toNfd(value: String): String
 
 private val COMBINING_MARKS = '̀'..'ͯ'
 private val BRACKET_SUFFIX = Regex("""[\[({].*?[])}]""")
-private val NON_ALPHANUMERIC = Regex("[^a-z0-9]+")
+/**
+ * B-427: a letter in any script counts, as on Worbus for desktop (B-313's titles rule). `[a-z0-9]` keyed a
+ * mixed-script title by its Latin part alone (`花様年華 pt.1` and `화양연화 pt.1` were both `pt1`). Marks are kept
+ * too: NFD splits a kana's voiced mark (ガ = カ + U+3099) as it splits an accent, and only the Latin accents
+ * ([COMBINING_MARKS]) are folded.
+ */
+private val NON_ALPHANUMERIC = Regex("[^\\p{L}\\p{M}\\p{Nd}]+")
 
 /**
- * Album titles compared the way a person would: case, accents, punctuation and
+ * Album titles compared the way a person would: case, Latin accents, punctuation and
  * parenthesised edition suffixes all discarded. "Kid A" and "Kid A (Remastered)"
  * are the same record for this purpose.
  *
