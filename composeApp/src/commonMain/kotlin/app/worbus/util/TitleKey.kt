@@ -10,10 +10,13 @@ expect fun toNfd(value: String): String
 private val COMBINING_MARKS = '̀'..'ͯ'
 private val BRACKET_SUFFIX = Regex("""[\[({].*?[])}]""")
 /**
- * B-427: a letter in any script counts, as on Worbus for desktop (B-313's titles rule). `[a-z0-9]` keyed a
- * mixed-script title by its Latin part alone (`花様年華 pt.1` and `화양연화 pt.1` were both `pt1`). Marks are kept
- * too: NFD splits a kana's voiced mark (ガ = カ + U+3099) as it splits an accent, and only the Latin accents
- * ([COMBINING_MARKS]) are folded.
+ * B-427: a letter in any script counts. `[a-z0-9]` keyed a mixed-script title by its Latin part alone (`花様年華 pt.1`
+ * and `화양연화 pt.1` were both `pt1`). Marks are kept too: NFD splits a kana's voiced mark (ガ = カ + U+3099) as it
+ * splits an accent, and only the Latin accents ([COMBINING_MARKS]) are folded.
+ *
+ * Not yet the desktop's rule (stage 2 review M5): Worbus for desktop's album `titleKey` (`discography-model.ts`) still
+ * keeps `[a-z0-9]`, so the two clients pair non-Latin titles differently until it follows (backlog B-455). B-313's
+ * any-script rule there is its artist-name normaliser (`album-match.ts`), which drops marks (ガ = カ there).
  */
 private val NON_ALPHANUMERIC = Regex("[^\\p{L}\\p{M}\\p{Nd}]+")
 
