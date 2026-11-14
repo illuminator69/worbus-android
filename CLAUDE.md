@@ -2381,8 +2381,10 @@ true of invented *album art*, and not of an icon naming the kind.
   by the flying element at a new size every frame: the album cover card's `dropShadow` (30 dp blur) was rasterised in
   software on the main thread each flight frame (~110-130 ms per open on the VM AVD). The shadow is before
   `sharedElement` (at the card's place and size) and its alpha follows the page's transition (`CoverShadow.kt`, owner's
-  option c): none in flight, a fade in on landing, a fade out as the page leaves, which a predictive Back seeks with the
-  finger. A Back's flight draws the TARGET's content (the tile), so anything only the page's element draws pops off.
+  option c): none in flight, a fade in on landing; leaving, it is gone by 12 % of the cover's flight back (on the
+  flight's own time and curve), which a predictive Back seeks with the finger and a cancel restores. It stays at the
+  card's place, so a slower fade left a smudge there while the cover flew off. A Back's flight draws the TARGET's
+  content (the tile), so anything only the page's element draws pops off.
   Page pushes and pops: `NavDisplay`'s `transitionSpec` / `popTransitionSpec` in `App.kt` read
   the style inside the lambda and build `Material3Transitions.enter` / `exit` / `popEnter` /
   `popExit(motion)` (the old fixed-timing `SharedXAxis*` vals were unused and are gone).

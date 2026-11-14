@@ -11,11 +11,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import app.worbus.ui.util.PageMotion
+import app.worbus.ui.util.coverSlideTiming
+import app.worbus.ui.util.curve
 import kotlinx.coroutines.flow.first
 
 /*
  * B-447 (the owner's ruling 2026-11-14, option c): the album page's cover card shadow is not drawn while the cover flies,
- * fades in once it has landed, and fades out as the page leaves, a dragged (predictive) Back included, coming back if
+ * fades in once it has landed, and fades out as the cover leaves, a dragged (predictive) Back included, coming back if
  * the gesture is cancelled.
  *
  * The shadow sits OUTSIDE the cover's shared element (`HeadingRow.kt`), at the card's place and size. Inside it, it
@@ -28,8 +30,18 @@ import kotlinx.coroutines.flow.first
 internal fun coverShadowAtRest(current: EnterExitState, target: EnterExitState): Boolean =
 	current == EnterExitState.Visible && target == EnterExitState.Visible
 
-/** How long the shadow takes to fade in after landing, and out as the page leaves: the outgoing page's own fade. */
+/** How long the shadow takes to fade in after landing: the outgoing page's own fade. */
 internal fun coverShadowFadeMs(motion: PageMotion): Int = motion.exitFadeMs
+
+/**
+ * How far along its flight back the cover is when its shadow is gone. The shadow stays at the card's place while the
+ * cover leaves it, so it must be gone before the two visibly part: a fade over the page's exit fade left a half-strong
+ * smudge where the card had been while the cover was already well on its way (VM AVD, predictive Back held at 1/6).
+ */
+internal const val COVER_SHADOW_GONE_AT = 0.12f
+
+/** The shadow's alpha factor while the page leaves, from the cover's flight progress (0 at the card, 1 at the tile). */
+internal fun coverShadowLeaving(flight: Float): Float = (1f - flight / COVER_SHADOW_GONE_AT).coerceIn(0f, 1f)
 
 /**
  * The shadow's alpha factor, 0 to 1, for the page whose enter/exit [transition] this is. Read it in the draw phase (the
@@ -37,9 +49,10 @@ internal fun coverShadowFadeMs(motion: PageMotion): Int = motion.exitFadeMs
  *
  * - **Entering**: 0 for the whole transition (the cover flies), then a [coverShadowFadeMs] fade once it has settled.
  *   Kept outside [transition], so the page's transition does not last any longer for it.
- * - **Leaving**: a [transition] animation, 1 → 0 over [coverShadowFadeMs] from the start of the exit. A predictive Back
- *   seeks this transition with the gesture, so the shadow fades with the finger and returns when the gesture is
- *   cancelled (the transition seeks back to Visible).
+ * - **Leaving**: the cover's flight progress as a [transition] animation on the flight's own time and curve
+ *   ([coverSlideTiming]), through [coverShadowLeaving]: gone by [COVER_SHADOW_GONE_AT] of the flight. A predictive Back
+ *   seeks this transition with the gesture, so the shadow fades with the finger as the cover starts to move and
+ *   returns when the gesture is cancelled (the transition seeks back to Visible).
  */
 @Composable
 internal fun rememberCoverShadowFade(transition: Transition<EnterExitState>, motion: PageMotion): () -> Float {
@@ -53,9 +66,10 @@ internal fun rememberCoverShadowFade(transition: Transition<EnterExitState>, mot
 			landed.animateTo(1f, tween(fadeMs, easing = LinearEasing))
 		}
 	}
-	val leaving = transition.animateFloat(
-		transitionSpec = { tween(fadeMs, easing = LinearEasing) },
-		label = "coverShadow"
-	) { state -> if (state == EnterExitState.PostExit) 0f else 1f }
-	return remember(landed, leaving) { { landed.value * leaving.value } }
+	val flightTiming = coverSlideTiming(motion)
+	val flight = transition.animateFloat(
+		transitionSpec = { tween(flightTiming.durationMs, easing = flightTiming.easing.curve()) },
+		label = "coverShadowFlight"
+	) { state -> if (state == EnterExitState.PostExit) 1f else 0f }
+	return remember(landed, flight) { { landed.value * coverShadowLeaving(flight.value) } }
 }

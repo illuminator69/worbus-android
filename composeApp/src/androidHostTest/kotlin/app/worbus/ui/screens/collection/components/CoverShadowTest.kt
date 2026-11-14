@@ -32,8 +32,18 @@ class CoverShadowTest {
 		for (style in AnimationStyle.entries) for (speed in listOf(0.5f, 1f, 2f)) {
 			val m = pageMotionOf(style, speed)
 			assertEquals(m.exitFadeMs, coverShadowFadeMs(m), "$style at $speed")
-			assertTrue(coverShadowFadeMs(m) < m.slideMs, "a pop fades it out before the page has left")
 		}
+	}
+
+	/* A Back seeks the cover's flight; the shadow (at the card's place) must be gone before the cover has visibly left
+	 * it, and back in full when the gesture is cancelled. */
+	@Test
+	fun theShadowIsGoneEarlyInTheFlightBack() {
+		assertEquals(1f, coverShadowLeaving(0f))
+		assertEquals(0f, coverShadowLeaving(COVER_SHADOW_GONE_AT))
+		assertEquals(0f, coverShadowLeaving(1f))
+		assertEquals(0.5f, coverShadowLeaving(COVER_SHADOW_GONE_AT / 2), 1e-4f)
+		assertTrue(COVER_SHADOW_GONE_AT <= 0.15f, "gone before the cover is a sixth of its way")
 	}
 
 	@Test
