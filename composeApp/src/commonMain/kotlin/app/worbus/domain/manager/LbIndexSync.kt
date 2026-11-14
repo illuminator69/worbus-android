@@ -239,7 +239,11 @@ class LbIndexSync(
 		if (proven) feedMissing = false
 		if (feedMissing) return Outcome.SKIPPED
 		runSkip = if (lbBotManager.isConfigured) LbIndexSkip.LB_BOT_DOWN else LbIndexSkip.NOT_SET_UP
-		if (!proven && !lbBotManager.ensureAvailability()) return Outcome.SKIPPED
+		if (!proven && !lbBotManager.ensureAvailability()) {
+			// B-443: refused as too old for this user, not out of reach.
+			if (lbBotManager.lbAccess.value == LbAccess.TOO_OLD) runSkip = LbIndexSkip.TOO_OLD
+			return Outcome.SKIPPED
+		}
 		runSkip = LbIndexSkip.NO_FEED
 		// Asked AGAIN, after the probe (review ruling R20a). On a hub too old to send `welcome.lb`
 		// nothing has filled the route list before the first probe, and an empty list means

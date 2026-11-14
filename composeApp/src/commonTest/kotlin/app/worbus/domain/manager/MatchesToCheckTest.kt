@@ -153,7 +153,7 @@ class MatchesToCheckTest {
 		assertTrue(matchesSectionShown(LbPanelData.UNREACHABLE, null))
 		assertEquals(
 			"lb-bot is needed for this and is not reachable right now.",
-			matchesNote(LbPanelData.UNREACHABLE, 0)
+			matchesNote(LbPanelData.UNREACHABLE, 0, tooOld = false)
 		)
 	}
 
@@ -162,23 +162,23 @@ class MatchesToCheckTest {
 		// Whether lb-bot sends the list is seconds from being known; a heading that shows and
 		// then vanishes on an older lb-bot would be the wrong thing to have said.
 		assertFalse(matchesSectionShown(LbPanelData.READING, null))
-		assertNull(matchesNote(LbPanelData.READING, 0))
+		assertNull(matchesNote(LbPanelData.READING, 0, tooOld = false))
 	}
 
 	@Test
 	fun anOlderHubOrLbBotShowsNoSection() {
 		assertFalse(matchesSectionShown(LbPanelData.UNSUPPORTED, null))
 		assertFalse(matchesSectionShown(LbPanelData.UNSUPPORTED, listOf(unmatched("ar-1"))))
-		assertNull(matchesNote(LbPanelData.UNSUPPORTED, 3))
+		assertNull(matchesNote(LbPanelData.UNSUPPORTED, 3, tooOld = false))
 	}
 
 	@Test
 	fun anEmptyListSaysNothingToCheckAndAFullOneSaysNothingExtra() {
-		assertEquals("Nothing to check.", matchesNote(LbPanelData.CURRENT, 0))
-		assertNull(matchesNote(LbPanelData.CURRENT, 5))
+		assertEquals("Nothing to check.", matchesNote(LbPanelData.CURRENT, 0, tooOld = false))
+		assertNull(matchesNote(LbPanelData.CURRENT, 5, tooOld = false))
 		assertEquals(
 			"Can't reach lb-bot. This is the copy this device loaded last.",
-			matchesNote(LbPanelData.STALE, 5)
+			matchesNote(LbPanelData.STALE, 5, tooOld = false)
 		)
 	}
 }

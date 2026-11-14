@@ -143,6 +143,8 @@ fun LibraryMatchesScreen(
 	val toFixNumber = toFix?.let { toFixNumber(it.page, attentionBadge) }
 	val backStack = LocalNavStack.current
 	val hubSaysNoLbBot by viewModel.hubSaysNoLbBot.collectAsStateWithLifecycle()
+	// B-443: a list the hub refused as lbbot_too_old says so (R26), not "can't reach lb-bot".
+	val tooOld = app.worbus.ui.components.sheets.rememberLbTooOld()
 
 	// Read when the page appears, and again when the hub's configuration changes or the hub
 	// says its lb-bot is back: what was read before is about a layer that is no longer there.
@@ -296,7 +298,7 @@ fun LibraryMatchesScreen(
 					item(key = "c:note") {
 						Column(Modifier.padding(bottom = 8.dp)) {
 							if (matchesKnown) Muted(MATCHES_TO_CHECK_BLURB)
-							matchesNote(matches.data, matches.rows.size)?.let { Muted(it) }
+							matchesNote(matches.data, matches.rows.size, tooOld)?.let { Muted(it) }
 						}
 					}
 					if (matchesKnown) itemsIndexed(matches.rows, key = { _, it -> "c:${it.ndArtistId}" }) { index, row ->
@@ -322,7 +324,7 @@ fun LibraryMatchesScreen(
 
 				MatchesSection.ARTISTS -> {
 					item(key = "a:note") {
-						overridesNote(overrides.data, overrides.rows.size)?.let {
+						overridesNote(overrides.data, overrides.rows.size, tooOld)?.let {
 							Box(Modifier.padding(bottom = 8.dp)) { Muted(it) }
 						}
 					}
@@ -347,7 +349,7 @@ fun LibraryMatchesScreen(
 
 				MatchesSection.ALBUMS -> {
 					item(key = "l:note") {
-						albumRowsNote(albumRows.data, albumRows.rows.size)?.let {
+						albumRowsNote(albumRows.data, albumRows.rows.size, tooOld)?.let {
 							Box(Modifier.padding(bottom = 8.dp)) { Muted(it) }
 						}
 					}
@@ -375,7 +377,7 @@ fun LibraryMatchesScreen(
 
 				MatchesSection.MERGES -> {
 					item(key = "m:note") {
-						mergeRowsNote(mergeRows.data, mergeRows.rows.size)?.let {
+						mergeRowsNote(mergeRows.data, mergeRows.rows.size, tooOld)?.let {
 							Box(Modifier.padding(bottom = 8.dp)) { Muted(it) }
 						}
 					}

@@ -100,9 +100,9 @@ internal fun matchesSectionShown(data: LbPanelData, rows: List<LbMatchToCheck>?)
 	}
 
 /** The line under the heading, or null when the rows speak for themselves. */
-internal fun matchesNote(data: LbPanelData, count: Int): String? = when (data) {
+internal fun matchesNote(data: LbPanelData, count: Int, tooOld: Boolean): String? = when (data) {
 	LbPanelData.UNSUPPORTED, LbPanelData.READING -> null
-	LbPanelData.UNREACHABLE -> LB_UNREACHABLE_LINE
-	LbPanelData.STALE -> LB_STALE_LINE
+	LbPanelData.UNREACHABLE -> unreachableLine(tooOld)
+	LbPanelData.STALE -> staleLine(tooOld)
 	LbPanelData.CURRENT -> if (count == 0) "Nothing to check." else null
 }

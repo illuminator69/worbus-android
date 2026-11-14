@@ -262,22 +262,22 @@ class LbBotDataTest {
 	fun theOverridesNoteSaysEachStateInItsOwnWords() {
 		assertEquals(
 			"This hub or lb-bot is older and does not store MusicBrainz overrides yet.",
-			overridesNote(LbPanelData.UNSUPPORTED, 0)
+			overridesNote(LbPanelData.UNSUPPORTED, 0, tooOld = false)
 		)
-		assertEquals("Asking lb-bot…", overridesNote(LbPanelData.READING, 0))
+		assertEquals("Asking lb-bot…", overridesNote(LbPanelData.READING, 0, tooOld = false))
 		assertEquals(
 			"lb-bot is needed for this and is not reachable right now.",
-			overridesNote(LbPanelData.UNREACHABLE, 0)
+			overridesNote(LbPanelData.UNREACHABLE, 0, tooOld = false)
 		)
 		assertEquals(
 			"Can't reach lb-bot. This is the copy this device loaded last.",
-			overridesNote(LbPanelData.STALE, 3)
+			overridesNote(LbPanelData.STALE, 3, tooOld = false)
 		)
 		assertEquals(
 			"None. An override is set from an artist's page: Fix MusicBrainz match.",
-			overridesNote(LbPanelData.CURRENT, 0)
+			overridesNote(LbPanelData.CURRENT, 0, tooOld = false)
 		)
-		assertNull(overridesNote(LbPanelData.CURRENT, 3))
+		assertNull(overridesNote(LbPanelData.CURRENT, 3, tooOld = false))
 	}
 
 	@Test

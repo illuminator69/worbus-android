@@ -61,26 +61,26 @@ class OverrideListsTest {
 		assertEquals(true, overrideListShown(LbPanelData.CURRENT, emptyList<LbMergeRow>()))
 		assertEquals(
 			"None. An album's release is set from the album's page: Fix album match.",
-			albumRowsNote(LbPanelData.CURRENT, 0)
+			albumRowsNote(LbPanelData.CURRENT, 0, tooOld = false)
 		)
 		assertEquals(
 			"None. Two spellings of one artist are merged from the artist's page: Fix MusicBrainz match.",
-			mergeRowsNote(LbPanelData.CURRENT, 0)
+			mergeRowsNote(LbPanelData.CURRENT, 0, tooOld = false)
 		)
 	}
 
 	@Test
 	fun aListWithRowsSpeaksForItself() {
 		assertEquals(true, overrideListShown(LbPanelData.CURRENT, listOf(merge())))
-		assertNull(albumRowsNote(LbPanelData.CURRENT, 2))
-		assertNull(mergeRowsNote(LbPanelData.CURRENT, 1))
+		assertNull(albumRowsNote(LbPanelData.CURRENT, 2, tooOld = false))
+		assertNull(mergeRowsNote(LbPanelData.CURRENT, 1, tooOld = false))
 	}
 
 	@Test
 	fun theCopyLoadedLastSaysThatItIs() {
 		assertEquals(true, overrideListShown(LbPanelData.STALE, emptyList<LbMergeRow>()))
-		assertEquals(LB_STALE_LINE, albumRowsNote(LbPanelData.STALE, 3))
-		assertEquals(LB_STALE_LINE, mergeRowsNote(LbPanelData.STALE, 0))
+		assertEquals(LB_STALE_LINE, albumRowsNote(LbPanelData.STALE, 3, tooOld = false))
+		assertEquals(LB_STALE_LINE, mergeRowsNote(LbPanelData.STALE, 0, tooOld = false))
 	}
 
 	@Test

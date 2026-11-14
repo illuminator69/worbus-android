@@ -34,6 +34,9 @@ enum class LbIndexSkip {
 	/** lb-bot is not reachable right now. */
 	LB_BOT_DOWN,
 
+	/** B-443: the hub calls this Worbus Server's lb-bot too old for this (signed-in) user. */
+	TOO_OLD,
+
 	/** lb-bot answered the request with a refusal that is not worth retrying. */
 	REFUSED
 }
@@ -91,6 +94,7 @@ internal fun indexRunLine(run: LbIndexRun): String = when (run) {
 		LbIndexSkip.NOT_SET_UP -> "Not pulled: no hub is set up."
 		LbIndexSkip.NO_FEED -> "Not pulled: this hub or lb-bot has no index feed."
 		LbIndexSkip.LB_BOT_DOWN -> "Not pulled: lb-bot is not reachable. The mirror is unchanged."
+		LbIndexSkip.TOO_OLD -> "Not pulled: this Worbus Server's lb-bot is too old for signed-in users. The mirror is unchanged."
 		LbIndexSkip.REFUSED -> "Not pulled: lb-bot refused the request. The mirror is unchanged."
 	}
 	is LbIndexRun.Failed ->
@@ -220,13 +224,23 @@ const val LB_UNREACHABLE_LINE = "lb-bot is needed for this and is not reachable 
 const val LB_STALE_LINE = "Can't reach lb-bot. This is the copy this device loaded last."
 const val LB_READING_LINE = "Asking lb-bot…"
 
+/** B-443: R26's sentence (`error_lbbot_too_old`), where a list could not be read because the hub calls lb-bot too old. */
+const val LB_TOO_OLD_LINE = "This Worbus Server's lb-bot is too old for signed-in users."
+const val LB_TOO_OLD_STALE_LINE = "This Worbus Server's lb-bot is too old for signed-in users. This is the copy this device loaded last."
+
+/** B-443: the copy loaded last, said for why it is not lb-bot's answer now. */
+internal fun staleLine(tooOld: Boolean): String = if (tooOld) LB_TOO_OLD_STALE_LINE else LB_STALE_LINE
+
+/** B-443: nothing loaded, said for why. */
+internal fun unreachableLine(tooOld: Boolean): String = if (tooOld) LB_TOO_OLD_LINE else LB_UNREACHABLE_LINE
+
 /** The line under the overrides heading, or null when the list speaks for itself. */
-internal fun overridesNote(data: LbPanelData, count: Int): String? = when (data) {
+internal fun overridesNote(data: LbPanelData, count: Int, tooOld: Boolean): String? = when (data) {
 	LbPanelData.UNSUPPORTED ->
 		"This hub or lb-bot is older and does not store MusicBrainz overrides yet."
 	LbPanelData.READING -> LB_READING_LINE
-	LbPanelData.UNREACHABLE -> LB_UNREACHABLE_LINE
-	LbPanelData.STALE -> LB_STALE_LINE
+	LbPanelData.UNREACHABLE -> unreachableLine(tooOld)
+	LbPanelData.STALE -> staleLine(tooOld)
 	LbPanelData.CURRENT ->
 		if (count == 0) "None. An override is set from an artist's page: Fix MusicBrainz match."
 		else null
@@ -658,16 +672,16 @@ internal fun overrideListShown(data: LbPanelData, rows: List<*>?, controls: Bool
 	controls && rows != null && (data == LbPanelData.STALE || data == LbPanelData.CURRENT)
 
 /** The line under the album overrides' heading, or null when the rows speak for themselves. */
-internal fun albumRowsNote(data: LbPanelData, count: Int): String? = when (data) {
-	LbPanelData.STALE -> LB_STALE_LINE
+internal fun albumRowsNote(data: LbPanelData, count: Int, tooOld: Boolean): String? = when (data) {
+	LbPanelData.STALE -> staleLine(tooOld)
 	LbPanelData.CURRENT ->
 		if (count == 0) "None. An album's release is set from the album's page: Fix album match." else null
 	LbPanelData.UNSUPPORTED, LbPanelData.READING, LbPanelData.UNREACHABLE -> null
 }
 
 /** As [albumRowsNote], for the name merges. */
-internal fun mergeRowsNote(data: LbPanelData, count: Int): String? = when (data) {
-	LbPanelData.STALE -> LB_STALE_LINE
+internal fun mergeRowsNote(data: LbPanelData, count: Int, tooOld: Boolean): String? = when (data) {
+	LbPanelData.STALE -> staleLine(tooOld)
 	LbPanelData.CURRENT ->
 		if (count == 0) {
 			"None. Two spellings of one artist are merged from the artist's page: Fix MusicBrainz match."
