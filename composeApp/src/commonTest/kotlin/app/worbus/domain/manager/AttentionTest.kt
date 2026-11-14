@@ -73,8 +73,8 @@ class AttentionTest {
 	fun aFullAnswerParsesAndToleratesUnknownFields() {
 		val a = ok()
 		assertEquals(AttentionCounts(3, 1, 16, 12, 14), a.counts)
-		assertEquals(listOf("rel-1", "g1"), a.albums.map { it.key })
-		assertTrue(a.albums[1].picking)
+		assertEquals(listOf("rel-1", "g1"), a.albums!!.map { it.key })
+		assertTrue(a.albums!![1].picking)
 		assertEquals("flac", a.folders.single().formats)
 		assertEquals("unknown", a.folders.single().confidence)
 	}

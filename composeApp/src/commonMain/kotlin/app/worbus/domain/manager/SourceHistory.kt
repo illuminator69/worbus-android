@@ -7,9 +7,9 @@ import kotlinx.serialization.Serializable
  * PROTOCOL §15.6) joined with this device's own ledger, which outlives lb-bot's (it keeps a verified
  * row 6 h and a failed one 24 h; the device keeps a week).
  *
- * lb-bot's row wins the state; the device's keeps what lb-bot has forgotten and is the only one with
- * buttons: a row only lb-bot knows offers Open album and nothing else (no Retry, no Cancel, and no
- * Dismiss, since it expires there by itself).
+ * The newer row wins the state (by each row's own time, the follow-ups review L2, as Need you decides); the
+ * device's keeps what lb-bot has forgotten and is the only one with buttons: a row only lb-bot knows offers Open
+ * album and nothing else (no Retry, no Cancel, and no Dismiss, since it expires there by itself).
  */
 
 /** One request in lb-bot's ledger. `state` is the §15.2 server state. */
@@ -99,8 +99,8 @@ fun activityRead(status: Int, body: String): ActivityRead = when (status) {
 enum class SourceHistorySection { Requests, Transfers, Wishlist, NeedYou }
 
 /**
- * One row of Requests. [state] is the ledger's own state string (lb-bot's when it lists the row);
- * [entry] is this device's row, the one with buttons; [server] is lb-bot's.
+ * One row of Requests. [state] is the ledger's own state string (lb-bot's when its row decided); [entry] is this
+ * device's row, the one with buttons; [server] is lb-bot's activity row of the request, when it lists one.
  */
 data class HistoryRow(
 	val key: String,
@@ -115,59 +115,29 @@ data class HistoryRow(
 	val entry: LbFillEntry?,
 	val server: ActivityRequest? = null,
 	/**
-	 * Review M1: the row's state is the ledger's although lb-bot lists it: a Retry lb-bot has not been read
-	 * since, or a row that settled here after lb-bot's answer was read. Follow-up 2026-11-14: also this device's
-	 * settled GAP row, which lb-bot's fill ledger does not track (below).
+	 * The fill the row is drawn as, words, pill and buttons ([shown]); built by [mergeHistory] and
+	 * [NeedYouItem.asHistoryRow] from the state that decided the request (review M1 of the second re-walk; review L1
+	 * and L2 of the follow-ups).
 	 */
-	val ledgerWins: Boolean = false,
-	/**
-	 * Follow-up 2026-11-14: the gap's own state from `/lb/attention`'s `albums` (`kind: "gap"`, `failed` or
-	 * `picking`), the one place lb-bot says a gap waits on a pick. `/lb/activity` is lb-bot's FILL ledger: a gap
-	 * gets a row there only once a fill of it reaches placement, so for a gap that row is the last fill that got
-	 * that far, never where the gap is now, and it never says `picking`.
-	 */
-	val gap: AttentionAlbum? = null,
-	/** [gap] is newer than this device's row and says otherwise: lb-bot's later state, shown. */
-	val gapLater: Boolean = false,
-	/** A Need you row ([NeedYouItem.asHistoryRow]): drawn as its item decided ([NeedYouItem.drawn]). */
-	val drawn: LbFillEntry? = null
+	val drawn: LbFillEntry? = null,
+	/** [drawn] is [entry] with lb-bot's newer state laid on it ([withServerState]): its buttons are this device's. */
+	val overlaid: Boolean = false
 ) {
-	/**
-	 * Review M1 (second re-walk): the fill the row is drawn as, words, pill and buttons. This device's row
-	 * ([entry]) while it is running, while the ledger is newer than lb-bot's answer ([ledgerWins]) and while
-	 * the two agree; **lb-bot's row when lb-bot's later state differs** (a fill retried from another client
-	 * that has landed, or one it is working on again), which then offers Open album alone, as any row only
-	 * lb-bot knows. It used to be the ledger's always, while [state] (and so the Running group) was lb-bot's.
-	 */
-	val shown: LbFillEntry
-		get() {
-			if (drawn != null) return drawn
-			if (gap != null && (entry == null || gapLater)) return gap.asLedgerRow()
-			val s = server ?: return entry!!
-			val e = entry ?: return s.asLedgerRow()
-			if (!e.settled || ledgerWins || serverAgrees(s.state, e.outcome)) return e
-			return s.asLedgerRow()
-		}
+	val shown: LbFillEntry get() = drawn ?: entry ?: server!!.asLedgerRow()
 
+	/** Drawn as this device's row (itself, or with lb-bot's newer state on it): its buttons act on [entry]. */
+	val mine: Boolean get() = entry != null && (shown === entry || overlaid)
 
-	/**
-	 * Review M1: a request drawn as failed or waiting on a pick. Need you itself (the chip and the badge) is
-	 * [needYouItems] since the follow-up of 2026-11-14 (the desktop's rule, every client's requests); this is what
-	 * one row says.
-	 */
+	/** A request drawn as failed or waiting on a pick (Need you itself is [needYouItems]). */
 	val needsYou: Boolean
 		get() = shown.settled &&
 			(shown.outcome == LbBotManager.OUTCOME_FAILED || shown.outcome == LbBotManager.OUTCOME_NEEDS_PICK)
 
 	/**
-	 * Searching, queued, downloading or placing: the Running group. A device row lb-bot does not list,
-	 * or one it lists as finished while the ledger runs it again (a Retry), is running by its ledger.
+	 * The Running group: this device's row drawn as itself while it is unsettled; lb-bot's row while it is
+	 * searching, queued, downloading or placing.
 	 */
-	val running: Boolean get() = when {
-		entry != null && !entry.settled && (server == null || server.state in TERMINAL_SERVER_STATES) -> true
-		server == null && entry != null -> false
-		else -> state in RUNNING_STATES
-	}
+	val running: Boolean get() = if (entry != null && shown === entry) !entry.settled else !shown.settled && shown.state in RUNNING_STATES
 }
 
 private val RUNNING_STATES = setOf("searching", "queued", "downloading", "placing")
@@ -180,9 +150,6 @@ private fun serverAgrees(state: String, outcome: String): Boolean = when (state)
 	"cancelled" -> outcome == LbBotManager.OUTCOME_CANCELLED
 	else -> false
 }
-
-/** lb-bot's states a request ends in. A running ledger row against one of these is a Retry. */
-private val TERMINAL_SERVER_STATES = setOf("failed", "placed", "verified", "cancelled")
 
 /**
  * Whether the page reads lb-bot again every few seconds: while a running row is one lb-bot lists. A
@@ -225,135 +192,59 @@ fun historyEmptyState(read: HistoryRead, rows: Int, asOf: Long? = null): History
 }
 
 /**
- * lb-bot's list joined with the device's, each request once. A server row and a device row are the
- * same request by release MBID, else by group id ([sameFill]); lb-bot's state wins, the device's row
- * comes along. A device row lb-bot no longer lists stays, however old.
+ * lb-bot's list joined with the device's, each request once. Review L2 of the follow-ups: **the same requests, joined
+ * the same way and decided by the same state as Need you** ([requestGroups], [decide]): rows of one request by release,
+ * group, release group and (an orphan gap) names; lb-bot's state decides only when its row is newer than this
+ * device's, by lb-bot's own row time, never by when it was read. A device row lb-bot no longer lists stays, however
+ * old. `/lb/attention`'s albums ([attention]) are lb-bot's side too: a gap's own status, another client's pick.
  *
- * Review M1 (second re-walk): **lb-bot's later state wins**. A ledger row that settled after lb-bot's
- * answer was read ([readAt], epoch ms on this device's clock; null is "not known", and lb-bot's state wins)
- * keeps its own state: that answer predates it.
+ * Drawn: this device's row when its state decided; this device's row with lb-bot's newer state on it when that state
+ * needs someone (as Need you draws it, review L1); this device's running row while lb-bot's newer row is a fill in
+ * flight; lb-bot's row (Open album only) when lb-bot's newer state is another ending (a retry from another client
+ * that landed). Dismissals are not applied here: Requests lists a dismissed request while lb-bot does (an open
+ * question for the owner; the desktop's Activity lists its own ledger alone).
  */
 fun mergeHistory(
 	server: List<ActivityRequest>,
 	device: List<LbFillEntry>,
-	readAt: Long? = null,
-	/** Follow-up 2026-11-14: `/lb/attention`'s albums (the gaps' own state). */
 	attention: List<AttentionAlbum> = emptyList()
-): List<HistoryRow> {
-	val claimed = mutableSetOf<String>()
-	val fromServer = server.mapNotNull { s ->
-		val entry = device.firstOrNull { it.key !in claimed && sameFill(s.releaseMbid, s.groupId, it) }
-			// A gap fill whose review group is gone reaches here with no groupId (lb-bot names it from its
-			// labels): this device's gap row for it is found by its names, or it would count twice.
-			?: if (s.gapFill && s.groupId.isBlank()) device.firstOrNull {
-				it.key !in claimed && it.isGap && sameNames(it.artist, it.album, s.artist, s.album)
-			} else null
-		if (entry == null) {
-			// One gap, several fill-ledger rows (lb-bot keys them by release): the device's gap row already
-			// stands for the group, so another row of it is not a request of its own.
-			if (s.groupId.isNotBlank() && device.any { it.isGap && it.groupId == s.groupId && it.key in claimed }) return@mapNotNull null
-		}
-		if (entry != null) claimed += entry.key
-		// B2 (audit L4b-01): a running ledger row against a finished lb-bot row is a Retry lb-bot has
-		// not been read since. The ledger is newer for the rows it names (a fill frame or a poll moves
-		// it at once), as on Needs attention: the row is running, in the device's own state.
-		val retried = entry != null && !entry.settled && s.state in TERMINAL_SERVER_STATES
-		val settledSince = entry != null && entry.settled && readAt != null && entry.finishedAt > readAt
-		// Follow-up 2026-11-14: a gap's fill-ledger row is the last fill that reached placement, not the gap:
-		// an OLDER `verified` or `placed` row must not hide this device's gap that failed or waits on a pick
-		// (newer wins, by timestamp, as in Need you).
-		val gapHeld = entry != null && entry.isGap && entry.settled && deviceClock(entry) >= (s.updatedAt * 1000).toLong()
-		val state = if (retried || settledSince || gapHeld) entry.state else s.state
-		HistoryRow(
-			key = entry?.key ?: s.releaseMbid.ifBlank { s.groupId.ifBlank { s.rgid } },
-			artist = s.artist.ifBlank { entry?.artist.orEmpty() },
-			album = s.album.ifBlank { entry?.album.orEmpty() },
-			rgid = s.rgid.ifBlank { entry?.rgid.orEmpty() },
-			state = state,
-			percent = if (retried) entry.percent.takeIf { state == "downloading" } else s.percent.takeIf { s.state == "downloading" },
-			updatedAt = if (retried) maxOf((s.updatedAt * 1000).toLong(), deviceClock(entry)) else (s.updatedAt * 1000).toLong(),
-			fromDevice = entry != null,
-			entry = entry,
-			server = s,
-			ledgerWins = retried || settledSince || gapHeld
-		)
+): List<HistoryRow> = requestGroups(server, attention, emptyList(), device).map(::historyRow)
+
+private fun NeedYouServerEntry.plainKey(): String =
+	activity?.let { it.releaseMbid.ifBlank { it.groupId.ifBlank { it.rgid } } }
+		?: attention?.let { it.key.ifBlank { it.groupId.ifBlank { it.releaseMbid } } }
+		?: releaseMbid.ifBlank { groupId }
+
+private fun historyRow(g: RequestGroup): HistoryRow {
+	val d = decide(g.here, g.theirs)
+	val mine = d.mine
+	val lbbot = d.lbbot
+	val (drawn, overlaid) = when {
+		mine == null -> lbbot!!.ownRow() to false
+		!d.lbbotDecides -> mine to false
+		serverNeedOutcome(lbbot!!.state) != null -> mine.withServerState(lbbot) to true
+		!mine.settled && lbbot.state in LIVE_STATES -> mine to false
+		mine.settled && serverAgrees(lbbot.state, mine.outcome) -> mine to false
+		else -> lbbot.ownRow() to false
 	}
-	val deviceOnly = device.filter { it.key !in claimed }.map { e ->
-		HistoryRow(
-			key = e.key,
-			artist = e.artist,
-			album = e.album,
-			rgid = e.rgid,
-			state = e.state,
-			percent = e.percent.takeIf { !e.settled && e.state == "downloading" },
-			updatedAt = deviceClock(e),
-			fromDevice = true,
-			entry = e
-		)
-	}
-	return withAttention(fromServer + deviceOnly, attention)
+	val asMine = drawn === mine
+	val activity = lbbot?.activity ?: g.theirs.filter { it.activity != null }.maxByOrNull { it.updatedAt }?.activity
+	return HistoryRow(
+		key = mine?.key ?: g.theirs.map { it.plainKey() }.filter { it.isNotBlank() }.minOrNull().orEmpty(),
+		artist = lbbot?.artist?.ifBlank { null } ?: mine?.artist.orEmpty(),
+		album = lbbot?.album?.ifBlank { null } ?: mine?.album.orEmpty(),
+		rgid = lbbot?.rgid?.ifBlank { null } ?: mine?.rgid.orEmpty(),
+		state = if (d.lbbotDecides) lbbot!!.state else mine!!.state,
+		percent = if (asMine) mine!!.percent.takeIf { !mine.settled && mine.state == "downloading" }
+		else lbbot?.activity?.percent?.takeIf { lbbot.state == "downloading" },
+		updatedAt = if (asMine) deviceClock(mine!!) else lbbot!!.updatedAtMs,
+		fromDevice = mine != null,
+		entry = mine,
+		server = activity,
+		drawn = drawn,
+		overlaid = overlaid
+	)
 }
-
-/**
- * Follow-up 2026-11-14: `/lb/attention`'s failed and picking albums joined to the rows, as [needYouItems] reads them.
- * A gap lb-bot lists is its current state: it is laid on a row only lb-bot knows (whose fill-ledger row may be an
- * older fill of that gap) unless a fill of it in flight is newer, and on this device's row when it is newer than that
- * row and says otherwise ([HistoryRow.gapLater]). An album no row names (another client's gap at a pick, a gap that
- * failed at search, which writes no fill-ledger row) is a row of its own, drawn from lb-bot's words, Open album only.
- */
-private fun withAttention(rows: List<HistoryRow>, attention: List<AttentionAlbum>): List<HistoryRow> {
-	if (attention.isEmpty()) return rows
-	val out = rows.toMutableList()
-	for (a in attention) {
-		if (a.state != "failed" && a.state != "picking") continue
-		val i = out.indexOfFirst { r -> namesSameRequest(r, a) }
-		if (i >= 0) {
-			val r = out[i]
-			if (a.kind != "gap") continue
-			val e = r.entry
-			val s = r.server
-			when {
-				e == null -> if (s == null || s.state !in LIVE_FILL_STATES || s.updatedAt <= a.updatedAt) out[i] = r.copy(gap = a, state = a.state)
-				e.isGap && e.settled && (a.updatedAt * 1000).toLong() > deviceClock(e) && !gapAgrees(a.state, e.outcome) ->
-					out[i] = r.copy(gap = a, gapLater = true, state = a.state)
-			}
-			continue
-		}
-		out += HistoryRow(
-			key = a.key.ifBlank { a.groupId.ifBlank { a.releaseMbid } },
-			artist = a.artist,
-			album = a.album,
-			rgid = a.rgid,
-			state = a.state,
-			percent = null,
-			updatedAt = (a.updatedAt * 1000).toLong(),
-			fromDevice = false,
-			entry = null,
-			gap = a
-		)
-	}
-	return out
-}
-
-private val LIVE_FILL_STATES = setOf("downloading", "placed", "placing", "queued", "searching")
-
-/** Whether a row is the request an attention album names: by release, else by group. */
-private fun namesSameRequest(r: HistoryRow, a: AttentionAlbum): Boolean {
-	val rels = listOfNotNull(r.entry?.releaseMbid, r.server?.releaseMbid, r.gap?.releaseMbid).filter { it.isNotBlank() }
-	val groups = listOfNotNull(r.entry?.groupId, r.server?.groupId, r.gap?.groupId).filter { it.isNotBlank() }
-	return (a.releaseMbid.isNotBlank() && a.releaseMbid in rels) || (a.groupId.isNotBlank() && a.groupId in groups)
-}
-
-private fun gapAgrees(state: String, outcome: String): Boolean = when (state) {
-	"failed" -> outcome == LbBotManager.OUTCOME_FAILED
-	"picking" -> outcome == LbBotManager.OUTCOME_NEEDS_PICK
-	else -> false
-}
-
-private fun norm(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
-
-private fun sameNames(a1: String, b1: String, a2: String, b2: String): Boolean =
-	norm(b1).isNotEmpty() && norm(b1) == norm(b2) && norm(a1) == norm(a2)
 
 /**
  * Follow-up 2026-11-14: Source history's groups, the one reading the page and its menu badge share. Requests is
@@ -367,7 +258,7 @@ fun sourceHistoryGroups(
 	dismissed: List<DismissedRequest> = emptyList()
 ): HistoryGroups {
 	val albums = attention?.last?.albums
-	val rows = mergeHistory(activity?.requests.orEmpty(), ledger, activity?.readAt, albums.orEmpty())
+	val rows = mergeHistory(activity?.requests.orEmpty(), ledger, albums.orEmpty())
 	return historyGroups(rows).copy(
 		needYou = needYouItems(activity?.requests, albums, dismissed, ledger).map { it.asHistoryRow() }
 	)
@@ -457,7 +348,8 @@ fun AttentionAlbum.asLedgerRow(): LbFillEntry = LbFillEntry(
 	total = total,
 	mp3WouldHelp = false,
 	failureKind = "",
-	retryable = false,
+	// Review L3: the desktop's `retryable ?? gap` (an attention album says nothing of it).
+	retryable = kind == "gap",
 	attempts = 0,
 	settled = true,
 	startedAt = 0L,

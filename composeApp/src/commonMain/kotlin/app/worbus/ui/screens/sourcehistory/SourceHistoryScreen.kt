@@ -317,9 +317,9 @@ private fun LazyListScope.historyGroup(
 	}
 	itemsIndexed(rows, key = { _, row -> "request:${row.key}" }) { index, row ->
 		// Review M1: drawn as its state is (lb-bot's later state wins), and with this device's buttons only
-		// while it is drawn as this device's row.
+		// while it is drawn as this device's row, itself or with lb-bot's newer state on it (follow-ups L1).
 		val entry: LbFillEntry = row.shown
-		val mine = row.entry != null && entry === row.entry
+		val mine = row.mine
 		FillRow(
 			fill = entry,
 			now = now,

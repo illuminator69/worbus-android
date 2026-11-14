@@ -64,9 +64,11 @@ class SecondRewalkReviewTest {
 		val x = (g.running + g.earlier).single { it.key == "x" }
 		assertEquals(LbBotManager.OUTCOME_DONE, x.shown.outcome)
 		assertFalse(x.needsYou)
-		// A row lb-bot agrees with keeps this phone's entry and its buttons.
+		// A row lb-bot agrees with keeps this phone's entry and its buttons (follow-ups review L1: with lb-bot's newer
+		// words on it, as the desktop's `drawnRow`).
 		val y = g.needYou.single { it.key == "here:y" }
-		assertSame(y.entry, y.shown)
+		assertTrue(y.mine)
+		assertEquals(y.entry!!.key, y.shown.key)
 		// lb-bot's own failed row (another client's) is listed, and (follow-up 2026-11-14) counted.
 		assertTrue((g.running + g.earlier).any { it.entry == null && it.state == "failed" && it.needsYou })
 		// Every Need you row is a request Requests lists too.

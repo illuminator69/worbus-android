@@ -1,6 +1,11 @@
 package app.worbus.domain.manager
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 /*
  * Source history's Need you: one set, one number, for the chip and the menu badge, from any client (the owner,
@@ -59,9 +64,13 @@ data class NeedYouServerEntry(
 	val fromAttention: Boolean,
 	val failureKind: String = "",
 	val reason: String = "",
-	val retryable: Boolean = false,
+	/** Review L3: null for an attention album, which says nothing (read as [gap], the desktop's `retryable ?? gap`). */
+	val retryable: Boolean? = null,
 	/** Epoch seconds, lb-bot's clock. */
-	val updatedAt: Double
+	val updatedAt: Double,
+	/** The row it came from, for Requests' words (percent, totals): exactly one of the two is set. */
+	val activity: ActivityRequest? = null,
+	val attention: AttentionAlbum? = null
 ) {
 	val updatedAtMs: Long get() = (updatedAt * 1000).toLong()
 }
@@ -77,19 +86,30 @@ fun serverNeedOutcome(state: String): String? = when (state) {
 }
 
 /** The fill-ledger states of a fill in flight (`_album_fill_view`). */
-private val LIVE_STATES = setOf("downloading", "placed", "placing", "queued", "searching")
+internal val LIVE_STATES = setOf("downloading", "placed", "placing", "queued", "searching")
+
+/**
+ * Review L3: the inputs as the desktop allowlists them (`activityRequests`, `attentionAlbums`): an activity row with
+ * no state, or with neither a release nor a group to join it by, is dropped; so is an attention album of another
+ * kind, with no state, or with neither id.
+ */
+internal fun ActivityRequest.kept(): Boolean = state.isNotEmpty() && (releaseMbid.isNotEmpty() || groupId.isNotEmpty())
+
+internal fun AttentionAlbum.kept(): Boolean =
+	(kind == "gap" || kind == "request") && state.isNotEmpty() && (groupId.isNotEmpty() || releaseMbid.isNotEmpty())
 
 private fun ActivityRequest.entry() = NeedYouServerEntry(
 	releaseMbid, groupId, rgid, artist, album, state, gap = gapFill, fromAttention = false,
-	failureKind = failureKind, reason = reason, retryable = retryable, updatedAt = updatedAt
+	failureKind = failureKind, reason = reason, retryable = retryable, updatedAt = updatedAt, activity = this
 )
 
 private fun AttentionAlbum.entry() = NeedYouServerEntry(
-	releaseMbid, groupId, rgid, artist, album, state, gap = kind == "gap", fromAttention = true, updatedAt = updatedAt
+	releaseMbid, groupId, rgid, artist, album, state, gap = kind == "gap", fromAttention = true, updatedAt = updatedAt,
+	attention = this
 )
 
 /** When a device row last moved, as the desktop's `sortAt`: its settle, else its start. */
-private fun LbFillEntry.sortAt(): Long = if (finishedAt > 0L) finishedAt else startedAt
+internal fun LbFillEntry.sortAt(): Long = if (finishedAt > 0L) finishedAt else startedAt
 
 private fun norm(s: String) = s.trim().lowercase()
 private fun nameId(artist: String, album: String) =
@@ -102,7 +122,7 @@ private fun ids(releaseMbid: String, groupId: String, rgid: String): List<String
 }
 
 private fun serverEntries(activity: List<ActivityRequest>?, attention: List<AttentionAlbum>?) =
-	activity.orEmpty().map { it.entry() } + attention.orEmpty().map { it.entry() }
+	activity.orEmpty().filter { it.kept() }.map { it.entry() } + attention.orEmpty().filter { it.kept() }.map { it.entry() }
 
 private sealed interface Node {
 	data class Ledger(val row: LbFillEntry) : Node
@@ -110,16 +130,25 @@ private sealed interface Node {
 	data class Dismissed(val d: DismissedRequest) : Node
 }
 
+/** One request: every row of it, joined ([requestGroups]). [ids]: every identity its rows carry. */
+internal class RequestGroup(
+	val here: List<LbFillEntry>,
+	val theirs: List<NeedYouServerEntry>,
+	val dismissedAt: Long,
+	val ids: List<String>
+)
+
 /**
- * Need you's items, newest first. [activity] / [attention]: lb-bot's last good answers, null when there is none.
- * The desktop's `needYouItems`, case for case.
+ * Rows of one request joined into one group (union-find): by release, by group, by release group, and, only for a
+ * gap row lb-bot names but can no longer place in a group, by artist and album. Need you and Requests read the same
+ * groups (review L2), lb-bot's rows first, in order, then this device's, then the dismissals.
  */
-fun needYouItems(
+internal fun requestGroups(
 	activity: List<ActivityRequest>?,
 	attention: List<AttentionAlbum>?,
 	dismissed: List<DismissedRequest>,
 	ledger: List<LbFillEntry>
-): List<NeedYouItem> {
+): List<RequestGroup> {
 	val server = serverEntries(activity, attention)
 	// A gap lb-bot names but no longer holds a group for: joined by its names, and only to a gap row or dismissal.
 	val orphanNames = server.filter { it.gap && it.groupId.isEmpty() }.map { nameId(it.artist, it.album) }
@@ -129,7 +158,7 @@ fun needYouItems(
 		return if (id.isNotEmpty() && id in orphanNames) listOf(id) else emptyList()
 	}
 
-	val nodes: List<Node> = ledger.map { Node.Ledger(it) } + server.map { Node.Server(it) } + dismissed.map { Node.Dismissed(it) }
+	val nodes: List<Node> = server.map { Node.Server(it) } + ledger.map { Node.Ledger(it) } + dismissed.map { Node.Dismissed(it) }
 	val nodeIds = nodes.map { node ->
 		when (node) {
 			is Node.Ledger -> node.row.let { ids(it.releaseMbid, it.groupId, it.rgid) + named(it.isGap, it.artist, it.album) }
@@ -160,8 +189,7 @@ fun needYouItems(
 	val groups = LinkedHashMap<Int, MutableList<Int>>()
 	nodes.indices.forEach { i -> groups.getOrPut(find(i)) { mutableListOf() } += i }
 
-	val out = mutableListOf<Pair<Long, NeedYouItem>>()
-	for (members in groups.values) {
+	return groups.values.map { members ->
 		val here = mutableListOf<LbFillEntry>()
 		val theirs = mutableListOf<NeedYouServerEntry>()
 		var dismissedAt = Long.MIN_VALUE
@@ -170,24 +198,54 @@ fun needYouItems(
 			is Node.Server -> theirs += node.entry
 			is Node.Dismissed -> dismissedAt = maxOf(dismissedAt, node.d.at)
 		}
+		RequestGroup(here, theirs, dismissedAt, members.flatMap { nodeIds[it] })
+	}
+}
+
+/** Which state decides a request: this device's newest row ([mine]), lb-bot's side ([lbbot]), and which one won. */
+internal class RequestDecision(val mine: LbFillEntry?, val lbbot: NeedYouServerEntry?) {
+	/** lb-bot decides only when its row is the NEWER state of the request (timestamps). */
+	val lbbotDecides: Boolean = lbbot != null && (mine == null || lbbot.updatedAtMs > mine.sortAt())
+}
+
+/**
+ * The desktop's decision: lb-bot's side is the gap's own status (attention) when it lists one, unless a fill of it in
+ * flight is newer; otherwise lb-bot's newest row.
+ */
+internal fun decide(here: List<LbFillEntry>, theirs: List<NeedYouServerEntry>): RequestDecision {
+	val mine = here.maxByOrNull { it.sortAt() }
+	val gapNow = theirs.filter { it.fromAttention && it.gap }.maxByOrNull { it.updatedAt }
+	val live = theirs.filter { !it.fromAttention && it.state in LIVE_STATES }.maxByOrNull { it.updatedAt }
+	val lbbot = if (gapNow != null) {
+		if (live != null && live.updatedAt > gapNow.updatedAt) live else gapNow
+	} else theirs.maxByOrNull { it.updatedAt }
+	return RequestDecision(mine, lbbot)
+}
+
+/**
+ * Need you's items, newest first. [activity] / [attention]: lb-bot's last good answers, null when there is none.
+ * The desktop's `needYouItems`, case for case.
+ */
+fun needYouItems(
+	activity: List<ActivityRequest>?,
+	attention: List<AttentionAlbum>?,
+	dismissed: List<DismissedRequest>,
+	ledger: List<LbFillEntry>
+): List<NeedYouItem> {
+	val out = mutableListOf<Pair<Long, NeedYouItem>>()
+	for (g in requestGroups(activity, attention, dismissed, ledger)) {
 		// What was there when this device dismissed the request stays dismissed here.
-		val shownHere = here.filter { it.sortAt() > dismissedAt }
-		val shownTheirs = theirs.filter { it.updatedAtMs > dismissedAt }
-		val mine = shownHere.maxByOrNull { it.sortAt() }
-		val gapNow = shownTheirs.filter { it.fromAttention && it.gap }.maxByOrNull { it.updatedAt }
-		val live = shownTheirs.filter { !it.fromAttention && it.state in LIVE_STATES }.maxByOrNull { it.updatedAt }
-		val lbbot = if (gapNow != null) {
-			if (live != null && live.updatedAt > gapNow.updatedAt) live else gapNow
-		} else shownTheirs.maxByOrNull { it.updatedAt }
-		val lbbotDecides = lbbot != null && (mine == null || lbbot.updatedAtMs > mine.sortAt())
-		val counts = if (lbbotDecides) serverNeedOutcome(lbbot!!.state) != null
+		val d = decide(g.here.filter { it.sortAt() > g.dismissedAt }, g.theirs.filter { it.updatedAtMs > g.dismissedAt })
+		val mine = d.mine
+		val lbbot = d.lbbot
+		val counts = if (d.lbbotDecides) serverNeedOutcome(lbbot!!.state) != null
 		else mine != null && mine.settled &&
 			(mine.outcome == LbBotManager.OUTCOME_FAILED || mine.outcome == LbBotManager.OUTCOME_NEEDS_PICK)
 		if (!counts) continue
 		// A request this device holds no row of is keyed by its smallest identity: the same on every read.
-		val key = if (mine != null) "here:${mine.key}" else "lb:${members.flatMap { nodeIds[it] }.sorted().firstOrNull().orEmpty()}"
-		out += (if (lbbotDecides) lbbot!!.updatedAtMs else mine!!.sortAt()) to
-			NeedYouItem(key, mine, if (lbbotDecides) lbbot else null)
+		val key = if (mine != null) "here:${mine.key}" else "lb:${g.ids.sorted().firstOrNull().orEmpty()}"
+		out += (if (d.lbbotDecides) lbbot!!.updatedAtMs else mine!!.sortAt()) to
+			NeedYouItem(key, mine, if (d.lbbotDecides) lbbot else null)
 	}
 	return out.sortedWith(compareByDescending<Pair<Long, NeedYouItem>> { it.first }.thenBy { it.second.key }).map { it.second }
 }
@@ -215,7 +273,36 @@ fun dismissalsStillListed(
 const val DISMISSED_RETAIN_MS = 30L * 24 * 60 * 60 * 1000
 const val DISMISSED_MAX = 200
 
-/** A request only lb-bot knows, as a ledger row for the fill vocabulary: lb-bot's words, settled, no buttons. */
+/** The dismissals within [DISMISSED_RETAIN_MS] of [now], the newest [DISMISSED_MAX] (the desktop's `pruneDismissed`). */
+fun boundDismissals(dismissed: List<DismissedRequest>, now: Long): List<DismissedRequest> =
+	dismissed.filter { now - it.at < DISMISSED_RETAIN_MS }.takeLast(DISMISSED_MAX)
+
+/**
+ * `lbDismissedRequests` as stored: a JSON list of [DismissedRequest]. Review L4: also the first format of this
+ * branch (`0c1f5593`, run on the VM's AVD), an object of `"r:<release>"` (an album fill) or `"g:<group>"` (a gap)
+ * to epoch ms, read into the same requests rather than lost. Anything else is none.
+ */
+fun decodeDismissedRequests(stored: String): List<DismissedRequest> = try {
+	when (val e = lbWireJson.parseToJsonElement(stored)) {
+		is JsonArray -> lbWireJson.decodeFromJsonElement(ListSerializer(DismissedRequest.serializer()), e)
+		is JsonObject -> e.mapNotNull { (k, v) ->
+			val at = (v as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
+			when {
+				k.startsWith("r:") && k.length > 2 -> DismissedRequest(releaseMbid = k.drop(2), at = at)
+				k.startsWith("g:") && k.length > 2 -> DismissedRequest(groupId = k.drop(2), isGap = true, at = at)
+				else -> null
+			}
+		}
+		else -> emptyList()
+	}
+} catch (e: Exception) {
+	emptyList()
+}
+
+/**
+ * A request only lb-bot knows, as a ledger row for the fill vocabulary: lb-bot's words, settled, no buttons (the
+ * desktop's `serverLedgerRow`).
+ */
 fun NeedYouServerEntry.asLedgerRow(): LbFillEntry = LbFillEntry(
 	key = releaseMbid.ifBlank { groupId.ifBlank { rgid } },
 	isGap = gap,
@@ -233,7 +320,7 @@ fun NeedYouServerEntry.asLedgerRow(): LbFillEntry = LbFillEntry(
 	total = 0,
 	mp3WouldHelp = false,
 	failureKind = failureKind,
-	retryable = retryable,
+	retryable = retryable ?: gap,
 	attempts = 0,
 	settled = true,
 	startedAt = 0L,
@@ -241,15 +328,38 @@ fun NeedYouServerEntry.asLedgerRow(): LbFillEntry = LbFillEntry(
 	cancellable = false
 )
 
+/** lb-bot's own row of a request, worded from the read it came from: Requests and Need you draw it the same way. */
+internal fun NeedYouServerEntry.ownRow(): LbFillEntry = activity?.asLedgerRow() ?: attention?.asLedgerRow() ?: asLedgerRow()
+
 /**
- * The row an item is drawn as: this device's row when its state decided, or when lb-bot's newer state says the same
- * (so its buttons stay); lb-bot's row when lb-bot's newer state differs (Open album only, as any row lb-bot alone
- * knows).
+ * Review L1, the desktop's `drawnRow`: this device's row with lb-bot's newer state, words and failure laid on it. It
+ * keeps its key, kind and peers, so its buttons (Dismiss at least) act on this device's row.
+ */
+fun LbFillEntry.withServerState(e: NeedYouServerEntry): LbFillEntry = copy(
+	attempts = 0,
+	cancellable = false,
+	failureKind = e.failureKind,
+	mp3WouldHelp = false,
+	outcome = serverNeedOutcome(e.state) ?: outcome,
+	percent = 0,
+	reason = e.reason,
+	retryable = e.retryable ?: retryable,
+	retryAt = 0L,
+	settled = true,
+	finishedAt = e.updatedAtMs,
+	state = e.state,
+	verifyGaveUp = false
+)
+
+/**
+ * The row an item is drawn as (review L1, the desktop's `drawnRow`): this device's row when its state decided; this
+ * device's row with lb-bot's state laid on it ([withServerState]) when lb-bot's newer state decided, so its buttons
+ * stay; lb-bot's own row (Open album only) for a request this device holds no row of.
  */
 fun NeedYouItem.drawn(): LbFillEntry {
 	val e = server ?: return ledger!!
-	val mine = ledger ?: return e.asLedgerRow()
-	return if (mine.settled && serverNeedOutcome(e.state) == mine.outcome) mine else e.asLedgerRow()
+	val mine = ledger ?: return e.ownRow()
+	return mine.withServerState(e)
 }
 
 /** Need you's items as Source history's rows (each drawn by [drawn]). */
@@ -262,9 +372,11 @@ fun NeedYouItem.asHistoryRow(): HistoryRow {
 		rgid = row.rgid.ifBlank { ledger?.rgid.orEmpty() },
 		state = row.state,
 		percent = null,
-		updatedAt = server?.updatedAtMs ?: ledger?.let { if (it.finishedAt > 0L) it.finishedAt else it.startedAt } ?: 0L,
+		updatedAt = server?.updatedAtMs ?: ledger?.sortAt() ?: 0L,
 		fromDevice = ledger != null,
 		entry = ledger,
-		drawn = row
+		server = server?.activity,
+		drawn = row,
+		overlaid = ledger != null && server != null
 	)
 }

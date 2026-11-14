@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
@@ -295,6 +296,12 @@ fun App() {
 	// only ever one snackbar. The system-notification half lives in androidMain — it needs
 	// a runtime permission and the platform notification API.
 	val lbBot = koinInject<LbBotManager>()
+	// Review M2 (follow-ups): Need you's two lb-bot reads (the avatar's dot, Source history's badge) while the app is
+	// in the foreground: on resume, then every minute, as the desktop's focus refetch and 60 s interval.
+	LifecycleResumeEffect(lbBot) {
+		val needYouReads = lbBot.watchNeedYouWhileShown()
+		onPauseOrDispose { needYouReads.cancel() }
+	}
 	val fillLanded = stringResource(Res.string.lbbot_fill_landed)
 	val fillLost = stringResource(Res.string.lbbot_fill_lost)
 	val fillLostReason = stringResource(Res.string.lbbot_fill_lost_reason)

@@ -265,8 +265,11 @@ class FollowupsNeedYouTest {
 		assertEquals(LbBotManager.OUTCOME_FAILED, row.outcome)
 		assertEquals("failed", row.state)
 		assertEquals("No peer had it", row.reason)
-		// Android draws lb-bot's differing newer state as lb-bot's row (Open album only), keeping the item's key.
+		// Follow-ups review L1: drawn as the desktop's `drawnRow`, this phone's row with lb-bot's state on it, so its
+		// buttons stay.
 		assertEquals("here:rg-1", item.key)
+		assertEquals("rg-1", row.key)
+		assertTrue(item.asHistoryRow().mine)
 	}
 
 	@Test
@@ -279,8 +282,11 @@ class FollowupsNeedYouTest {
 	@Test
 	fun lbBotNewerAndAgreeingKeepsThisDevicesRowAndItsButtons() {
 		val rows = listOf(ledgerRow(sortAt = ms(t0)))
-		val item = items(activity = listOf(activity(updatedAt = t0 + 30)), ledger = rows).single()
-		assertSame(rows.single(), item.drawn())
+		val item = items(activity = listOf(activity(reason = "No peer had it", updatedAt = t0 + 30)), ledger = rows).single()
+		// Follow-ups review L1: the desktop's `drawnRow` lays lb-bot's newer words on this phone's row.
+		assertEquals(rows.single().key, item.drawn().key)
+		assertEquals("No peer had it", item.drawn().reason)
+		assertTrue(item.asHistoryRow().mine)
 	}
 
 	// ---- L2: a failed read is not an answer ---------------------------------------------------- //

@@ -293,8 +293,9 @@ class PreferenceManager(
 	// B-364: fill-ledger rows that did not decode, kept verbatim (a JSON object, newest last) instead of
 	// erased with the rest. Read by nobody; FillLedgerStore writes it.
 	var lbBotWatchesSetAside by preference("{}")
-	// Follow-up 2026-11-14: requests dismissed on this device ("r:<release>" / "g:<group>" -> epoch ms), so lb-bot's
-	// own row for one (it keeps a failure 24 h) does not bring it back into Source history's Need you.
+	// Follow-up 2026-11-14: requests dismissed on this device, a JSON list of `DismissedRequest` (release, group,
+	// release group, artist, album, gap or not, when), so lb-bot's own row for one (it keeps a failure 24 h) does not
+	// bring it back into Source history's Need you. `decodeDismissedRequests` also reads this branch's first format.
 	var lbDismissedRequests by preference("[]")
 
 	// P1: the amber dot on the header avatar when one of this device's lb-bot requests failed or
