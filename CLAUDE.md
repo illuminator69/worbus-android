@@ -2356,6 +2356,13 @@ true of invented *album art*, and not of an icon naming the kind.
   one back animation, no fade into or out of a cover page, Settings' slide.
   Components keep `MotionScheme.expressive()` under Quick (`Theme.kt`; `standard()` is the
   one-line alternative), at the animation speed.
+  **A sheet's hide reaches Material through the motion scheme, never through `SheetState`** (B-442/B-154,
+  2026-11-14): M3's `BottomSheet` writes `showMotionSpec`, `hideMotionSpec` and the drag-settle spec into the sheet
+  state from `MaterialTheme.motionScheme` (`defaultSpatialSpec`, `fastEffectsSpec`) in a SideEffect on every
+  recomposition, so a spec written into the state is overwritten (Back and the player's chevron closed on Material's
+  fast spring, ~100 ms). `ModalBottomSheet.kt` wraps Material's sheet in `SheetMotionScheme` (`fastEffectsSpec` =
+  `PageMotion.sheetHideMs`) and gives the content the page's scheme back. The opening stays Material's spring:
+  `defaultSpatialSpec` also settles every drag, and `sheetShowMs` is not in effect (an owner's question).
   Page pushes and pops: `NavDisplay`'s `transitionSpec` / `popTransitionSpec` in `App.kt` read
   the style inside the lambda and build `Material3Transitions.enter` / `exit` / `popEnter` /
   `popExit(motion)` (the old fixed-timing `SharedXAxis*` vals were unused and are gone).

@@ -28,11 +28,14 @@ import app.worbus.ui.navigation.LocalTabTapMotion
 
 // navi-connect I-042: a sheet's opening and closing times follow the animation style
 // (PageMotion.kt); the vals are the Expressive/Standard timing, unchanged.
+// B-442: not in effect. Material opens a sheet and settles its drags on one spec (its motion scheme's
+// defaultSpatialSpec), so this would also make every drag release a fixed-time tween; the opening stays Material's
+// spring (a question for the owner). The hide below is in effect, through `SheetMotionScheme`.
 fun sheetShowMotionSpec(motion: PageMotion) = tween<Float>(
 	durationMillis = motion.sheetShowMs,
 	easing = EmphasizedDecelerateEasing
 )
-fun sheetHideMotionSpec(motion: PageMotion) = tween<Float>(
+fun <T> sheetHideMotionSpec(motion: PageMotion) = tween<T>(
 	durationMillis = motion.sheetHideMs,
 	easing = EmphasizedAccelerateEasing
 )

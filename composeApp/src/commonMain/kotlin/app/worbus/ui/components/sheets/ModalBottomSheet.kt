@@ -22,7 +22,6 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,7 +53,11 @@ import app.worbus.ui.theme.NavicTheme
 import app.worbus.ui.util.CoverAmbient
 import app.worbus.ui.util.pageMotionOf
 import app.worbus.ui.util.sheetHideMotionSpec
-import app.worbus.ui.util.sheetShowMotionSpec
+import app.worbus.ui.util.PageMotion
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,6 +123,23 @@ fun ModalBottomSheet(
 	// Initial pass and never consumed, so the sheet's own drag and the content's scrolling see
 	// every event as before.
 	var touched by remember { mutableStateOf(false) }
+	// B-442 / B-154: Material's sheet takes its show, hide and drag-settle specs from the motion scheme, in a
+	// SideEffect that runs on every recomposition of the sheet (BottomSheet, M3 1.5): `defaultSpatialSpec` to show
+	// and settle, `fastEffectsSpec` to hide. The specs this wrapper wrote into the sheet state once were overwritten
+	// on the sheet's first recomposition, so Back and the player's chevron closed on Material's fast spring (~100 ms
+	// on the VM AVD) whatever `PageMotion.sheetHideMs` said. The hide is given through the scheme instead
+	// ([SheetMotionScheme]), and the content gets the page's own scheme back ([outerMotion]).
+	val preferences = koinInject<PreferenceManager>()
+	val motion = pageMotionOf(preferences.animationStyle, preferences.motionSpeed)
+	val outerMotion = MaterialTheme.motionScheme
+	val sheetMotion = remember(outerMotion, motion) { SheetMotionScheme(outerMotion, motion) }
+	val outerColors = MaterialTheme.colorScheme
+	val outerShapes = MaterialTheme.shapes
+	val outerType = MaterialTheme.typography
+	val withPageMotion: @Composable (@Composable () -> Unit) -> Unit = { inner ->
+		MaterialExpressiveTheme(colorScheme = outerColors, motionScheme = outerMotion, shapes = outerShapes, typography = outerType, content = inner)
+	}
+	MaterialExpressiveTheme(colorScheme = outerColors, motionScheme = sheetMotion, shapes = outerShapes, typography = outerType) {
 	androidx.compose.material3.ModalBottomSheet(
 		onDismissRequest = onDismissRequest,
 		modifier = modifier.pointerInput(Unit) {
@@ -155,7 +175,7 @@ fun ModalBottomSheet(
 		// container-coloured frame shows there.
 		contentWindowInsets = if (ambient != null) ({ contentWindowInsets().only(WindowInsetsSides.Top) }) else contentWindowInsets,
 		properties = properties,
-		content = {
+		content = { withPageMotion {
 			// INSIDE the window insets (below), not around them: the keyboard's inset changes
 			// every frame as it slides, and easing that too would let the keyboard cover the
 			// field it was opened for. The eased size is clamped to what the sheet is given,
@@ -208,20 +228,20 @@ fun ModalBottomSheet(
 			} else {
 				content()
 			}
-		},
+		} },
 	)
-
-	// navi-connect I-042: the times follow the animation style; the one-motion opening above
-	// is untouched.
-	val preferences = koinInject<PreferenceManager>()
-	val animationStyle = preferences.animationStyle
-	val motionSpeed = preferences.motionSpeed
-	@Suppress("INVISIBLE_REFERENCE")
-	LaunchedEffect(animationStyle, motionSpeed) {
-		val motion = pageMotionOf(animationStyle, motionSpeed)
-		sheetState.showMotionSpec = sheetShowMotionSpec(motion)
-		sheetState.hideMotionSpec = sheetHideMotionSpec(motion)
 	}
+}
+
+/**
+ * B-442: the motion scheme Material's sheet reads its hide from: [base] with `fastEffectsSpec` the sheet's hide
+ * ([sheetHideMotionSpec], `PageMotion.sheetHideMs`). Its `defaultSpatialSpec`, which opens the sheet and also
+ * settles every drag released on it, is left as [base]'s (a spring that follows the fling): a fixed-time tween
+ * there would make a fling take [PageMotion.sheetShowMs] whatever its speed. Read by the sheet alone: its
+ * content gets [base] back.
+ */
+internal class SheetMotionScheme(private val base: MotionScheme, private val motion: PageMotion) : MotionScheme by base {
+	override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = sheetHideMotionSpec(motion)
 }
 
 /**
