@@ -16,21 +16,20 @@ import app.worbus.domain.manager.attentionPage
 import app.worbus.domain.manager.matchesToShow
 
 /**
- * Needs attention (P6): the page is [attentionPage] over what [LbBotManager] already holds (the last
- * attention read, the device's ledger, Library Matches' "to check" list). It holds no list of its
- * own, so a fill frame or a retry moves a row the moment the ledger moves, and the next read (on
- * opening, on a pull, on a frame) replaces the rest.
+ * Needs attention (P6), now Library Matches' To fix: the page is [attentionPage] over what [LbBotManager]
+ * already holds (the last attention read, Library Matches' "to check" list). It holds no list of its own:
+ * the next read (on opening, on a pull, on a frame) replaces it. B-450: failed albums and picks are Source
+ * history's, not this page's.
  */
 class AttentionViewModel(private val lbBot: LbBotManager, hubManager: HubManager) : ViewModel() {
 
 	val page: StateFlow<AttentionPage> = combine(
-		lbBot.attention, lbBot.ledger, lbBot.matchesToCheck, lbBot.artistOverrides, lbBot.downloads
-	) { state, ledger, toCheck, overrides, downloads ->
+		lbBot.attention, lbBot.matchesToCheck, lbBot.artistOverrides, lbBot.downloads
+	) { state, toCheck, overrides, downloads ->
 		attentionPage(
 			read = state.status,
 			last = state.last,
 			lastAt = state.lastAt.takeIf { it > 0L },
-			ledger = ledger,
 			artistsToCheck = matchesToShow(toCheck, overrides)?.size,
 			downloadsOn = downloads.isOn
 		)

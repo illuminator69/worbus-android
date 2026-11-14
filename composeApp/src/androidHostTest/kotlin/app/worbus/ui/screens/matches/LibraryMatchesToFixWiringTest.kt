@@ -35,6 +35,6 @@ class LibraryMatchesToFixWiringTest {
 
 	@Test
 	fun nothingOfToFixIsReadForANonAdmin() {
-		assertTrue("val toFix = if (roles.admin) rememberToFixUi(snackbar) else null" in screen, "L8")
+		assertTrue("val toFix = if (roles.admin) rememberToFixUi() else null" in screen, "L8")
 	}
 }

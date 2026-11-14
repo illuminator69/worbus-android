@@ -2130,8 +2130,9 @@ true of invented *album art*, and not of an icon naming the kind.
   `webUrl/#/<path>` in a browser). (Since B-406 the list is Library Matches' **To fix** chip.) **Its number is
   Worbus for desktop's** (B-406, the owner's second re-walk, 2026-11-13): `imports + folders` (`libraryToFixCount`, from
   `GET /lb/attention`'s `counts`, PROTOCOL §15.6; desktop `libraryToFixCount`), for the chip, the headline and Library
-  Matches' menu badge alike, and no number without an answer. The failed albums, the picks and this phone's own rows are
-  listed, never counted there (lb-bot's own `toFixCount` adds `failedGaps + failedRequests`, and lb-bot counts a failed
+  Matches' menu badge alike, and no number without an answer. **Since B-450 (the owner's ruling, 2026-11-14) To fix lists
+  only what it counts, as the desktop's does**: the imports row and the folders to file. The failed albums, the picks and
+  this phone's own failures it used to list uncounted are Source history's Need you (lb-bot's own `toFixCount` adds `failedGaps + failedRequests`, and lb-bot counts a failed
   gap fill in both, which is how the phone once said 67 against the desktop's 41); this phone's failures and picks are
   Source history's badge (`sourceHistoryBadge`, desktop Activity's `attentionCount`), which is the size of Source
   history's **Need you** chip (review M1, second re-walk): every request drawn as failed or waiting on a pick, **from
@@ -2149,22 +2150,16 @@ true of invented *album art*, and not of an icon naming the kind.
   `sourceHistoryGroups`); Requests is still lb-bot's list joined with the ledger and attention (`mergeHistory`) (`mergeHistory` of the manager's last `/lb/activity` answer, `activityAnswer`, and
   the ledger), where lb-bot's later state wins (a ledger row that settled after lb-bot's answer was read keeps its own);
   it stays with downloading off, and Source history's menu row with it, as the desktop keeps Activity (review L3). The
-  To fix headline says what its number is made of ("41 to fix: 16 imports, 25 downloaded folders to file"), the listed
-  but uncounted groups say so under their headers, and neither "Nothing to fix" nor "To fix (0)" is said over a listed
-  row (review L1, L2). lb-bot's counts are read as the desktop reads them: a whole number above 0, else 0
+  To fix headline says what its number is made of ("41 to fix: 16 imports, 25 downloaded folders to file"), and neither
+  "Nothing to fix" nor "To fix (0)" is said over a listed folder (review L1, L2). lb-bot's counts are read as the desktop reads them: a whole number above 0, else 0
   (`LbCountSerializer`, review L7). It is read on a hub `welcome` / `lb` frame and on a `fill` frame that
   names a failure or a pick (forced), when the menu opens and when a page appears, at most every 30 s otherwise, one read
   at a time; never polled. **A read that did not happen is never zero**: an older hub or lb-bot (a bare 404, a 405) gives
-  To fix no number (the ledger's failures are Source history's badge and the avatar's dot) and the page lists the
-  device's rows with one sentence; a failed read keeps the last answer and says
-  when it was read; nothing read yet is a spinner. Rows lb-bot lists and the ledger holds appear once (lb-bot's state,
-  the device's buttons, but no Dismiss: on a row lb-bot lists it only hid this phone's copy, `AttentionRow.dismissable`);
-  the ledger's failed or waiting rows lb-bot no longer lists (it forgets in a day, the ledger in a week) are
-  `AttentionPage.Rows.deviceOnly`, under "Only on this phone" below lb-bot's albums and never under lb-bot's headline
-  (fix round B3); a row only lb-bot knows offers **Open album and nothing else** (`FillRow`'s `lbBotOnly`): nothing
-  here can retry, cancel or dismiss what the ledger does not hold, and a folder is never filed from here (filing
-  retags and moves files): its row says what lb-bot identified it as and how many files, never its name or path, and
-  opens `#/place/<id>` in lb-bot. Source history (it was Downloads' Fills and Wishlist chips, "Activity" in the menu) is
+  To fix no number (the ledger's failures are Source history's badge and the avatar's dot) and the section says so in
+  one sentence; a failed read keeps the last answer and says when it was read; nothing read yet is placeholder rows.
+  Nothing in To fix can retry, cancel or dismiss (those are Need you's rows), and a folder is never filed from here
+  (filing retags and moves files): its row says what lb-bot identified it as and how many files, never its name or path,
+  and opens `#/place/<id>` in lb-bot. Source history (it was Downloads' Fills and Wishlist chips, "Activity" in the menu) is
   lb-bot's ledger joined with the device's (`mergeHistory`), Running over Earlier with the Activity board's pills, the
   transfers chip only when lb-bot lists any, and `WishlistSection` moved whole; lb-bot's half is re-read every 10 s only
   while a running row is one lb-bot lists and the page is on screen (`historyRereadWanted`). A running ledger row against

@@ -125,7 +125,7 @@ class SecondRewalkReviewTest {
 	// ---- L1, L2 --------------------------------------------------------------------------------- //
 
 	private fun page(body: String) =
-		attentionPage(attentionRead(200, body), null, null, emptyList(), null) as AttentionPage.Rows
+		attentionPage(attentionRead(200, body), null, null, null) as AttentionPage.Rows
 
 	@Test
 	fun l1_nothingToFixIsNeverSaidOverListedFolders() {
@@ -137,7 +137,7 @@ class SecondRewalkReviewTest {
 		assertTrue(toFixHeadlineNothingShown(empty))
 		assertEquals(0, toFixNumber(empty, 0), "an answer with nothing listed is a 0")
 		val albumOnly = page("""{"version":1,"counts":{"failedGaps":1},"albums":[{"kind":"gap","key":"g","state":"failed"}]}""")
-		assertNull(toFixNumber(albumOnly, 0), "nor over a listed album")
+		assertEquals(0, toFixNumber(albumOnly, 0), "B-450: a failed album is Source history's, not To fix's")
 	}
 
 	@Test
@@ -146,10 +146,10 @@ class SecondRewalkReviewTest {
 		assertEquals(ToFixParts(total = 41, imports = 16, folders = 25), toFixParts(p))
 		assertEquals(ToFixParts(16, 16, 0), toFixParts(page("""{"version":1,"counts":{"imports":16}}""")))
 		// Downloading off: the folders are not counted, so not said.
-		val off = attentionPage(attentionRead(200, """{"version":1,"counts":{"imports":16,"folders":25}}"""), null, null, emptyList(), null, downloadsOn = false) as AttentionPage.Rows
+		val off = attentionPage(attentionRead(200, """{"version":1,"counts":{"imports":16,"folders":25}}"""), null, null, null, downloadsOn = false) as AttentionPage.Rows
 		assertEquals(ToFixParts(16, 16, 0), toFixParts(off))
 		// No answer, no number, no parts.
-		val none = attentionPage(AttentionRead.Older, null, null, emptyList(), null) as AttentionPage.Rows
+		val none = attentionPage(AttentionRead.Older, null, null, null) as AttentionPage.Rows
 		assertNull(toFixParts(none))
 	}
 

@@ -1,12 +1,9 @@
 package app.worbus.ui
 
-import app.worbus.domain.manager.AttentionAlbum
 import app.worbus.domain.manager.AttentionCounts
 import app.worbus.domain.manager.AttentionPage
-import app.worbus.domain.manager.AttentionRow
 import app.worbus.domain.manager.LbBotManager
 import app.worbus.domain.manager.LbDownloadsState
-import app.worbus.domain.manager.LbFillEntry
 import app.worbus.domain.manager.attentionBadge
 import app.worbus.domain.manager.toFixCount
 import app.worbus.domain.manager.AttentionRead
@@ -19,18 +16,12 @@ import app.worbus.domain.manager.LbUnownedRow
 import app.worbus.domain.manager.attentionPage
 import app.worbus.domain.manager.attentionRead
 import app.worbus.domain.manager.unownedRowAction
-import app.worbus.ui.components.common.FillButton
-import app.worbus.ui.components.common.FillText
-import app.worbus.ui.components.common.PillTone
 import app.worbus.ui.screens.artist.artistSheetOffersFillGaps
-import app.worbus.ui.screens.attention.attentionButtons
-import app.worbus.ui.screens.attention.attentionPill
 import app.worbus.ui.screens.collection.viewmodels.GapBoxUi
 import app.worbus.ui.screens.collection.viewmodels.gapError
 import app.worbus.ui.screens.downloads.viewmodels.refusalAnnounced
 import app.worbus.ui.screens.wishlist.sourceHistoryShowsWishlist
 import worbus.composeapp.generated.resources.Res
-import worbus.composeapp.generated.resources.attention_missing_off
 import app.worbus.ui.screens.collection.GapInput
 import app.worbus.ui.screens.collection.GapStage
 import app.worbus.ui.screens.collection.GapView
@@ -109,7 +100,7 @@ class DownloadsOffSurfacesTest {
 	private fun attentionRows(downloadsOn: Boolean): AttentionPage.Rows {
 		val read = attentionRead(200, attention)
 		val answer = (read as AttentionRead.Ok).attention
-		return attentionPage(read, answer, 1L, emptyList(), null, downloadsOn = downloadsOn) as AttentionPage.Rows
+		return attentionPage(read, answer, 1L, null, downloadsOn = downloadsOn) as AttentionPage.Rows
 	}
 
 	@Test
@@ -174,56 +165,18 @@ class DownloadsOffSurfacesTest {
 		assertIs<GapStage.Active>(gapStage(GapInput(transferring, 2, null, GapView.TRACKS, false, false, 100_000L, downloadsOn = true)))
 	}
 
-	private fun fillEntry(key: String) = LbFillEntry(
-		key = key, isGap = false, rgid = "rg-$key", groupId = "", releaseMbid = "rel-$key",
-		artist = "Artist", album = "Album", quality = "", state = "failed",
-		outcome = LbBotManager.OUTCOME_FAILED, reason = "no peers had it", percent = 0, done = 0, total = 5,
-		mp3WouldHelp = true, failureKind = "no_source", retryable = true, attempts = 3, settled = true,
-		startedAt = 0L, finishedAt = 0L
-	)
-
-	private val today = listOf(FillButton.ALLOW_MP3, FillButton.RETRY, FillButton.TRY_ANOTHER, FillButton.WISHLIST, FillButton.DISMISS)
-
 	@Test
-	fun attention_album_rows_offer_nothing_that_fetches_when_off() {
-		val album = AttentionAlbum(kind = "request", key = "rel-1", rgid = "rg-1", album = "B", state = "picking")
-		val lbBotsRow = AttentionRow(id = "request:rel-1", album = album, entry = fillEntry("1"))
-		val deviceRow = AttentionRow(id = "device:2", album = album, entry = fillEntry("2"))
-		assertEquals(listOf(FillButton.OPEN_ALBUM, FillButton.WISHLIST), attentionButtons(lbBotsRow, today, true, downloadsOn = false))
-		assertEquals(
-			listOf(FillButton.OPEN_ALBUM, FillButton.WISHLIST, FillButton.DISMISS),
-			attentionButtons(deviceRow, today, true, downloadsOn = false)
-		)
-		// Already wishlisted: no Wishlist.
-		assertEquals(listOf(FillButton.OPEN_ALBUM), attentionButtons(lbBotsRow, today, false, downloadsOn = false))
-		// One pill with no source and no failure in it.
-		val pill = attentionPill(lbBotsRow, downloadsOn = false)
-		assertEquals(FillText.Res(Res.string.attention_missing_off), pill.label)
-		assertEquals(PillTone.NEUTRAL, pill.tone)
-		// A refused row action that was lb-bot's `downloads_off` raises no snackbar.
+	fun a_downloads_off_refusal_raises_no_snackbar() {
+		// B-450: the album rows that offered these actions moved to Source history; the refusal rule stays.
 		assertFalse(refusalAnnounced(LbBotManager.LbError.Rejected(409, "Downloading is not set up on this server.", "downloads_off")))
-	}
-
-	@Test
-	fun attention_album_rows_offer_nothing_that_fetches_when_off_unchanged_when_on() {
-		val album = AttentionAlbum(kind = "request", key = "rel-1", rgid = "rg-1", album = "B", state = "failed")
-		val lbBotsRow = AttentionRow(id = "request:rel-1", album = album, entry = fillEntry("1"))
-		// Dismiss only where it removes the row (L4b-09), the rest as the vocabulary says.
-		assertEquals(today - FillButton.DISMISS, attentionButtons(lbBotsRow, today, true, downloadsOn = true))
-		// An lb-bot-only row opens its album, in both modes.
-		val lbOnly = AttentionRow(id = "request:rel-9", album = album, entry = null)
-		assertEquals(listOf(FillButton.OPEN_ALBUM), attentionButtons(lbOnly, today, true, downloadsOn = true))
-		assertEquals(listOf(FillButton.OPEN_ALBUM), attentionButtons(lbOnly, today, true, downloadsOn = false))
-		assertEquals(PillTone.BAD, attentionPill(lbBotsRow, downloadsOn = true).tone)
-		assertEquals(PillTone.WARN, attentionPill(lbBotsRow.copy(album = album.copy(state = "picking")), downloadsOn = true).tone)
 		assertTrue(refusalAnnounced(LbBotManager.LbError.Rejected(409, "busy", "busy")))
 		assertTrue(refusalAnnounced(LbBotManager.LbError.Busy))
 	}
 
 	@Test
 	fun attention_badge_counts_no_folder_when_off() {
-		// Ruling: the folders the page does not list while off are not counted either; the failed
-		// albums, which stay listed, are.
+		// Ruling: the folders the page does not list while off are not counted either (lb-bot's own to-fix
+		// number still counts its failed albums).
 		val counts = AttentionCounts(failedGaps = 3, failedRequests = 1, folders = 16)
 		assertEquals(20, toFixCount(counts))
 		assertEquals(4, toFixCount(counts, downloadsOn = false))
@@ -232,8 +185,8 @@ class DownloadsOffSurfacesTest {
 		assertEquals(1, attentionRows(downloadsOn = true).toFix)
 		val ok = attentionRead(200, attention) as AttentionRead.Ok
 		val state = AttentionState(last = ok.attention, lastAt = 1L, readAt = 1L, status = ok)
-		assertEquals(0, attentionBadge(state, emptyList(), downloadsOn = false))
-		assertEquals(1, attentionBadge(state, emptyList(), downloadsOn = true))
+		assertEquals(0, attentionBadge(state, downloadsOn = false))
+		assertEquals(1, attentionBadge(state, downloadsOn = true))
 	}
 
 	@Test

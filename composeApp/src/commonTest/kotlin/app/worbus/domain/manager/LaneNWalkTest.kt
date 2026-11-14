@@ -61,7 +61,7 @@ class LaneNWalkTest {
 
 	@Test
 	fun nothing_to_fix_only_for_a_list_that_was_read() {
-		val empty = AttentionPage.Rows(albums = emptyList(), folders = emptyList(), artistsToCheck = null, toFix = 0, notices = emptyList())
+		val empty = AttentionPage.Rows(folders = emptyList(), artistsToCheck = null, toFix = 0, notices = emptyList())
 		assertTrue(attentionEmptyShown(empty), "lb-bot answered, nothing listed")
 		// Too old, unavailable or refused: the read failed, and only the one sentence is said.
 		assertFalse(attentionEmptyShown(empty.copy(notices = listOf(AttentionNotice.Unreachable(since = null)))))

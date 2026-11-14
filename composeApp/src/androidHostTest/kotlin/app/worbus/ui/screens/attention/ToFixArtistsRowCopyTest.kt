@@ -28,16 +28,18 @@ class ToFixArtistsRowCopyTest {
 	@Test
 	fun theFilesGroupCountsImportsAndFoldersOnly() {
 		val answer = LbAttention(version = 1, counts = AttentionCounts(imports = 2, folders = 3))
-		val page = attentionPage(AttentionRead.Ok(answer), answer, 1L, emptyList(), artistsToCheck = 2) as AttentionPage.Rows
+		val page = attentionPage(AttentionRead.Ok(answer), answer, 1L, artistsToCheck = 2) as AttentionPage.Rows
 		assertEquals(2 + 3, toFixSectionCount(page))
 	}
 
 	@Test
 	fun theSectionListsWhatThePageListedButTheArtists() {
 		val items = section.substringAfter("fun LazyListScope.toFixItems(").substringBefore("\n}\n")
-		for (part in listOf("AttentionHead(", "albumRows(\"albums\"", "ImportsRowItem(", "FolderRow(", "albumRows(\"device-only\"", "openLb(\"needs/fix\")")) {
+		for (part in listOf("AttentionHead(", "ImportsRowItem(", "FolderRow(", "openLb(\"needs/fix\")")) {
 			assertTrue(part in items, "the To fix section lists $part")
 		}
+		// B-450: failed albums, picks and this phone's failures are Source history's.
+		assertTrue("albumRows(" !in items && "AlbumRow(" !in section, "no album rows in To fix")
 		assertTrue("artists-to-check" !in items && "Screen.LibraryMatches" !in items, "the artists to check are the To check chip")
 		assertTrue("fun AttentionScreen(" !in section, "no page of its own")
 	}

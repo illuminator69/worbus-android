@@ -2,7 +2,6 @@ package app.worbus.ui.screens.wishlist
 
 import app.worbus.sourceFile
 import worbus.composeapp.generated.resources.Res
-import worbus.composeapp.generated.resources.attention_missing_off
 import worbus.composeapp.generated.resources.info_external_album_index_failed_off
 import worbus.composeapp.generated.resources.request_downloads_off
 import app.worbus.ui.screens.downloads.WISHLIST_OFF_STRINGS
@@ -36,7 +35,7 @@ class WishlistCopyTest {
 	/** The lane N review's OFF strings: Needs attention's pill and line, and the missing album's index note. */
 	@Test
 	fun review_off_copy_has_no_searching_words() {
-		for (res in listOf(Res.string.attention_missing_off, Res.string.request_downloads_off, Res.string.info_external_album_index_failed_off)) {
+		for (res in listOf(Res.string.request_downloads_off, Res.string.info_external_album_index_failed_off)) {
 			val text = strings[res.key]
 			assertTrue(text != null, "${res.key} is not in values/strings.xml")
 			val lower = text.lowercase()

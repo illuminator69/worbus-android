@@ -10,14 +10,14 @@ package app.worbus.domain.manager
  * Worbus for desktop's Library Matches page is the twin for To check, Artists, Albums and Merged names.
  * Android has a fifth, To fix (B-406, the owner's ruling of 2026-11-13: the Needs attention page that
  * was), as the desktop's Library Matches has. **Its number is the desktop's** (`libraryToFixCount`:
- * lb-bot's imports and folders to file; the owner's second re-walk, 2026-11-13 evening), though the phone's
- * section also lists the failed albums, the picks and this phone's own rows, uncounted.
+ * lb-bot's imports and folders to file; the owner's second re-walk, 2026-11-13 evening), and since B-450
+ * (2026-11-14) so is its list: the failed albums, the picks and this phone's own failures are Source history's.
  */
 
 /**
  * The page's sections, in the order they are offered. B-406 (the owner's ruling, 2026-11-13): **To fix**,
- * lb-bot's own to-fix list (failed albums, albums waiting on a pick, downloaded folders and imports to
- * file), which was the separate "Needs attention" page.
+ * lb-bot's imports and downloaded folders to file, which was the separate "Needs attention" page (its failed
+ * albums and picks moved to Source history, B-450).
  */
 enum class MatchesSection { TO_FIX, TO_CHECK, ARTISTS, ALBUMS, MERGES }
 

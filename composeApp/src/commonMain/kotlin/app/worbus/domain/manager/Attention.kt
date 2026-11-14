@@ -22,9 +22,9 @@ import kotlinx.serialization.json.jsonObject
  * Worbus P4, the import records it could not finish filing) ([toFixCount]). Since the owner's second
  * re-walk (B-406, 2026-11-13 evening) the phone's To fix number, for the chip, the headline and Library
  * Matches' menu badge alike, is **Worbus for desktop's**: lb-bot's imports plus the folders waiting to be
- * filed ([libraryToFixCount], desktop `libraryToFixCount`). The failed albums, the picks and this phone's
- * own rows are still listed in the section, and not counted there; this phone's own failures and picks
- * are Source history's badge ([needsAttentionCount], desktop Activity's `attentionCount`). Artists to
+ * filed ([libraryToFixCount], desktop `libraryToFixCount`). B-450 (2026-11-14): the failed albums, the picks
+ * and this phone's own rows are no longer listed in the section either; they are Source history's Need you and
+ * its badge ([needsAttentionCount], desktop Activity's `attentionCount`). Artists to
  * check are Library Matches' To check chip. Where lb-bot has not answered (older, unreachable, nothing
  * read yet) the section has no number at all, as the desktop has no To fix chip then.
  */
@@ -191,12 +191,12 @@ fun libraryToFixCount(c: AttentionCounts, downloadsOn: Boolean = true): Int =
 
 /**
  * Library Matches' menu badge: the To fix section's own number ([toFixTotal]) over the same page the
- * section draws ([attentionPage], from the same state and ledger), so the badge, the chip and the headline
+ * section draws ([attentionPage], from the same state), so the badge, the chip and the headline
  * are one number, the desktop's ([libraryToFixCount]). With no answer from lb-bot it is 0 (no badge), as
  * the desktop's Library Matches badge is.
  */
-fun attentionBadge(state: AttentionState, ledger: List<LbFillEntry>, downloadsOn: Boolean = true): Int =
-	(attentionPage(state.status, state.last, state.lastAt.takeIf { it > 0L }, ledger, null, downloadsOn) as? AttentionPage.Rows)
+fun attentionBadge(state: AttentionState, downloadsOn: Boolean = true): Int =
+	(attentionPage(state.status, state.last, state.lastAt.takeIf { it > 0L }, null, downloadsOn) as? AttentionPage.Rows)
 		?.let(::toFixTotal)
 		?: 0
 
@@ -253,46 +253,16 @@ fun folderTitle(f: AttentionFolder, unidentified: String): String =
 fun folderDetail(f: AttentionFolder, filesWord: (Int) -> String): String =
 	listOfNotNull(filesWord(f.fileCount), f.formats.trim().uppercase().ifBlank { null }).joinToString(" · ")
 
-/** Whether a server row and a device ledger row are the same fill: by release MBID, else by group id. */
-internal fun sameFill(releaseMbid: String, groupId: String, entry: LbFillEntry): Boolean = when {
-	releaseMbid.isNotBlank() && entry.releaseMbid.isNotBlank() -> releaseMbid == entry.releaseMbid
-	groupId.isNotBlank() -> groupId == entry.groupId || (entry.isGap && groupId == entry.key)
-	else -> false
-}
-
-/** A ledger row the attention page lists: settled, and a failure or a pick waiting. */
-internal fun LbFillEntry.wantsAttention(): Boolean =
-	settled && (outcome == LbBotManager.OUTCOME_FAILED || outcome == LbBotManager.OUTCOME_NEEDS_PICK)
-
-/** One album row on the page. [entry] is this device's ledger row for it, when there is one. */
-data class AttentionRow(
-	val id: String,
-	val album: AttentionAlbum,
-	val entry: LbFillEntry?
-) {
-	/** Only a row the ledger holds can be retried here; lb-bot's own rows open the album. */
-	val actionable: Boolean get() = entry != null
-
-	/** A row only this phone's ledger holds: lb-bot does not list it (any more). */
-	val isDeviceOnly: Boolean get() = id.startsWith("device:")
-
-	/**
-	 * Dismiss is for a row only this phone holds. On a row lb-bot still lists it only hid this phone's
-	 * copy: the row stayed as lb-bot's, with the count and the dot unchanged (audit L4b-09).
-	 */
-	val dismissable: Boolean get() = isDeviceOnly
-}
-
 /** A one-line note under the page's title. */
 sealed interface AttentionNotice {
-	/** The hub or lb-bot is older: only this device's requests can be listed. */
+	/** The hub or lb-bot is older: it lists nothing to fix. */
 	data object Older : AttentionNotice
 
 	/** lb-bot did not answer; what is shown was read at [since] (epoch ms), or never when null. */
 	data class Unreachable(val since: Long?) : AttentionNotice
 
-	/** The caps cut rows: say how many more lb-bot holds. */
-	data class Truncated(val albums: Int, val folders: Int) : AttentionNotice
+	/** The cap cut folders: say how many more lb-bot holds (B-450: its album rows are Source history's). */
+	data class Truncated(val folders: Int) : AttentionNotice
 }
 
 /**
@@ -302,7 +272,7 @@ sealed interface AttentionNotice {
  * notice is said alone: nothing claims what was not checked.
  */
 fun attentionEmptyShown(page: AttentionPage.Rows): Boolean =
-	page.albums.isEmpty() && page.folders.isEmpty() && page.deviceOnly.isEmpty() && page.imports == 0 &&
+	page.folders.isEmpty() && page.imports == 0 &&
 		(page.artistsToCheck ?: 0) == 0 && page.toFix == 0 &&
 		page.notices.none { it is AttentionNotice.Unreachable || it == AttentionNotice.Older }
 
@@ -310,8 +280,12 @@ sealed interface AttentionPage {
 	/** Nothing read yet and nothing to show from before: not "nothing to fix". */
 	data object Loading : AttentionPage
 
+	/**
+	 * B-450 (the owner's ruling, 2026-11-14): what lb-bot has to be filed, as Worbus for desktop's To fix: its
+	 * imports and the folders waiting. Failed albums, the albums waiting on a pick and this phone's own failed
+	 * rows were listed here too, uncounted; they are Source history's Need you, where every client's are.
+	 */
 	data class Rows(
-		val albums: List<AttentionRow>,
 		val folders: List<AttentionFolder>,
 		/** Library Matches' "to check" list, or null when it is not known. Listed, never counted. */
 		val artistsToCheck: Int?,
@@ -321,13 +295,6 @@ sealed interface AttentionPage {
 		 */
 		val toFix: Int?,
 		val notices: List<AttentionNotice>,
-		/**
-		 * With an answer from lb-bot: the failed or waiting rows this phone's ledger holds that lb-bot
-		 * no longer lists (the ledger keeps a week, lb-bot a day). Listed apart, under "Only on this
-		 * phone", never under lb-bot's headline as if lb-bot had counted them (audit L4b-02). Without an
-		 * answer the device's rows are [albums] and there is no headline.
-		 */
-		val deviceOnly: List<AttentionRow> = emptyList(),
 		/** Worbus P4: lb-bot's `counts.imports` from the answer shown, 0 without one. */
 		val imports: Int = 0,
 		/** B-406: lb-bot's `counts.folders` from the answer shown, 0 without one or while downloading is off. */
@@ -352,27 +319,25 @@ fun toFixSectionCount(page: AttentionPage.Rows): Int =
  * no number, over this phone's own rows).
  *
  * Review M4 had made it everything the section lists (lb-bot's [toFixCount], the picks, this phone's rows):
- * 67 on the owner's phone against the desktop's 41. Those rows are still listed, under Albums and Only on
- * this phone, each group with its own row count; this phone's failures and picks are Source history's
- * badge ([sourceHistoryBadge]).
+ * 67 on the owner's phone against the desktop's 41. Since B-450 those rows are not listed here at all: they are
+ * Source history's Need you and its badge ([sourceHistoryBadge]).
  */
 fun toFixTotal(page: AttentionPage.Rows): Int? = page.toFix
 
 /**
- * The page, from the last read, the last good answer ([last], read at [lastAt]) and the ledger.
+ * The page, from the last read and the last good answer ([last], read at [lastAt]).
  *
- * - A good answer lists lb-bot's rows; a ledger row the server also lists appears once, lb-bot's
- *   state with the device's [AttentionRow.entry]. The device's own failed or waiting rows lb-bot no
- *   longer lists are [AttentionPage.Rows.deviceOnly] (lb-bot forgets a failed request after a day;
- *   the ledger keeps a week).
- * - A failed read keeps the last good answer and says since when; with none, the device's rows.
- * - An older hub or lb-bot lists the device's rows and says so. No read at all is [AttentionPage.Loading].
+ * - A good answer lists lb-bot's imports and folders to file.
+ * - A failed read keeps the last good answer and says since when; with none, nothing and no number.
+ * - An older hub or lb-bot lists nothing and says so. No read at all is [AttentionPage.Loading].
+ *
+ * B-450: lb-bot's failed albums and picks (`albums`) and this device's failed or waiting rows are not this
+ * page's; Source history's Need you lists them ([needYouItems]).
  */
 fun attentionPage(
 	read: AttentionRead?,
 	last: LbAttention?,
 	lastAt: Long?,
-	ledger: List<LbFillEntry>,
 	artistsToCheck: Int?,
 	/**
 	 * Worbus P1: lb-bot can download. Off, no folder is listed: a folder row's only action is filing it
@@ -388,68 +353,24 @@ fun attentionPage(
 	}
 	if (read == null && answer == null) return AttentionPage.Loading
 
-	val device = ledger.filter { it.wantsAttention() }
 	val notices = buildList {
 		if (read == AttentionRead.Older) add(AttentionNotice.Older)
 		if (read == AttentionRead.Unavailable) add(AttentionNotice.Unreachable(lastAt.takeIf { last != null }))
 		val cut = answer?.truncated
-		if (cut != null && (cut.albums > 0 || cut.folders > 0)) add(AttentionNotice.Truncated(cut.albums, cut.folders))
+		if (downloadsOn && cut != null && cut.folders > 0) add(AttentionNotice.Truncated(cut.folders))
 	}
 	if (answer == null) {
-		return AttentionPage.Rows(
-			albums = device.sortedForAttention().map { it.asAttentionRow() },
-			folders = emptyList(),
-			artistsToCheck = artistsToCheck,
-			toFix = null,
-			notices = notices
-		)
+		return AttentionPage.Rows(folders = emptyList(), artistsToCheck = artistsToCheck, toFix = null, notices = notices)
 	}
-
-	val claimed = mutableSetOf<String>()
-	val serverRows = answer.albums.orEmpty().mapNotNull { album ->
-		val entry = ledger.firstOrNull { it.key !in claimed && sameFill(album.releaseMbid, album.groupId, it) }
-		if (entry != null) claimed += entry.key
-		// The ledger is newer than any read for the rows it names (a fill frame or a poll moves it
-		// at once): a fill this device has started again is running, and no longer waits on anyone.
-		if (entry != null && !entry.settled) return@mapNotNull null
-		AttentionRow(id = "${album.kind}:${album.key.ifBlank { album.groupId.ifBlank { album.releaseMbid } }}", album = album, entry = entry)
-	}
-	val deviceOnly = device.filter { it.key !in claimed }.sortedForAttention().map { it.asAttentionRow() }
 	return AttentionPage.Rows(
-		albums = serverRows,
 		folders = if (downloadsOn) answer.folders else emptyList(),
 		artistsToCheck = artistsToCheck,
 		toFix = answer.counts?.let { libraryToFixCount(it, downloadsOn) },
 		notices = notices,
-		deviceOnly = deviceOnly,
 		imports = answer.counts?.imports ?: 0,
 		foldersCounted = if (downloadsOn) answer.counts?.folders ?: 0 else 0
 	)
 }
-
-/** Failed first, then waiting on a pick; newest first inside each. */
-private fun List<LbFillEntry>.sortedForAttention(): List<LbFillEntry> =
-	sortedWith(compareBy<LbFillEntry> { if (it.outcome == LbBotManager.OUTCOME_FAILED) 0 else 1 }
-		.thenByDescending { it.finishedAt })
-
-/** A ledger row as the page's album row, named and keyed as lb-bot would. */
-internal fun LbFillEntry.asAttentionRow(): AttentionRow = AttentionRow(
-	id = "device:$key",
-	album = AttentionAlbum(
-		kind = if (isGap) "gap" else "request",
-		key = key,
-		groupId = groupId,
-		releaseMbid = releaseMbid,
-		rgid = rgid,
-		artist = artist,
-		album = album,
-		coverUrl = coverUrl,
-		state = if (outcome == LbBotManager.OUTCOME_NEEDS_PICK) "picking" else "failed",
-		total = total,
-		updatedAt = finishedAt / 1000.0
-	),
-	entry = this
-)
 
 /**
  * Whether to read `/lb/attention` now: never while a read is out, always when forced, otherwise at

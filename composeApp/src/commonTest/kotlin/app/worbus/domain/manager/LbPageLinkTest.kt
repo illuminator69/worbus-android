@@ -26,7 +26,7 @@ class LbPageLinkTest {
 		val older = (attentionRead(200, answer("""{"failedGaps":1,"failedRequests":2,"folders":3}""")) as AttentionRead.Ok).attention
 		assertEquals(0, older.counts!!.imports)
 		assertEquals(6, toFixCount(older.counts!!))
-		val page = attentionPage(attentionRead(200, answer("""{"failedGaps":1,"imports":4}""")), null, null, emptyList(), null)
+		val page = attentionPage(attentionRead(200, answer("""{"failedGaps":1,"imports":4}""")), null, null, null)
 		// B-406 (second re-walk): the To fix number is the desktop's, imports + folders; the failed gap is listed.
 		assertEquals(4, (page as AttentionPage.Rows).toFix)
 		assertEquals(4, libraryToFixCount(counts.copy(folders = 0)))
@@ -35,7 +35,7 @@ class LbPageLinkTest {
 	@Test
 	fun imports_row_only_when_positive() {
 		fun rows(counts: String) =
-			attentionPage(attentionRead(200, answer(counts)), null, null, emptyList(), null) as AttentionPage.Rows
+			attentionPage(attentionRead(200, answer(counts)), null, null, null) as AttentionPage.Rows
 		assertNull(importsRow(rows("""{"imports":0}"""), "https://lb.example.org/#/needs/imports"))
 		assertNull(importsRow(rows("""{"failedGaps":2}"""), null))
 		assertEquals(ImportsRow(3, "https://lb.example.org/#/needs/imports"), importsRow(rows("""{"imports":3}"""), "https://lb.example.org/#/needs/imports"))

@@ -135,7 +135,7 @@ fun LibraryMatchesScreen(
 	val snackbar = remember { SnackbarHostState() }
 	// B-406 review L8: lb-bot answers its to-fix list to admins only, so for anyone else nothing of it is
 	// read (the forced `/lb/attention` read, its collectors and the row actions' view model).
-	val toFix = if (roles.admin) rememberToFixUi(snackbar) else null
+	val toFix = if (roles.admin) rememberToFixUi() else null
 	// Review M4: before the section's first read, its number is this page's menu badge (the same rule).
 	val attentionBadge by lbBot.attentionBadge.collectAsStateWithLifecycle()
 	val toFixNumber = toFix?.let { toFixNumber(it.page, attentionBadge) }

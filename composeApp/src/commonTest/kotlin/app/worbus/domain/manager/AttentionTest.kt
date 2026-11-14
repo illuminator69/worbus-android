@@ -96,14 +96,13 @@ class AttentionTest {
 	fun libraryMatchesBadgeIsTheDesktopsNumberAndSourceHistoryCountsThisPhone() {
 		// B-406, second re-walk: lb-bot's 16 folders (+ 0 imports), the desktop's number. Its 3 failed gaps,
 		// 1 failed request and 14 picks are listed, not counted; this phone's two rows are Source history's.
-		assertEquals(16, attentionBadge(read(ok()), twoFailed))
-		assertEquals(16, attentionBadge(read(ok()), emptyList()))
-		assertEquals(0, attentionBadge(AttentionState(), twoFailed), "nothing read: no number, as the desktop")
+		assertEquals(16, attentionBadge(read(ok())))
+		assertEquals(0, attentionBadge(AttentionState()), "nothing read: no number, as the desktop")
 		assertEquals(2, sourceHistoryBadge(twoFailed))
 		// Review L3 (second re-walk): kept with downloading off, as the desktop keeps Activity's badge.
 		assertEquals(2, sourceHistoryBadge(twoFailed))
 		val nothing = ok().copy(counts = AttentionCounts(), albums = emptyList(), folders = emptyList())
-		assertEquals(0, attentionBadge(read(nothing), emptyList()))
+		assertEquals(0, attentionBadge(read(nothing)))
 	}
 
 	/*
@@ -127,16 +126,13 @@ class AttentionTest {
 			folders = emptyList()
 		)
 		val ledger = listOf(entry("mine"), entry("y", outcome = LbBotManager.OUTCOME_NEEDS_PICK))
-		val page = attentionPage(AttentionRead.Ok(answer), answer, 1L, ledger, null) as AttentionPage.Rows
+		val page = attentionPage(AttentionRead.Ok(answer), answer, 1L, null) as AttentionPage.Rows
 		assertEquals(41, toFixTotal(page), "not failed albums, picks or this phone's rows")
-		assertEquals(41, attentionBadge(read(answer), ledger))
+		assertEquals(41, attentionBadge(read(answer)))
 		assertEquals(41, toFixNumber(page, badge = 0))
-		// They are still listed.
-		assertEquals(listOf("g", "p"), page.albums.map { it.album.key })
-		assertEquals(2, page.deviceOnly.size)
 		// What made 67 before: lb-bot's to-fix (which counts a failed gap fill as a failed gap AND a failed
-		// request) + its picks + this phone's own rows.
-		assertEquals(61 + 4 + 2, toFixCount(counts) + counts.picks + page.deviceOnly.size)
+		// request) + its picks + this phone's own rows. B-450: those rows are Source history's.
+		assertEquals(61 + 4 + 2, toFixCount(counts) + counts.picks + ledger.size)
 	}
 
 	@Test
@@ -144,12 +140,11 @@ class AttentionTest {
 		val ledger = listOf(entry("x"), entry("y"))
 		for (status in listOf(AttentionRead.Unavailable, AttentionRead.Older)) {
 			val state = AttentionState(status = status)
-			val page = attentionPage(status, null, null, ledger, null) as AttentionPage.Rows
+			val page = attentionPage(status, null, null, null) as AttentionPage.Rows
 			assertNull(toFixTotal(page), "$status")
-			assertNull(toFixNumber(page, attentionBadge(state, ledger)), "$status")
-			assertEquals(0, attentionBadge(state, ledger), "$status")
-			assertEquals(2, page.albums.size, "this phone's rows are still listed")
-			assertEquals(2, sourceHistoryBadge(ledger), "and Source history's badge counts them")
+			assertNull(toFixNumber(page, attentionBadge(state)), "$status")
+			assertEquals(0, attentionBadge(state), "$status")
+			assertEquals(2, sourceHistoryBadge(ledger), "this phone's rows are Source history's (B-450)")
 		}
 		// Before the first read: the badge's number, or none.
 		assertEquals(3, toFixNumber(AttentionPage.Loading, badge = 3))
@@ -157,20 +152,19 @@ class AttentionTest {
 	}
 
 	@Test
-	fun nothingToFixIsNeverSaidOverAListedAlbum() {
+	fun nothingToFixIsSaidOverPicksAndThisPhonesRowsButNeverOverAListedFolder() {
+		// B-450: picks and this phone's failures are Source history's, so they no longer keep "Nothing to fix" away.
 		val picksOnly = ok().copy(
 			counts = AttentionCounts(picks = 1),
 			albums = listOf(AttentionAlbum(kind = "gap", key = "g", groupId = "g", state = "picking")),
 			folders = emptyList()
 		)
-		val page = attentionPage(AttentionRead.Ok(picksOnly), picksOnly, 1L, emptyList(), null) as AttentionPage.Rows
+		val page = attentionPage(AttentionRead.Ok(picksOnly), picksOnly, 1L, null) as AttentionPage.Rows
 		assertEquals(0, toFixTotal(page))
-		assertFalse(toFixHeadlineNothingShown(page))
-		val none = picksOnly.copy(counts = AttentionCounts(), albums = emptyList())
-		val deviceOnly = attentionPage(AttentionRead.Ok(none), none, 1L, listOf(entry("z")), null) as AttentionPage.Rows
-		assertFalse(toFixHeadlineNothingShown(deviceOnly))
-		val empty = attentionPage(AttentionRead.Ok(none), none, 1L, emptyList(), null) as AttentionPage.Rows
-		assertTrue(toFixHeadlineNothingShown(empty))
+		assertTrue(toFixHeadlineNothingShown(page))
+		// Review L1: a folder listed while lb-bot's counts say none.
+		val uncountedFolder = ok().copy(counts = AttentionCounts())
+		assertFalse(toFixHeadlineNothingShown(attentionPage(AttentionRead.Ok(uncountedFolder), uncountedFolder, 1L, null) as AttentionPage.Rows))
 	}
 
 	// --- folders -----------------------------------------------------------------------------------
@@ -209,90 +203,56 @@ class AttentionTest {
 
 	@Test
 	fun noReadAndNoAnswerIsLoadingNotNothing() {
-		assertEquals(AttentionPage.Loading, attentionPage(null, null, null, emptyList(), null))
+		assertEquals(AttentionPage.Loading, attentionPage(null, null, null, null))
 	}
 
 	@Test
 	fun aFailedReadKeepsTheLastAnswerAndSaysSinceWhen() {
-		val page = attentionPage(AttentionRead.Unavailable, ok(), lastAt = 1_000L, emptyList(), 7)
+		val page = attentionPage(AttentionRead.Unavailable, ok(), lastAt = 1_000L, 7)
 		assertIs<AttentionPage.Rows>(page)
 		assertEquals(16, page.toFix, "the desktop's number: folders (16) + imports (0)")
 		assertEquals(listOf(AttentionNotice.Unreachable(1_000L)), page.notices)
-		assertEquals(listOf("rel-1", "g1"), page.albums.map { it.album.key })
+		assertEquals(listOf("abcdef012345"), page.folders.map { it.id })
 		assertEquals(7, page.artistsToCheck)
 	}
 
 	@Test
-	fun aFailedReadWithNoAnswerListsTheDeviceAndNoNumber() {
-		val page = attentionPage(AttentionRead.Unavailable, null, null, listOf(entry("a")), null)
+	fun aFailedReadWithNoAnswerListsNothingAndNoNumber() {
+		val page = attentionPage(AttentionRead.Unavailable, null, null, null)
 		assertIs<AttentionPage.Rows>(page)
 		assertNull(page.toFix, "zero from a failed read is never drawn as zero")
 		assertEquals(listOf(AttentionNotice.Unreachable(null)), page.notices)
-		assertEquals(listOf("a"), page.albums.map { it.album.key })
+		assertTrue(page.folders.isEmpty(), "B-450: this phone's rows are Source history's")
 	}
 
 	@Test
-	fun anOlderHubListsTheLedgersFailedAndWaitingRowsAndSaysSo() {
-		val ledger = listOf(
-			entry("pick", outcome = LbBotManager.OUTCOME_NEEDS_PICK, finishedAt = 9),
-			entry("old", finishedAt = 1),
-			entry("new", finishedAt = 5),
-			entry("run", outcome = LbBotManager.OUTCOME_RUNNING, settled = false),
-			entry("done", outcome = LbBotManager.OUTCOME_DONE)
-		)
-		val page = attentionPage(AttentionRead.Older, ok(), 1L, ledger, null)
+	fun anOlderHubListsNothingAndSaysSo() {
+		val page = attentionPage(AttentionRead.Older, ok(), 1L, null)
 		assertIs<AttentionPage.Rows>(page)
 		assertEquals(listOf(AttentionNotice.Older), page.notices)
 		assertNull(page.toFix)
-		assertEquals(listOf("new", "old", "pick"), page.albums.map { it.album.key }, "failed first, newest first, then picks")
-		assertTrue(page.albums.all { it.actionable })
 		assertTrue(page.folders.isEmpty())
 	}
 
 	@Test
 	fun aTruncatedAnswerSaysSo() {
-		val cut = ok().copy(truncated = AttentionTruncated(albums = 12, folders = 0))
-		val page = attentionPage(AttentionRead.Ok(cut), cut, 1L, emptyList(), null) as AttentionPage.Rows
-		assertEquals(listOf(AttentionNotice.Truncated(12, 0)), page.notices)
+		val cut = ok().copy(truncated = AttentionTruncated(albums = 12, folders = 3))
+		val page = attentionPage(AttentionRead.Ok(cut), cut, 1L, null) as AttentionPage.Rows
+		assertEquals(listOf(AttentionNotice.Truncated(3)), page.notices, "B-450: the album rows are Source history's")
+		val albumsOnly = ok().copy(truncated = AttentionTruncated(albums = 12, folders = 0))
+		assertTrue((attentionPage(AttentionRead.Ok(albumsOnly), albumsOnly, 1L, null) as AttentionPage.Rows).notices.isEmpty())
 	}
 
 	@Test
-	fun aFillBothSidesKnowIsListedOnceWithLbBotsStateAndTheDevicesRow() {
-		val ledger = listOf(
-			entry("rg-x", releaseMbid = "rel-1", finishedAt = 3),
-			entry("g1", outcome = LbBotManager.OUTCOME_NEEDS_PICK, isGap = true, groupId = "g1"),
-			entry("mine", finishedAt = 2)
-		)
-		val page = attentionPage(AttentionRead.Ok(ok()), ok(), 1L, ledger, null) as AttentionPage.Rows
-		assertEquals(listOf("rel-1", "g1"), page.albums.map { it.album.key })
-		assertEquals(listOf("mine"), page.deviceOnly.map { it.album.key }, "only on this phone: listed apart (B3)")
-		assertEquals("rg-x", page.albums[0].entry?.key)
-		assertEquals("picking", page.albums[1].album.state, "lb-bot's state wins")
-		assertEquals("g1", page.albums[1].entry?.key)
-		assertTrue(page.albums.all { it.actionable })
-		val ids = (page.albums + page.deviceOnly).map { it.id }
-		assertEquals(ids.size, ids.toSet().size, "ids are unique")
-	}
-
-	@Test
-	fun aFillThisDeviceStartedAgainLeavesTheListBeforeTheNextRead() {
-		val retried = entry("rg-x", releaseMbid = "rel-1", settled = false)
-		val page = attentionPage(AttentionRead.Ok(ok()), ok(), 1L, listOf(retried), null) as AttentionPage.Rows
-		assertEquals(listOf("g1"), page.albums.map { it.album.key })
-		assertEquals(16, page.toFix, "the count is lb-bot's until it is read again")
-	}
-
-	@Test
-	fun aRowOnlyLbBotKnowsHasNoEntry() {
-		val page = attentionPage(AttentionRead.Ok(ok()), ok(), 1L, emptyList(), null) as AttentionPage.Rows
-		assertTrue(page.albums.none { it.actionable })
+	fun aGoodAnswerSaysNoNotice() {
+		val page = attentionPage(AttentionRead.Ok(ok()), ok(), 1L, null) as AttentionPage.Rows
 		assertEquals(16, page.toFix)
 		assertTrue(page.notices.isEmpty())
 	}
 
 	@Test
 	fun artistsToCheckArePassedThroughAndNeverCounted() {
-		val page = attentionPage(AttentionRead.Ok(ok()), ok(), 1L, emptyList(), 104) as AttentionPage.Rows
+		val page = attentionPage(AttentionRead.Ok(ok()), ok(), 1L, 104) as AttentionPage.Rows
 		assertEquals(104, page.artistsToCheck)
 		assertEquals(16, page.toFix)
 	}
@@ -310,19 +270,19 @@ class AttentionTest {
 			folders = List(25) { AttentionFolder(id = "f$it") }
 		)
 		fun page(toCheck: Int?, downloadsOn: Boolean = true) =
-			attentionPage(AttentionRead.Ok(a), a, 1L, emptyList(), toCheck, downloadsOn) as AttentionPage.Rows
+			attentionPage(AttentionRead.Ok(a), a, 1L, toCheck, downloadsOn) as AttentionPage.Rows
 		assertEquals(16 + 25, toFixSectionCount(page(null)))
 		assertEquals(16 + 25, toFixSectionCount(page(0)))
 		// B-406 re-walk: the artists to check are Library Matches' To check chip, not a row of this group.
 		assertEquals(16 + 25, toFixSectionCount(page(3)))
 		// lb-bot's count, not the rows it listed: a cut list still says how many there are.
 		val cut = a.copy(folders = a.folders.take(10))
-		assertEquals(16 + 25, toFixSectionCount(attentionPage(AttentionRead.Ok(cut), cut, 1L, emptyList(), null) as AttentionPage.Rows))
+		assertEquals(16 + 25, toFixSectionCount(attentionPage(AttentionRead.Ok(cut), cut, 1L, null) as AttentionPage.Rows))
 		// Downloading off: no folder is listed, and none is counted (toFixCount's rule).
 		assertEquals(16, toFixSectionCount(page(null, downloadsOn = false)))
 		// Review m9: counts that lack `folders` never count fewer than are listed.
 		val noFolderCount = a.copy(counts = AttentionCounts(imports = 16))
-		assertEquals(16 + 25, toFixSectionCount(attentionPage(AttentionRead.Ok(noFolderCount), noFolderCount, 1L, emptyList(), null) as AttentionPage.Rows))
+		assertEquals(16 + 25, toFixSectionCount(attentionPage(AttentionRead.Ok(noFolderCount), noFolderCount, 1L, null) as AttentionPage.Rows))
 	}
 
 	// --- refresh -----------------------------------------------------------------------------------
@@ -357,7 +317,7 @@ class AttentionTest {
 		assertEquals(AttentionRead.Unavailable, failed.status)
 		val older = nextAttentionState(good, AttentionRead.Older, 30L)
 		assertNull(older.last)
-		assertEquals(0, attentionBadge(older, twoFailed), "an older hub: no to-fix number")
+		assertEquals(0, attentionBadge(older), "an older hub: no to-fix number")
 		assertEquals(2, sourceHistoryBadge(twoFailed))
 	}
 
@@ -376,44 +336,4 @@ class AttentionTest {
 		assertEquals(0, menuAttentionBadge(badge = 5, configured = false))
 		assertEquals(5, menuAttentionBadge(badge = 5, configured = true))
 	}
-
-	private val zero = """{"version":1,"serverTime":1.0,"counts":{"failedGaps":0,"failedRequests":0,"folders":0},"albums":[],"folders":[]}"""
-
-	@Test
-	fun deviceOnlyRowsAreNotInAlbums() {
-		// L4b-02: the ledger keeps a failed request 7 days, lb-bot a day; it hung under "Nothing to fix".
-		val answer = (attentionRead(200, zero) as AttentionRead.Ok).attention
-		val old = entry("rg-old", releaseMbid = "rel-old", finishedAt = 5L)
-		val page = attentionPage(AttentionRead.Ok(answer), answer, 1L, listOf(old), null) as AttentionPage.Rows
-		assertEquals(0, page.toFix)
-		assertTrue(page.albums.isEmpty())
-		assertEquals(listOf("device:rg-old"), page.deviceOnly.map { it.id })
-	}
-
-	@Test
-	fun aServerRowTheLedgerHoldsStaysInAlbums() {
-		val held = entry("rg-x", releaseMbid = "rel-1")
-		val page = attentionPage(AttentionRead.Ok(ok()), ok(), 1L, listOf(held), null) as AttentionPage.Rows
-		assertEquals("rg-x", page.albums.first { it.album.key == "rel-1" }.entry?.key)
-		assertTrue(page.deviceOnly.isEmpty())
-	}
-
-	@Test
-	fun dismissableIsOnlyTrueForADeviceOnlyRow() {
-		// L4b-09: dismissing a row lb-bot still lists only hid this phone's copy; the count stayed.
-		val held = entry("rg-x", releaseMbid = "rel-1")
-		val mine = entry("rg-mine", releaseMbid = "rel-mine")
-		val page = attentionPage(AttentionRead.Ok(ok()), ok(), 1L, listOf(held, mine), null) as AttentionPage.Rows
-		val server = page.albums.first { it.album.key == "rel-1" }
-		assertTrue(server.actionable)
-		assertFalse(server.dismissable)
-		assertTrue(page.deviceOnly.single().dismissable)
-	}
-
-	@Test
-	fun anOlderHubsDeviceRowsAreDismissable() {
-		val page = attentionPage(AttentionRead.Older, null, null, listOf(entry("rg-a")), null) as AttentionPage.Rows
-		assertTrue(page.albums.single().dismissable)
-	}
 }
-

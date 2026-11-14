@@ -327,11 +327,11 @@ class LbBotManager(
 	private var attentionInFlight = false
 
 	/**
-	 * Library Matches' menu badge: the To fix section's own number over the same state and ledger
+	 * Library Matches' menu badge: the To fix section's own number over the same state
 	 * ([attentionBadge]), the desktop's (lb-bot's imports and folders to file; B-406, second re-walk).
 	 */
-	val attentionBadge: StateFlow<Int> = combine(_attention, _ledger, downloadsMode.value) { state, ledger, downloads ->
-		attentionBadge(state, ledger, downloadsOn = downloads.isOn)
+	val attentionBadge: StateFlow<Int> = combine(_attention, downloadsMode.value) { state, downloads ->
+		attentionBadge(state, downloadsOn = downloads.isOn)
 	}.stateIn(scope, SharingStarted.Eagerly, 0)
 
 	/**
