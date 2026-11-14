@@ -2002,7 +2002,8 @@ true of invented *album art*, and not of an icon naming the kind.
   and "stuttered up and down". Measured on the VM emulator with the sheet's offset logged: with
   easing the offset bounced between 3 and 124 px over a 1200 px swipe; with it off during the
   touch the offset followed the finger and the sheet dismissed. The wrapper watches the pointer
-  on the Initial pass (never consuming) and, while one is down, reports the measured height and
+  on the Initial pass (never consuming), on the drag handle and the content (never on the sheet's outer
+  modifier, which covers the space above the sheet, B-442), and, while one is down, reports the measured height and
   resets the easing to it. **One node for the sheet's life** (`easedHeight` in the wrapper), told
   whether to ease: swapping `animateContentSize()` in and out with the finger created a fresh
   node on the lift, which takes its first measurement as its start, so a tap that changed the
@@ -2360,13 +2361,28 @@ true of invented *album art*, and not of an icon naming the kind.
   one back animation, no fade into or out of a cover page, Settings' slide.
   Components keep `MotionScheme.expressive()` under Quick (`Theme.kt`; `standard()` is the
   one-line alternative), at the animation speed.
-  **A sheet's hide reaches Material through the motion scheme, never through `SheetState`** (B-442/B-154,
-  2026-11-14): M3's `BottomSheet` writes `showMotionSpec`, `hideMotionSpec` and the drag-settle spec into the sheet
-  state from `MaterialTheme.motionScheme` (`defaultSpatialSpec`, `fastEffectsSpec`) in a SideEffect on every
-  recomposition, so a spec written into the state is overwritten (Back and the player's chevron closed on Material's
-  fast spring, ~100 ms). `ModalBottomSheet.kt` wraps Material's sheet in `SheetMotionScheme` (`fastEffectsSpec` =
-  `PageMotion.sheetHideMs`) and gives the content the page's scheme back. The opening stays Material's spring:
-  `defaultSpatialSpec` also settles every drag, and `sheetShowMs` is not in effect (an owner's question).
+  **A sheet closes on the spring it opens on, through the motion scheme, never through `SheetState`** (B-442/B-154;
+  the owner's walk of `a7ea2fe1`, 2026-11-14: "it should just be the reverse of how they open"). M3 1.5's `BottomSheet`
+  writes `showMotionSpec`, `hideMotionSpec` and the drag-settle spec into the sheet state from `MaterialTheme.motionScheme`
+  in a SideEffect on every recomposition: `defaultSpatialSpec` opens the sheet and settles a released drag,
+  `fastEffectsSpec` (an effects spring) runs `hide()`, which is what Back, the player's chevron and a tap on the scrim
+  call, so they closed in ~100 ms while a drag closed on the opening's spring. A spec written into the state is
+  overwritten. `ModalBottomSheet.kt` runs Material's sheet under `sheetMotionScheme(theme's scheme)`, whose
+  `fastEffectsSpec` is that scheme's `defaultSpatialSpec`, and gives the content the page's scheme back. Sheets have no
+  times in `PageMotion` (`sheetShowMs`/`sheetHideMs` and their tweens are gone; `c5d2c36d`'s 300 ms tween close was the
+  walk's "different easing"). `SheetCloseMotionTest`.
+  **Nothing that takes touches goes on the sheet's outer `modifier`** (B-442, same walk: "you should be able to close
+  the sheet by tapping the space above"). M3 1.5 applies it BEFORE `draggableAnchors` moves the sheet down, so it lies
+  over [0, sheet height] from the top of the window, above the scrim in hit testing: the B-121 touch watch there took
+  every tap above a tall sheet (the album sheet, 1881 of 2992 px, had no tappable scrim at all; a short sheet only a band
+  near it). The watch is on the drag handle and the content (`watchTouch`). Applies to every sheet on the wrapper,
+  `BottomSheetScene`'s (Queue in landscape, Playback speed) included; the player has no space above it.
+  **Nothing expensive rides a shared element's flight** (B-447, 2026-11-14). A modifier AFTER `sharedElement` is drawn
+  by the flying element at a new size every frame: the album cover card's `dropShadow` (30 dp blur) was rasterised in
+  software on the main thread each flight frame (~110-130 ms per open on the VM AVD). The shadow is before
+  `sharedElement` (at the card's place and size) and its alpha follows the page's transition (`CoverShadow.kt`, owner's
+  option c): none in flight, a fade in on landing, a fade out as the page leaves, which a predictive Back seeks with the
+  finger. A Back's flight draws the TARGET's content (the tile), so anything only the page's element draws pops off.
   Page pushes and pops: `NavDisplay`'s `transitionSpec` / `popTransitionSpec` in `App.kt` read
   the style inside the lambda and build `Material3Transitions.enter` / `exit` / `popEnter` /
   `popExit(motion)` (the old fixed-timing `SharedXAxis*` vals were unused and are gone).
