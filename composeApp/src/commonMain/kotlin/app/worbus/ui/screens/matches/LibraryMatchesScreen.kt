@@ -2,7 +2,10 @@ package app.worbus.ui.screens.matches
 
 import app.worbus.ui.screens.attention.toFixNumber
 import app.worbus.domain.manager.matchesFirstChoiceFinal
-import app.worbus.domain.manager.matchesFirstChoiceShown
+import app.worbus.domain.manager.matchesPageSection
+import app.worbus.domain.manager.matchesRolesSettled
+import app.worbus.domain.manager.HubManager
+import app.worbus.ui.components.common.rowPlaceholders
 import app.worbus.domain.manager.AttentionPage
 import app.worbus.ui.screens.attention.toFixItems
 import app.worbus.ui.screens.attention.rememberToFixUi
@@ -182,11 +185,11 @@ fun LibraryMatchesScreen(
 	// B-406 review M3: the page's first choice, once made on known numbers, is kept for the visit.
 	val toCheckRead = matches.data != LbPanelData.READING
 	// B-444: final only on known numbers: the role, and (for an admin) lb-bot's to-fix list answered.
-	val firstChoiceFinal = matchesFirstChoiceFinal(
-		offered, toFixNumber ?: 0, toCheckRead,
-		toFixRead = toFix != null && toFix.page !is AttentionPage.Loading,
-		rolesKnown = roles.known
-	)
+	// Review N4: a hub out of reach sends no welcome, so it settles an unknown role.
+	val hubUnreachable by koinInject<HubManager>().unreachable.collectAsStateWithLifecycle()
+	val rolesSettled = matchesRolesSettled(roles.known, hubUnreachable)
+	val toFixRead = toFix != null && toFix.page !is AttentionPage.Loading
+	val firstChoiceFinal = matchesFirstChoiceFinal(offered, toFixNumber ?: 0, toCheckRead, toFixRead, rolesSettled)
 	LaunchedEffect(section, firstChoiceFinal) { if (chosen == null && firstChoiceFinal) chosen = section }
 
 	val openArtist: (String) -> (() -> Unit)? = { id ->
@@ -282,12 +285,20 @@ fun LibraryMatchesScreen(
 		// Review L6: the page's own first choice is no chip tap. Opened with no section, it answers Artists while
 		// the To check rows and the To fix number are still loading, then To check or To fix when they land, and the
 		// swap faded Artists out and the chosen section in, right after the page's push: a change nobody made. So
-		// nothing is shown until that choice is made on known numbers (`matchesFirstChoiceFinal`, the rule that
-		// then keeps it for the visit) or the user picks a chip, and the first section shown comes in at once.
-		// Only a change from one section to another fades through.
-		val sectionShown = section.takeIf { chosen != null || firstChoiceFinal || matchesFirstChoiceShown(offered, toFixNumber ?: 0, toCheckRead) }
+		// no section is shown until that choice is made on known numbers (`matchesFirstChoiceFinal`, the rule that
+		// then keeps it for the visit) or the user picks a chip: until then the rows' skeleton (stage 2 review M1:
+		// B-444 had brought back a section drawn early, To check, then a cross-fade to To fix when a slow
+		// `/lb/attention` answered), and the first section shown comes in at once. Only a change from one section
+		// to another fades through.
+		val sectionShown = matchesPageSection(section, chosen, offered, toFixNumber ?: 0, toCheckRead, toFixRead, rolesSettled)
 		ContentSwap(sectionShown, Modifier.fillMaxSize(), animate = { from, _ -> from != null }, label = "matchesSection") { section ->
-		if (section != null) LazyColumn(
+		if (section == null) LazyColumn(
+			modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+			contentPadding = innerPadding.withoutTop() + PaddingValues(top = 8.dp, bottom = 24.dp),
+			userScrollEnabled = false
+		) {
+			rowPlaceholders("matches")
+		} else LazyColumn(
 			modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
 			contentPadding = innerPadding.withoutTop() + PaddingValues(top = 8.dp, bottom = 24.dp)
 		) {

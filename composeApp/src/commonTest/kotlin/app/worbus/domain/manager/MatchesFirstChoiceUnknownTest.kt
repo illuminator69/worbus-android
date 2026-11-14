@@ -31,10 +31,14 @@ class MatchesFirstChoiceUnknownTest {
 		assertTrue(matchesFirstChoiceFinal(withFix, toFixCount = 41, toCheckRead = false, toFixRead = true, rolesKnown = true))
 	}
 
+	// Stage 2 review M1: no section is drawn before the choice is final (`matchesFirstChoiceShown` is gone): the rows'
+	// skeleton, MatchesSkeletonTest.
+
 	@Test
-	fun theSectionIsShownAsBeforeWhileItsChoiceMayStillMove() {
-		assertTrue(matchesFirstChoiceShown(withoutFix, toFixCount = 0, toCheckRead = true))
-		assertFalse(matchesFirstChoiceShown(withFix, toFixCount = 0, toCheckRead = false))
-		assertTrue(matchesFirstChoiceShown(withFix, toFixCount = 3, toCheckRead = false))
+	fun aHubOutOfReachSettlesAnUnknownRole() {
+		// N4: no welcome is on its way while dialling fails, so an unknown role does not hold the page's skeleton.
+		assertTrue(matchesRolesSettled(rolesKnown = false, hubUnreachable = true))
+		assertFalse(matchesRolesSettled(rolesKnown = false, hubUnreachable = false))
+		assertTrue(matchesRolesSettled(rolesKnown = true, hubUnreachable = false))
 	}
 }

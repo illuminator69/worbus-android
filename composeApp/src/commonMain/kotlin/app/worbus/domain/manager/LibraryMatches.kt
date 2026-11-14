@@ -82,12 +82,33 @@ internal fun matchesFirstChoiceFinal(
 	)
 
 /**
- * B-444: whether the page shows a section before its first choice is final ([matchesFirstChoiceFinal]): as soon as
- * the To check list is read, or To fix has something, as before. Until the role and the to-fix number are known the
- * section shown may still move, once, to the one they choose (To fix when lb-bot then counts something).
+ * The section the page draws, or null for the rows' skeleton: a chip the user picked ([chosen]) at once; before that,
+ * only the page's own first choice once it is final ([matchesFirstChoiceFinal]), and that one is then kept.
+ *
+ * Stage 2 review M1: B-444 drew a section while the choice could still move, so an admin who opened the page while
+ * `/lb/attention` was slow saw To check (its list answered first) cross-fade to To fix when attention answered, under a
+ * finger that may have been on a To check row (the owner's rules: a slow lookup gets a skeleton, a list does not swap
+ * by itself). The wait is bounded: a failed to-fix read is an answer (`Rows(Unreachable)`), and an unknown role is
+ * settled by the welcome or by the hub being out of reach (`matchesRolesSettled`).
  */
-internal fun matchesFirstChoiceShown(offered: List<MatchesSection>, toFixCount: Int, toCheckRead: Boolean): Boolean =
-	(MatchesSection.TO_FIX in offered && toFixCount > 0) || toCheckRead
+internal fun matchesPageSection(
+	section: MatchesSection,
+	chosen: MatchesSection?,
+	offered: List<MatchesSection>,
+	toFixCount: Int,
+	toCheckRead: Boolean,
+	toFixRead: Boolean,
+	rolesKnown: Boolean
+): MatchesSection? = section.takeIf {
+	chosen != null || matchesFirstChoiceFinal(offered, toFixCount, toCheckRead, toFixRead, rolesKnown)
+}
+
+/**
+ * Stage 2 review N4: whether the page may treat the role as settled. Known once the hub has said who the user is; and
+ * while the hub cannot be reached ([hubUnreachable]: dialling fails) no welcome is on its way, so the page decides on
+ * what it has (To fix is not offered) rather than waiting for one: a skeleton for as long as the hub is down otherwise.
+ */
+internal fun matchesRolesSettled(rolesKnown: Boolean, hubUnreachable: Boolean): Boolean = rolesKnown || hubUnreachable
 
 /** A section's chip: its name, and its count once the list has been loaded ([count] non-null). */
 internal fun matchesSectionLabel(section: MatchesSection, count: Int?): String {
