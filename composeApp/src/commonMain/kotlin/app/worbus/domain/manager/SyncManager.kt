@@ -171,10 +171,11 @@ class SyncManager(
 
 	private val changedSyncMutex = Mutex()
 
-	private suspend fun syncChangedAlbums(why: String) {
+	/** A changed-albums sweep; false when it failed (a full pull under way counts as done: it re-reads all). */
+	private suspend fun syncChangedAlbums(why: String): Boolean {
 		// Never alongside the full pull, which re-reads everything anyway.
-		if (syncMutex.isLocked) return
-		changedSyncMutex.withLock {
+		if (syncMutex.isLocked) return true
+		return changedSyncMutex.withLock {
 			repository.syncChangedAlbums()
 				.onSuccess { count ->
 					if (count > 0) {
@@ -185,6 +186,7 @@ class SyncManager(
 					}
 				}
 				.onFailure { Logger.w("SyncManager", "$why: changed-album sync failed", it) }
+				.isSuccess
 		}
 	}
 
@@ -202,25 +204,28 @@ class SyncManager(
 	private fun startScanWatch() {
 		if (scanWatchJob?.isActive == true) return
 		scanWatchJob = scope.launch {
-			var wasScanning = false
-			var lastCount: Int? = null
+			// B-429: from the lastScan last acted on, so a scan that ran while the app was closed is seen at the
+			// first reading (at once, not 30 s in).
+			var state = ScanWatchState(lastScan = preferenceManager.lastScanSeen.ifBlank { null })
+			var first = true
 			while (isActive) {
-				delay(SCAN_WATCH_INTERVAL)
+				if (!first) delay(SCAN_WATCH_INTERVAL)
+				first = false
 				if (!connectivityManager.isOnline.value) continue
-				val status = try {
-					sessionManager.api.getScanStatus()
+				val reading = try {
+					sessionManager.fetchScanStatus()
 				} catch (e: Exception) {
 					if (e is kotlin.coroutines.cancellation.CancellationException) throw e
 					continue
 				}
-				val finished = wasScanning && !status.scanning
-				val countMoved = lastCount != null && lastCount != status.count && !status.scanning
-				wasScanning = status.scanning
-				if (!status.scanning) lastCount = status.count
-				if (finished || countMoved) {
+				val (next, due) = scanWatchStep(state, reading)
+				state = next
+				if (due) {
 					delay(SCAN_SETTLE_DELAY)
-					syncChangedAlbums("Navidrome scan")
+					// Kept for the next start only once acted on: a sweep that failed is tried again then.
+					if (!syncChangedAlbums("Navidrome scan")) continue
 				}
+				next.lastScan?.let { preferenceManager.lastScanSeen = it }
 			}
 		}
 	}

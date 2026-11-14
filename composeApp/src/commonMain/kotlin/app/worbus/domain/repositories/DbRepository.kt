@@ -49,6 +49,7 @@ import app.worbus.data.database.mappers.toEntity
 import app.worbus.domain.manager.NotificationIds
 import app.worbus.domain.manager.NotificationManager
 import app.worbus.domain.manager.SessionManager
+import app.worbus.domain.manager.artistListStale
 import app.worbus.domain.manager.WriteQueue
 import app.worbus.domain.models.DomainArtist
 import app.worbus.util.Logger
@@ -435,11 +436,23 @@ class DbRepository(
 		}
 		if (albums.isEmpty()) error("none of ${wanted.size} album(s) could be fetched")
 		val entities = albums.map { it.toEntities(it) }
+		val newAlbums = albums.size - albumDao.getAlbumRowsByIds(albums.map { it.id }).size
 		writeQueue.withOverlay { overlay ->
 			albumDao.insertAlbums(entities.map { overlay.album(it.first) })
 			entities.flatMap { it.second }.map(overlay::song).chunked(1500).forEach { songDao.insertSongs(it) }
 		}
 		Logger.i("DbRepository", "- Targeted sync: ${albums.size} album(s)")
+		// B-429: the artist list was read by the full pull only, so a new artist (its first album landed) stayed
+		// out of Library > Artists until a manual full sync. One `getArtists` brings it, and album counts, in.
+		val artistIds = entities.map { it.first.artistId }
+		if (artistListStale(newAlbums, artistIds, heldArtistIds(artistIds))) {
+			try {
+				replaceArtists(sessionManager.fetchAlbumArtists().map { it.toEntity() })
+			} catch (e: Exception) {
+				if (e is CancellationException) throw e
+				Logger.w("DbRepository", "targeted sync: the artist list could not be read: ${e.message}")
+			}
+		}
 		albums.size
 	}
 

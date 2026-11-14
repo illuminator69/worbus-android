@@ -171,6 +171,9 @@ class PreferenceManager(
 	// sync related settings
 	var lastFullSyncTime by preference(0L)
 
+	/** B-429: Navidrome's `lastScan` the scan watch last acted on, so a scan while the app was closed is seen. */
+	var lastScanSeen by preference("")
+
 	// navi-connect autoplay (I-040): On or Off. With the hub's station engine the queue continues as
 	// a station (PROTOCOL §18); without it, as Auto DJ (`AutoDj.kt`). It was a four-way
 	// `AutoplayMode` stored by ordinal at "autoplayMode", read once by [migrateAutoplay].

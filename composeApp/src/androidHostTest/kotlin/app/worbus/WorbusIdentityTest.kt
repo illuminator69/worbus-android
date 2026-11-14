@@ -70,7 +70,8 @@ class WorbusIdentityTest {
 		assertEquals("Worbus-Android", CLIENT_NAME)
 		val session = sourceFile("src/commonMain/kotlin/app/worbus/domain/manager/SessionManager.kt").readText()
 		val sites = Regex("""parameter\("c",\s*([^)]+)\)""").findAll(session).map { it.groupValues[1].trim() }.toList()
-		assertEquals(8, sites.size, "SessionManager's hand-built requests: $sites")
+		// B-429: + getScanStatus (lastScan), read raw.
+		assertEquals(9, sites.size, "SessionManager's hand-built requests: $sites")
 		assertTrue(sites.all { it == "CLIENT_NAME" }, "every hand-built request sends c=CLIENT_NAME: $sites")
 		assertTrue(Regex("""\bclient\s*=\s*CLIENT_NAME\b""").containsMatchIn(session), "the bundled client is built with CLIENT_NAME")
 		val literal = mainSources().filter { Regex("""parameter\("c",\s*"""").containsMatchIn(it.readText()) }

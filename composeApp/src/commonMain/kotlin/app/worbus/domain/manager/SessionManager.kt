@@ -309,6 +309,30 @@ class SessionManager(
 	 * silently drops index groups — so this is a raw, lenient parse of all
 	 * `index[].artist[]` entries.
 	 */
+	/**
+	 * B-429: `getScanStatus` with Navidrome's `lastScan`, which the bundled client's model drops. A watcher scan
+	 * of a few changed files moves it and nothing else the watch can see.
+	 */
+	suspend fun fetchScanStatus(): ScanReading {
+		val base = settings.getString("instanceUrl", "").trimEnd('/')
+		val username = settings.getString("username", "")
+		val password = secrets.navidromePassword
+		val salt = Random.nextBytes(12)
+			.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+		val token = "$password$salt".encodeUtf8().md5().hex()
+		val envelope: SubsonicScanEnvelope = httpClient.get("$base/rest/getScanStatus.view") {
+			parameter("u", username)
+			parameter("t", token)
+			parameter("s", salt)
+			parameter("v", "1.16.1")
+			parameter("c", CLIENT_NAME)
+			parameter("f", "json")
+		}.body()
+		val status = envelope.response.scanStatus
+		if (envelope.response.status != "ok" || status == null) error("getScanStatus: ${envelope.response.error?.message ?: "no scanStatus"}")
+		return ScanReading(status.scanning, status.count, status.lastScan?.takeIf { it.isNotBlank() })
+	}
+
 	suspend fun fetchAlbumArtists(): List<RawArtist> {
 		val base = settings.getString("instanceUrl", "").trimEnd('/')
 		val username = settings.getString("username", "")
@@ -805,6 +829,22 @@ data class SonicMatchDto(
 	val entry: RawSongId = RawSongId(id = ""),
 	val similarity: Double = 0.0
 )
+
+@Serializable
+data class SubsonicScanEnvelope(
+	@SerialName("subsonic-response") val response: SubsonicScanBody = SubsonicScanBody()
+)
+
+@Serializable
+data class SubsonicScanBody(
+	val status: String = "ok",
+	val scanStatus: ScanStatusDto? = null,
+	val error: SubsonicErrorDto? = null
+)
+
+/** B-429: Navidrome's `scanStatus`; `lastScan` is the time its last scan ended. */
+@Serializable
+data class ScanStatusDto(val scanning: Boolean = false, val count: Int = 0, val lastScan: String? = null)
 
 @Serializable
 data class SubsonicArtistsEnvelope(
