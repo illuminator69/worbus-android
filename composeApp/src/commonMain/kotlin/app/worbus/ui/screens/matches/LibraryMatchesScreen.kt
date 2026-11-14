@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import app.worbus.ui.util.ContentSwap
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -264,6 +265,11 @@ fun LibraryMatchesScreen(
 			},
 			modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
 		) {
+		// B-431 (motion lane, 2026-11-14): a chip swaps the whole list, old out then new in (ContentSwap.kt). It was
+		// one list whose rows were swapped: To fix's rows (the only ones with item motion) faded out over the next
+		// section's, drawn at once, and the list kept its scroll. Each section is a list of its own now, composed
+		// fresh, so it opens at its top and no row animates across sections.
+		ContentSwap(section, modifier = Modifier.fillMaxSize(), label = "matchesSection") { section ->
 		LazyColumn(
 			modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
 			contentPadding = innerPadding.withoutTop() + PaddingValues(top = 8.dp, bottom = 24.dp)
@@ -401,6 +407,7 @@ fun LibraryMatchesScreen(
 					}
 				}
 			}
+		}
 		}
 		}
 	}

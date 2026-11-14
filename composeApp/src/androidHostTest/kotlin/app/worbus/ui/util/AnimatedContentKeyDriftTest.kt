@@ -25,10 +25,9 @@ class AnimatedContentKeyDriftTest {
 		"ui/screens/playlist/PlaylistListScreen.kt" to 1,
 		"ui/screens/radio/RadioListScreen.kt" to 1,
 		"ui/screens/nowPlaying/components/rows/ButtonsRow.kt" to 1,
-		// An Int step, an enum chip, an enum section, an Int icon state: their own key.
+		// An Int step, an Int icon state: their own key. (The Library's chip and Source history's section switch
+		// through ContentSwap since the motion lane, 2026-11-14, which keys its content.)
 		"ui/screens/radio/custom/CustomRadioScreen.kt" to 1,
-		"ui/screens/library/LibraryScreen.kt" to 1,
-		"ui/screens/sourcehistory/SourceHistoryScreen.kt" to 1,
 		"ui/components/sheets/AddToPlaylistSheet.kt" to 1,
 		// A new value is new content and the cross-fade is the point: another song's lyrics, the
 		// generator line's words changing, another error message.

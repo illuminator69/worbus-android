@@ -1,5 +1,6 @@
 package app.worbus.ui.screens.browse
 
+import app.worbus.ui.util.SwapRows
 import app.worbus.ui.util.ClaimAfterFirstFrame
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -115,7 +116,9 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 		topBar = { NestedTopBar({ Text(title) }) },
 		snackbarHost = { SnackbarHost(snackbarHostState) }
 	) { padding ->
-		LazyVerticalGrid(
+		// The genre chips swap the tiles once the new chart lands: they fade through (ContentSwap.kt's SwapRows).
+		// The chips are an item of the grid, on screen when tapped: no scroll reset.
+		SwapRows { LazyVerticalGrid(
 			modifier = Modifier.fillMaxSize(),
 			columns = GridCells.Adaptive(150.dp),
 			horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -171,7 +174,7 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 					FeedNote(stringResource(Res.string.browse_empty), onRetry = null)
 				}
 			}
-		}
+		} }
 	}
 }
 

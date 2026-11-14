@@ -1,5 +1,6 @@
 package app.worbus.ui.screens.search
 
+import app.worbus.ui.util.SwapRows
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -329,6 +330,8 @@ fun SearchScreen(
 			}
 		}
 	) { contentPadding ->
+		// The categories filter one list: its rows fade through (ContentSwap.kt's SwapRows), never both at once.
+		SwapRows {
 		LazyVerticalGrid(
 			modifier = Modifier.fillMaxSize(),
 			columns = GridCells.Fixed(2),
@@ -464,6 +467,7 @@ fun SearchScreen(
 					}
 				}
 			}
+		}
 		}
 	}
 

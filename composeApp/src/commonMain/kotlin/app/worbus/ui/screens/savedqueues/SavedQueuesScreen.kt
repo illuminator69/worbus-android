@@ -2,6 +2,7 @@
 
 package app.worbus.ui.screens.savedqueues
 
+import app.worbus.ui.util.SwapRows
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.plus
 import androidx.compose.foundation.lazy.LazyColumn
@@ -261,7 +262,9 @@ fun SavedQueuesScreen() {
 				description = stringResource(Res.string.info_no_saved_queues_hint)
 			)
 
-			else -> LazyColumn(
+			// The chips filter one list: its rows fade through (ContentSwap.kt's SwapRows), the leaving ones out first,
+			// then the staying ones slide as the new ones fade in (I-039's motion, never both at once).
+			else -> SwapRows { LazyColumn(
 				state = listState,
 				modifier = Modifier
 					.padding(top = innerPadding.calculateTopPadding())
@@ -286,7 +289,7 @@ fun SavedQueuesScreen() {
 						modifier = animatedItem()
 					)
 				}
-			}
+			} }
 		}
 	}
 

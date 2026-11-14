@@ -4,7 +4,6 @@ import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.PathEasing
 import androidx.compose.animation.core.tween
@@ -29,8 +28,7 @@ private val pathForAnimation =
 	}
 
 val EmphasizedEasing = PathEasing(pathForAnimation)
-val EmphasizedAccelerateEasing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
-val EmphasizedDecelerateEasing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+// EmphasizedAccelerateEasing and EmphasizedDecelerateEasing are in Easings.kt (motion lane, 2026-11-14).
 
 // navi-connect I-042: a sheet's opening and closing times follow the animation style
 // (PageMotion.kt); the vals are the Expressive/Standard timing, unchanged.
@@ -133,6 +131,30 @@ object Material3Transitions {
 				easing = EmphasizedAccelerateEasing
 			)
 		)
+	}
+
+	/**
+	 * The whole fade-through, old out then new in ([tabFadeWindows]). Every root tab change runs it, a bar tap
+	 * that leaves a pushed page included (B-434, `TabTapMotion`), and so does every chip's content swap
+	 * (`ContentSwap.kt`).
+	 */
+	fun tab(motion: PageMotion): ContentTransform = ContentTransform(tabEnter(motion), tabExit(motion))
+
+	/**
+	 * B-433 (motion lane, 2026-11-14): tabs inside a page (the queue's Up next and Related) move as pages do,
+	 * the slide and fade ([PageChange.SharedAxis]'s times and staggered fades: the old tab out, then the new one
+	 * in, never both), sliding a quarter of the width toward the tab being opened, as they did. They slid and
+	 * faded at once on the motion scheme's springs, both lists half drawn in the same place. [forward] is a tab
+	 * further right.
+	 */
+	fun inPageAxis(motion: PageMotion, forward: Boolean): ContentTransform {
+		val sign = if (forward) 1 else -1
+		val easing = motion.enterEasing.curve()
+		val enter = fadeIn(tween(durationMillis = motion.enterFadeMs, delayMillis = motion.enterFadeDelayMs, easing = easing)) +
+			slideInHorizontally(tween(durationMillis = motion.enterSlideMs, easing = easing)) { sign * it / 4 }
+		val exit = fadeOut(tween(durationMillis = motion.exitFadeMs, easing = EmphasizedAccelerateEasing)) +
+			slideOutHorizontally(tween(durationMillis = motion.exitSlideMs, easing = easing)) { -sign * it / 4 }
+		return enter togetherWith exit
 	}
 
 	private fun pageEnter(motion: PageMotion, density: Density, sign: Int): EnterTransition {

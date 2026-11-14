@@ -1,5 +1,6 @@
 package app.worbus.ui.screens.fresh
 
+import app.worbus.ui.util.SwapRows
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.Icon
@@ -179,7 +180,9 @@ fun FreshScreen(nested: Boolean = false) {
 		) {
 			// Upstream's grid: its columns follow the user's grid size on a phone and the cover
 			// size beyond, so a tablet shows as many as the album list does rather than two.
-			ArtGrid(
+			// The type chips filter one list: its rows fade through (ContentSwap.kt's SwapRows). The chips are the
+			// grid's first item, on screen when tapped, so the rows that come in arrive below them: no scroll reset.
+			SwapRows { ArtGrid(
 				modifier = if (!nested) {
 					Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
 				} else Modifier,
@@ -275,7 +278,7 @@ fun FreshScreen(nested: Boolean = false) {
 						)
 					}
 				}
-			}
+			} }
 		}
 	}
 }
