@@ -5,6 +5,8 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import app.worbus.data.database.dao.SongCoverId
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -40,6 +42,21 @@ data class StarChange(val songId: String, val starred: Boolean)
  */
 data class SongListArtist(val id: String, val name: String = "")
 
+/** N1: song ids per `IN (:ids)` query, well under SQLite's bound-variable limit (999 before 3.32, 32,766 after). */
+internal const val COVER_IDS_CHUNK = 900
+
+/**
+ * B-437: [ids]' cover ids as Room holds them, from [query] (one `IN (:ids)` query per list), again on every write.
+ * Stage 2 review N1: one query over the whole queue, which has no cap, so a queue past SQLite's variable limit threw.
+ */
+internal fun chunkedCoverIds(
+	ids: List<String>,
+	chunk: Int,
+	query: (List<String>) -> Flow<List<SongCoverId>>
+): Flow<Map<String, String?>> =
+	if (ids.isEmpty()) flowOf(emptyMap())
+	else combine(ids.chunked(chunk).map(query)) { parts -> parts.flatMap { it.asIterable() }.associate { it.songId to it.coverArtId } }
+
 class SongRepository(
 	private val songDao: SongDao,
 	private val albumDao: AlbumDao,
@@ -60,8 +77,7 @@ class SongRepository(
 	 * whenever a sync writes songs.
 	 */
 	fun observeCoverIds(ids: List<String>): Flow<Map<String, String?>> =
-		if (ids.isEmpty()) flowOf(emptyMap())
-		else songDao.observeCoverIds(ids).map { rows -> rows.associate { it.songId to it.coverArtId } }
+		chunkedCoverIds(ids, COVER_IDS_CHUNK, songDao::observeCoverIds)
 
 	suspend fun getAllSongs(): List<DomainSong> {
 		return songDao.getAllSongs().map { it.toDomainModel() }

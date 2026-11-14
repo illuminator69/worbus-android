@@ -1766,6 +1766,37 @@ class AndroidMediaPlayerViewModel(
 		)
 	}
 
+	/**
+	 * B-437 follow-up: the player's items follow a cover the queue learnt from Room, so the notification and the lock
+	 * screen draw the new artwork (they draw the items' metadata, which kept the cover id they were queued with until
+	 * the next restore). Only the artwork is replaced, on the same uri: media3 then updates the item in place
+	 * (`ProgressiveMediaSource.canUpdateMediaItem`), so the playing song is neither re-prepared nor interrupted. An item
+	 * without its local configuration is left alone (it could not be replaced on the same uri). Not while the controller
+	 * shows another device's session: those items are the remote facade's; the local items keep theirs until the next
+	 * restore.
+	 */
+	override fun onQueueCoversChanged(covers: Map<String, String?>) {
+		viewModelScope.launch {
+			val player = controller ?: return@launch
+			if (showsRemote()) return@launch
+			var replaced = 0
+			withQueueMutation {
+				for (i in 0 until player.mediaItemCount) {
+					val item = player.getMediaItemAt(i)
+					if (!covers.containsKey(item.mediaId) || item.localConfiguration == null) continue
+					val art = covers[item.mediaId]?.let { sessionManager.getCoverArtUrl(it).toUri() }
+					val metadata = item.mediaMetadata.buildUpon().setArtworkUri(art).build()
+					player.replaceMediaItem(i, item.buildUpon().setMediaMetadata(metadata).build())
+					replaced++
+				}
+			}
+			if (replaced > 0) {
+				Logger.i("MediaPlayer", "B-437: $replaced queued item(s) take a new cover")
+				updatePlaybackState()
+			}
+		}
+	}
+
 	override fun syncPlayerWithState(state: PlayerUiState) {
 		viewModelScope.launch {
 			val player = controller

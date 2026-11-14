@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.random.Random
 import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -149,16 +152,53 @@ data class QueueUndoSnapshot(
 
 enum class QueueUndoKind { CLEAR, REMOVE, MOVE, REPLACE }
 
+/** B-437: the ids of the queue's library songs (not a preview's), each once. */
+internal fun queueSongIds(queue: List<DomainSong>): List<String> =
+	queue.asSequence().filterNot { it.isExternal }.map { it.id }.distinct().toList()
+
+/**
+ * B-437: the cover ids Room holds for the queue's songs ([observe]: Room's flow for a list of song ids), again whenever
+ * the queue's songs change ([queues]) or a sync writes songs. Keyed by the queue's list itself, so the 200 ms progress
+ * ticks cost nothing.
+ */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+internal fun queueCoverFlow(
+	queues: Flow<List<DomainSong>>,
+	observe: (List<String>) -> Flow<Map<String, String?>>,
+	retryAfter: (attempt: Long) -> Duration,
+	onError: (Throwable) -> Unit = {}
+): Flow<Map<String, String?>> = queues
+	.distinctUntilChanged { a, b -> a === b }
+	.map(::queueSongIds)
+	.distinctUntilChanged()
+	.flatMapLatest { ids -> observe(ids) }
+	// Review N1: one failure (a locked database) ended the flow for the rest of the process. Read Room again after
+	// a back-off: the queue's current songs, from the start.
+	.retryWhen { e, attempt ->
+		if (e is kotlin.coroutines.cancellation.CancellationException) return@retryWhen false
+		onError(e)
+		kotlinx.coroutines.delay(retryAfter(attempt))
+		true
+	}
+
+/**
+ * B-437 follow-up: the songs whose cover id [after] changed from [before] (the same queue, [withCurrentCovers]'s
+ * answer), song id to its new cover id.
+ */
+internal fun coverChanges(before: List<DomainSong>, after: List<DomainSong>): Map<String, String?> = buildMap {
+	before.zip(after).forEach { (old, new) -> if (old.id == new.id && old.coverArtId != new.coverArtId) put(new.id, new.coverArtId) }
+}
+
+/** N1: how long the cover flow waits before reading Room again after a failure: 1 s, doubling, at most a minute. */
+internal fun coverFollowRetryAfter(attempt: Long): Duration =
+	(1L shl attempt.coerceIn(0L, 6L).toInt()).coerceAtMost(60L).seconds
+
 /**
  * Whether undoing [snap] can leave the song that is playing now as it is: the snapshot's playing
  * song is the one playing now, in the same saved-queue session. Then the queue is put back around
  * it without a reload; otherwise (the playing song was the one removed, the queue was cleared or
  * replaced) the snapshot is loaded whole.
  */
-/** B-437: the ids of the queue's library songs (not a preview's), each once. */
-internal fun queueSongIds(queue: List<DomainSong>): List<String> =
-	queue.asSequence().filterNot { it.isExternal }.map { it.id }.distinct().toList()
-
 internal fun undoKeepsPlayingSong(snap: QueueUndoSnapshot, now: PlayerUiState): Boolean {
 	val playing = now.currentSong ?: return false
 	return now.queue.isNotEmpty() &&
@@ -783,19 +823,30 @@ abstract class MediaPlayerViewModel(
 	 * changed-albums sweep (a scan, B-429), an lb-bot landing or a full pull; the queue, the player's rows and the
 	 * persisted queue then draw it. Keyed by the queue's list itself, so the 200 ms progress ticks cost nothing.
 	 */
-	@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 	private fun followRoomCovers() {
 		viewModelScope.launch {
-			_uiState
-				.map { it.queue }
-				.distinctUntilChanged { a, b -> a === b }
-				.map(::queueSongIds)
-				.distinctUntilChanged()
-				.flatMapLatest { ids -> songRepository.observeCoverIds(ids) }
-				.catch { e -> Logger.w("MediaPlayerViewModel", "Queue cover ids stopped following Room", e) }
-				.collect { covers -> _uiState.update { withCurrentCovers(it, covers) ?: it } }
+			queueCoverFlow(
+				queues = _uiState.map { it.queue },
+				observe = songRepository::observeCoverIds,
+				retryAfter = ::coverFollowRetryAfter,
+				onError = { e -> Logger.w("MediaPlayerViewModel", "Queue cover ids: Room could not be read", e) }
+			).collect { covers ->
+				var changed = emptyMap<String, String?>()
+				_uiState.update { state ->
+					val fresh = withCurrentCovers(state, covers)
+					changed = if (fresh == null) emptyMap() else coverChanges(state.queue, fresh.queue)
+					fresh ?: state
+				}
+				if (changed.isNotEmpty()) onQueueCoversChanged(changed)
+			}
 		}
 	}
+
+	/**
+	 * B-437 follow-up: the queue's songs in [covers] (song id to its new cover id) now draw another cover. The player's
+	 * own items (the notification's and the lock screen's artwork) follow here; the queue's state already has it.
+	 */
+	protected open fun onQueueCoversChanged(covers: Map<String, String?>) {}
 
 	@OptIn(FlowPreview::class)
 	private fun observeAndSaveState() {
