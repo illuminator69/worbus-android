@@ -1,5 +1,7 @@
 package app.worbus.ui.screens.share
 
+import app.worbus.ui.util.motionMs
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -82,7 +84,8 @@ fun ShareListScreen() {
 			onRefresh = { viewModel.refreshShares() },
 			key = listOf(sharesState, isRefreshingFlow)
 		) {
-			Crossfade(sharesState) { stateValue ->
+			// B-435 (motion lane, 2026-11-14): Crossfade's default 300 ms at the animation speed.
+			Crossfade(sharesState, animationSpec = tween(motionMs(300))) { stateValue ->
 				LazyVerticalGrid(
 					modifier = Modifier.fillMaxSize(),
 					columns = GridCells.Fixed(1),

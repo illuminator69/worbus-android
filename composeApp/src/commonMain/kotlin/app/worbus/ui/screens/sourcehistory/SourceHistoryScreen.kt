@@ -1,5 +1,6 @@
 package app.worbus.ui.screens.sourcehistory
 
+import app.worbus.ui.util.ContentSwap
 import app.worbus.domain.manager.historyRereadWanted
 import app.worbus.domain.manager.historyRead
 import app.worbus.domain.manager.historyEmptyState
@@ -7,7 +8,6 @@ import app.worbus.domain.manager.formatListenedAt
 import app.worbus.domain.manager.HistoryEmpty
 import worbus.composeapp.generated.resources.attention_notice_unreachable
 import kotlinx.datetime.TimeZone
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -212,7 +212,10 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 			},
 			modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
 		) {
-			AnimatedContent(shown, modifier = Modifier.fillMaxSize()) { current ->
+			// B-435 (motion lane, 2026-11-14): the one content swap (ContentSwap.kt), old out then new in on the
+			// page motion's times, so it follows the style and the speed. It was AnimatedContent's default, a
+			// fade-through with a scale on fixed times the speed did not reach.
+			ContentSwap(shown, modifier = Modifier.fillMaxSize(), label = "sourceHistorySection") { current ->
 				LazyColumn(
 					modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
 					contentPadding = innerPadding.withoutTop() + PaddingValues(top = 8.dp, bottom = 24.dp),

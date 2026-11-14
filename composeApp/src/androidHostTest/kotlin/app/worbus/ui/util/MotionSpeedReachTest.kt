@@ -14,9 +14,11 @@ class MotionSpeedReachTest {
 		listOf(
 			"ui/util/Arrival.kt", "ui/components/common/CoverAmbientBackground.kt", "ui/components/layouts/MiniPlayer.kt",
 			"ui/util/CoverColorScheme.kt", "ui/screens/collection/CollectionDetailScreen.kt",
-			"ui/components/common/CoverArt.kt", "ui/components/common/RemoteCoverArt.kt", "ui/screens/library/LibraryScreen.kt"
+			"ui/components/common/CoverArt.kt", "ui/components/common/RemoteCoverArt.kt"
 		).forEach { assertTrue("motionMs(" in src(it), it) }
 		assertTrue(".atSpeed(" in src("ui/theme/Theme.kt"), "the motion scheme's springs")
+		// The Library's chips swap through ContentSwap since the motion lane (2026-11-14), on the page motion's times.
+		assertTrue("ContentSwap(" in src("ui/screens/library/LibraryScreen.kt") && "pageMotion()" in src("ui/util/ContentSwap.kt"))
 	}
 
 	@Test

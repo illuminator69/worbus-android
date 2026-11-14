@@ -1,5 +1,12 @@
 package app.worbus.ui.components.layouts
 
+import app.worbus.ui.util.atMotionSpeed
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.expandIn
+import androidx.compose.animation.shrinkOut
+import androidx.compose.ui.unit.IntSize
 import app.worbus.ui.util.motionMs
 import app.worbus.ui.util.WASH_MS
 import app.worbus.ui.util.crossfadeMsFor
@@ -193,9 +200,15 @@ fun MiniPlayer(
 
 	// upstream's "hide mini player if idle" (alpha55): the whole bar, swiper included,
 	// is gated on there being a song unless the user wants it always visible.
+	// B-435 (motion lane, 2026-11-14): AnimatedVisibility's own enter and exit (a fade and an expand from the
+	// bottom end, Compose's default springs), at the animation speed.
 	AnimatedVisibility(
 		visible = hasSong || !preferenceManager.hideIfIdle,
-		modifier = modifier
+		modifier = modifier,
+		enter = fadeIn(spring<Float>(stiffness = Spring.StiffnessMediumLow).atMotionSpeed()) +
+			expandIn(spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntSize.VisibilityThreshold).atMotionSpeed()),
+		exit = shrinkOut(spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntSize.VisibilityThreshold).atMotionSpeed()) +
+			fadeOut(spring<Float>(stiffness = Spring.StiffnessMediumLow).atMotionSpeed())
 	) {
 	Swiper(
 		onSwipeLeft = {

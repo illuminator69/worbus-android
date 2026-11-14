@@ -174,7 +174,7 @@ fun GapBox(
 	/** Worbus P1: the line's Fill gaps, gone while lb-bot cannot download ([gapFillOffered]). */
 	fillOffered: Boolean = true
 ) {
-	val motion = rememberFoldMotion(tall = true)
+	val motion = rememberFoldMotion()
 	// The missing songs stay drawn while the list folds away.
 	var lastTracks by remember { mutableStateOf<GapStage.Tracks?>(null) }
 	if (stage is GapStage.Tracks) lastTracks = stage

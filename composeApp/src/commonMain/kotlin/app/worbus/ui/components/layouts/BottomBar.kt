@@ -17,6 +17,7 @@ import app.worbus.di.LocalNavStack
 import app.worbus.domain.manager.ShellController
 import app.worbus.ui.navigation.ShellTab
 import app.worbus.ui.navigation.isSelected
+import app.worbus.ui.navigation.LocalTabTapMotion
 import app.worbus.ui.navigation.onShellTabTapped
 import app.worbus.ui.viewmodel.RootViewModel
 
@@ -34,6 +35,7 @@ fun BottomBar(
 	val rootViewModel = koinViewModel<RootViewModel>()
 	val shellController = koinInject<ShellController>()
 	val backStack = LocalNavStack.current
+	val tabTaps = LocalTabTapMotion.current
 	val top = backStack.lastOrNull()
 
 	NavigationBar(
@@ -47,7 +49,7 @@ fun BottomBar(
 				selected = selected,
 				enabled = enabled,
 				onClick = dropUnlessResumed {
-					onShellTabTapped(tab, backStack, rootViewModel, shellController)
+					onShellTabTapped(tab, backStack, rootViewModel, shellController, tabTaps)
 				},
 				icon = {
 					if (selected) {

@@ -6,7 +6,8 @@ import kotlin.math.roundToInt
 
 /**
  * navi-connect I-042: the timing of page pushes and pops, Settings' and the album's slides, a root-tab
- * switch, the cover's shared-element flight, bottom sheets and Quick's folds, per [AnimationStyle], and
+ * switch (and every chip's content swap, `ContentSwap.kt`), the cover's shared-element flight, bottom sheets
+ * and the pace of Quick's folds, per [AnimationStyle], and
  * scaled by the animation speed setting ([PreferenceManager.motionSpeed], I-075). Pure values and no Compose
  * imports, so a host test can lock them; [Material3Transitions], the cover `BoundsTransform`, `Fold`,
  * `ModalBottomSheet` and the custom radio's steps build their specs from it ([pageMotion]), so this one table
@@ -49,11 +50,13 @@ data class PageMotion(
 	/** Settings' slide's curve (B-403 chose EaseOutQuart, upstream's predictive-back slide). */
 	val slideEasing: PageEasing,
 	/**
-	 * A fold (`Fold.kt`) and what moves with it, in ms, and for one that holds a list; null is the motion
-	 * scheme's own springs, which is what Expressive and Standard use.
+	 * B-436 (motion lane, 2026-11-14): how much quicker than the motion scheme's own spring a fold (`Fold.kt`)
+	 * and what moves with it run: stiffness × pace². Every style folds on the scheme's spring, so a fold moves
+	 * as the components around it do; 1 is the scheme's own (Expressive, Standard). Quick's folds were fixed
+	 * tweens (200 ms, 280 for a block that holds a list) beside the expressive springs of its components, the
+	 * mismatch `Fold.kt` was written to remove.
 	 */
-	val foldMs: Int? = null,
-	val foldTallMs: Int? = null
+	val foldPace: Float = 1f
 )
 
 /** Which of [Material3Transitions]' easings a motion uses. */
@@ -80,7 +83,10 @@ enum class PageEasing { Emphasized, EmphasizedDecelerate, EaseOutQuart }
  * - **A root tab** fades through (Ruling 7: never both tabs at once) over the old springs' ~330 ms, split as
  *   Material's fade-through (30 / 70): 100 out, 230 in. B-403 made it 90 + 210.
  * - **Back** is the pop of whichever motion runs (B-378's one back animation), so it has no time of its own.
- * - Sheets and folds were not changed by this session: 400 / 600 ms, and the motion scheme's springs.
+ * - Folds: the motion scheme's springs.
+ * - **Sheets** rise over 400 ms and fall over **300** (B-436, motion lane 2026-11-14): they fell over 600, slower
+ *   than they rose, upstream's numbers. An exit is shorter than its enter (Material's guidance, and Quick's 300 /
+ *   250 already); 300 rather than Material's 200-250 so a Quick sheet still never closes slower than this one.
  */
 val DefaultPageMotion = PageMotion(
 	enterFadeMs = 325,
@@ -92,7 +98,7 @@ val DefaultPageMotion = PageMotion(
 	exitSlideMs = 500,
 	exitSlideDp = 30,
 	sheetShowMs = 400,
-	sheetHideMs = 600,
+	sheetHideMs = 300,
 	tabExitFadeMs = 100,
 	tabEnterFadeMs = 230,
 	slideMs = 500,
@@ -102,8 +108,15 @@ val DefaultPageMotion = PageMotion(
 /**
  * Quick (I-075, the owner's ruling): **the page motion Expressive had at `4b592a4e`**, every number this
  * session's B-378, B-403 and B-404 set: Settings' slide 300 ms on EaseOutQuart; the album slide and the cover's
- * flight 300 ms on Emphasized; a root tab 90 out then 210 in. Quick's own sheets and folds, which this session
- * did not touch and which were already quicker than Expressive's, are kept.
+ * flight 300 ms on Emphasized; a root tab 90 out then 210 in. Quick's own sheets, which this session did not
+ * touch and which were already quicker than Expressive's, are kept.
+ *
+ * **Its folds** (B-436, motion lane 2026-11-14) are the motion scheme's spring, as every style's are, at Quick's
+ * pace: 500 / 300, Quick's push against Expressive's, so stiffness × 2.78. They were tweens of 200 ms (280 for a
+ * block holding a list) beside the expressive springs Quick's components run on; a spring at that pace keeps
+ * them as quick (rwalk3 measured the avatar menu's fold at 214 ms under Expressive and 130 under Quick; 214 / 1.67
+ * is 128) and makes them move as the chips and the side bar next to them do. Tweens under every style would be
+ * the same mismatch the other way round, Expressive's folds a tween among its own springs.
  *
  * **The slide and fade is 300 ms** (review M2, the owner's ruling of 2026-11-13: "make it 300"): it had become
  * Expressive's 500, so the commonest page change no longer told the two presets apart. From half the width on
@@ -129,8 +142,7 @@ val QuickPageMotion = PageMotion(
 	tabEnterFadeMs = 210,
 	slideMs = 300,
 	slideEasing = PageEasing.EaseOutQuart,
-	foldMs = 200,
-	foldTallMs = 280
+	foldPace = 500f / 300f
 )
 
 /** I-075: the animation speed setting's range and steps (0.5×, 0.75× … 2×); 1× is the preset as it is. */
@@ -158,7 +170,8 @@ fun motionSpeedLabel(speed: Float): String {
 /**
  * I-075: [this] at [speed] (2× is half of every time, 0.5× twice it). Every duration and delay scales, so
  * the fades' windows keep their order and the album slide and the cover's flight still land together;
- * distances and curves do not change. A fold left to the motion scheme's springs (null) stays a spring.
+ * distances and curves do not change. A fold's pace is relative to the motion scheme, which `NavicTheme` already
+ * scales by the speed, so it does not change either.
  */
 fun PageMotion.atSpeed(speed: Float): PageMotion {
 	val s = motionSpeedOf(speed)
@@ -175,9 +188,7 @@ fun PageMotion.atSpeed(speed: Float): PageMotion {
 		sheetHideMs = ms(sheetHideMs),
 		tabExitFadeMs = ms(tabExitFadeMs),
 		tabEnterFadeMs = ms(tabExitFadeMs + tabEnterFadeMs) - ms(tabExitFadeMs),
-		slideMs = ms(slideMs),
-		foldMs = foldMs?.let(::ms),
-		foldTallMs = foldTallMs?.let(::ms)
+		slideMs = ms(slideMs)
 	)
 }
 
@@ -274,6 +285,15 @@ data class SlideTiming(val durationMs: Int, val easing: PageEasing)
  */
 fun coverSlideTiming(motion: PageMotion): SlideTiming = SlideTiming(motion.slideMs, motion.enterEasing)
 
+/**
+ * Motion lane review L3 (2026-11-14): the time and curve of a shared element's flight (a cover, the bottom bar's
+ * bounds) in a page change. A bar tap ([tabTap], `TabTapMotion`) fades through in [tabFadeWindows]' time (Expressive
+ * 330 ms), so its flights take that time: on the album slide's 500 the cover landed after the page had (B-404's rule
+ * the other way round), and the bar's bounds held every tab tap at 500 ms. Any other change is [coverSlideTiming].
+ */
+fun sharedFlightTiming(motion: PageMotion, tabTap: Boolean): SlideTiming =
+	if (tabTap) SlideTiming(tabFadeWindows(motion).enterEndMs, motion.enterEasing) else coverSlideTiming(motion)
+
 private const val PAGE_KIND_KEY = "app.worbus.pageKind"
 
 /** An entry's metadata saying what page it is ([PageKind]). */
@@ -291,9 +311,6 @@ fun pageKindOfScene(entries: List<Map<String, Any>>): PageKind {
 	val top = pageKindOf(entries.lastOrNull())
 	return if (top == PageKind.Cover && entries.size > 1) PageKind.Panes else top
 }
-
-/** The fold's time under [motion], or null for the motion scheme's springs. */
-fun foldMs(motion: PageMotion, tall: Boolean): Int? = if (tall) motion.foldTallMs else motion.foldMs
 
 /**
  * A style's motion at a speed. I-075: Standard keeps sharing Expressive's table, as it has since Quick was
