@@ -2370,6 +2370,17 @@ true of invented *album art*, and not of an icon naming the kind.
   Sheets: the shared `ModalBottomSheet` wrapper takes its show / hide times from it (so the
   player and queue scenes too); only the times, the one-motion opening is unchanged. **A sheet closes faster than
   it opens** under every style (B-436: Expressive and Standard 400 / 300, Quick 300 / 250; it was 400 / 600).
+- **A page's content is composed before its slide or after it, never in it (B-405, B-446).** The owner feels a
+  long frame in the middle of a push as a stutter, and one in the first frame (before anything has moved) as nothing.
+  The artist page and the discography open on `ArtistPageMemory` (what a page of that artist last showed) and
+  compose in their first frame; an artist page with nothing in memory slides in on its spinner and shows its Room
+  read only once its slide has ended (`FirstShowHold`, at most `SEEDED_READ_WAIT_MS`), where it used to land mid-slide
+  (`ArtistFirstShowTest`). The page says it has settled through `OnPageSettled`; a page that holds or defers work on it
+  must call it. **The bundled font is stored, not deflated** (`androidResources.noCompress += "ttf"` in
+  `androidApp/build.gradle.kts`, `BundledFontStoredTest`): every `defaultFont(grade, round)` variation is a Typeface
+  of its own, loaded on the main thread at its first use, and `Font.Builder` maps a stored asset but inflated the
+  deflated 4 MB Google Sans into a new buffer each time, ~45 ms (VM) inside the first album page's content frame.
+  A new font goes in as `.ttf` or gets its own `noCompress` entry.
 - **The launcher icons and the splash are Worbus's own (P5, design §6.5).** The picker's two entries are
   `AppIconVariant.Default` (shown as **Ink**: the `#F1F3EF` disc on `#18211F`) and `Tidepool` (shown as **Paper**:
   the `#18211F` disc on `#F1F3EF`; Worbus P6 made the art monochrome and relabelled the two, nothing else), stored by
