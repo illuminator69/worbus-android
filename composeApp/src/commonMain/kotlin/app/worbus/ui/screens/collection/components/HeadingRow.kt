@@ -36,6 +36,9 @@ import app.worbus.ui.components.common.CoverArt
 import app.worbus.ui.theme.defaultFont
 import app.worbus.ui.util.rememberCoverBoundsTransform
 import app.worbus.di.LocalPlatformContext
+import app.worbus.domain.manager.PreferenceManager
+import app.worbus.ui.util.pageMotion
+import org.koin.compose.koinInject
 
 @Composable
 fun CollectionDetailScreenHeadingRow(
@@ -58,26 +61,32 @@ fun CollectionDetailScreenHeadingRow(
 			// The blur ends in a hard edge 30 dp out, where it is still a few percent dark: invisible
 			// on a dark page, a grey box on a light one. Half as dark there.
 			val shadowAlpha = if (LocalContentColor.current.luminance() < 0.5f) 0.25f else 0.5f
+			val pageScope = LocalNavAnimatedContentScope.current
+			val shadowFade = rememberCoverShadowFade(pageScope.transition, koinInject<PreferenceManager>().pageMotion())
 			CoverArt(
 				coverArtId = collection.coverArtId,
 				contentDescription = collection.name,
 				shape = coverCardShape,
 				modifier = Modifier
 					.size(212.dp)
-					.sharedElement(
-						sharedContentState = this@with.rememberSharedContentState("${tab}-${collection.id}-cover"),
-						boundsTransform = rememberCoverBoundsTransform(),
-						animatedVisibilityScope = LocalNavAnimatedContentScope.current
-					)
 					// Soft drop shadow so the card reads as floating above the wash. BEFORE the fade,
 					// and faded by its own alpha: `alpha()` draws what follows it into a layer the size
 					// of the square cover, which cut the shadow off at the square and left only its
 					// corners showing round the rounded cover while the page scrolled.
+					// B-447: and BEFORE the shared element, so it stays at the card's place and size and is
+					// never redrawn at the flight's (its blur was made again in software every flight frame);
+					// none while the cover flies in, faded in when it lands, faded out as the page leaves
+					// (`CoverShadow.kt`).
 					.dropShadow(coverCardShape) {
 						radius = 30.dp.toPx()
 						color = Color.Black
-						alpha = shadowAlpha * titleAlpha
+						alpha = shadowAlpha * titleAlpha * shadowFade()
 					}
+					.sharedElement(
+						sharedContentState = this@with.rememberSharedContentState("${tab}-${collection.id}-cover"),
+						boundsTransform = rememberCoverBoundsTransform(),
+						animatedVisibilityScope = pageScope
+					)
 					.alpha(titleAlpha),
 				crossfadeMs = 0
 			)
