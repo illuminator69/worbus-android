@@ -2146,7 +2146,11 @@ true of invented *album art*, and not of an icon naming the kind.
   it is NEWER than this device's row, by timestamp. A Dismiss (or Add to wishlist) here is remembered
   (`LbBotManager.dismissedRequests`, persisted, `dismissalOf`) and hides lb-bot's rows of that request that are not
   newer; it is forgotten once a full answer lists nothing for it (`dismissalsStillListed`). A row only lb-bot knows
-  offers Open album only. The badge and the chip are `needYouItems`' size and items (`sourceHistoryBadge`,
+  offers Open album only. **To fix's two row rules moved with the rows** (stage 2 review M3, M4): while lb-bot's
+  downloads are off a row offers nothing that fetches (`fillRowButtons`: Open album, Wishlist, Dismiss; the pill is
+  "Missing"), and Open album goes To fix's way (`historyOpenTarget`): a gap to the LIBRARY album with its gaps box,
+  else the release group's page, else the library album, from the `albumId` lb-bot names (`RequestAlbum`), with the
+  library's cover and "N tracks missing". The badge and the chip are `needYouItems`' size and items (`sourceHistoryBadge`,
   `sourceHistoryGroups`); Requests is still lb-bot's list joined with the ledger and attention (`mergeHistory`) (`mergeHistory` of the manager's last `/lb/activity` answer, `activityAnswer`, and
   the ledger), where lb-bot's later state wins (a ledger row that settled after lb-bot's answer was read keeps its own);
   it stays with downloading off, and Source history's menu row with it, as the desktop keeps Activity (review L3). The
