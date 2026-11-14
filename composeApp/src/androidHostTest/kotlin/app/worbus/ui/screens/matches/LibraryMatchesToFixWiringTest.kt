@@ -28,9 +28,10 @@ class LibraryMatchesToFixWiringTest {
 	@Test
 	fun theDotAndTheMenuReadBothBadges() {
 		val button = sourceFile("src/commonMain/kotlin/app/worbus/ui/components/common/AvatarButton.kt").readText()
-		assertTrue("attentionDotShown(badge + sourceHistory," in button, "the dot ignores this phone's own failures")
+		// B-457: both read Source history's badge through the one rule that drops it while downloads are off.
+		assertTrue("badge + sourceHistoryMenuBadge(sourceHistory, lbBot.isConfigured, downloads)" in button, "the dot ignores this phone's own failures")
 		val menu = sourceFile("src/commonMain/kotlin/app/worbus/ui/components/sheets/AvatarMenu.kt").readText()
-		assertTrue("sourceHistoryCount = menuAttentionBadge(sourceHistory, lbConfigured)" in menu, "Source history has no badge")
+		assertTrue("sourceHistoryCount = sourceHistoryMenuBadge(sourceHistory, lbConfigured, downloads)" in menu, "Source history has no badge")
 	}
 
 	@Test
