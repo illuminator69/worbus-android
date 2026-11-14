@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.Flow
 import app.worbus.data.database.entities.SongEntity
 import app.worbus.util.Logger
 
+/** A song's id and its cover id, as Room holds them ([SongDao.observeCoverIds]). */
+data class SongCoverId(val songId: String, val coverArtId: String?)
+
 @Dao
 interface SongDao {
 	@Query("SELECT * FROM SongEntity WHERE songId = :songId LIMIT 1")
@@ -95,6 +98,13 @@ interface SongDao {
 
 	@Query("SELECT * FROM SongEntity WHERE songId IN (:ids)")
 	suspend fun getSongsByIds(ids: List<String>): List<SongEntity>
+
+	/**
+	 * B-437: these songs' cover ids as Room holds them, again on every write to the song table (a sync
+	 * that learnt a new cover id). The queue's songs keep the id they were queued with otherwise.
+	 */
+	@Query("SELECT songId, coverArtId FROM SongEntity WHERE songId IN (:ids)")
+	fun observeCoverIds(ids: List<String>): Flow<List<SongCoverId>>
 
 	/** Q-165 follow-up (major 1): the songs at one disc and track number, a re-keyed download's candidates. */
 	@Query("SELECT * FROM SongEntity WHERE IFNULL(trackNumber, 0) = :track AND IFNULL(discNumber, 0) = :disc")

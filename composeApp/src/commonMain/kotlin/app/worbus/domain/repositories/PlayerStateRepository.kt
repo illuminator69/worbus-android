@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import app.worbus.domain.models.DomainSong
 import app.worbus.ui.core.PlayerUiState
 import app.worbus.util.Logger
 import kotlin.coroutines.cancellation.CancellationException
@@ -83,3 +84,26 @@ internal fun stateToRestore(saved: PlayerUiState?, current: PlayerUiState): Play
 	saved
 		?.takeIf { current.queue.isEmpty() }
 		?.copy(isPaused = true, isLoading = false)
+
+/**
+ * B-437 (the owner, 2026-11-14: refresh the queue's songs' cover ids): the [state] with every queued song's
+ * cover id as Room now holds it ([covers]: song id to cover id, from [SongRepository.observeCoverIds]), or
+ * null when none differs. A song keeps the id it was queued with, and Navidrome's cover ids are versioned
+ * (`al-<album>_<hash>`) and answered `immutable`, so a cover changed outside the app stayed old in the
+ * queue, the player and the persisted queue, across restarts. A song Room does not hold (a preview, an
+ * `ext:` row) is left alone; Room's null (the cover is gone) is taken as it is.
+ */
+internal fun withCurrentCovers(state: PlayerUiState, covers: Map<String, String?>): PlayerUiState? {
+	if (covers.isEmpty()) return null
+	var changed = false
+	fun fresh(song: DomainSong): DomainSong {
+		if (song.isExternal || !covers.containsKey(song.id)) return song
+		val id = covers[song.id]
+		if (id == song.coverArtId) return song
+		changed = true
+		return song.copy(coverArtId = id)
+	}
+	val queue = state.queue.map(::fresh)
+	val current = state.currentSong?.let(::fresh)
+	return if (changed) state.copy(queue = queue, currentSong = current) else null
+}

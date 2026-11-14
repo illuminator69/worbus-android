@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import app.worbus.data.database.dao.AlbumDao
 import app.worbus.data.database.dao.DownloadDao
 import app.worbus.data.database.dao.SongDao
@@ -53,6 +55,14 @@ class SongRepository(
 	 * hub's station engine never hears from (navi-connect PROTOCOL §18.1).
 	 */
 	val starChanges: SharedFlow<StarChange> = _starChanges.asSharedFlow()
+	/**
+	 * B-437: each of [ids]' cover id as Room holds it (a song Room does not hold is absent), and again
+	 * whenever a sync writes songs.
+	 */
+	fun observeCoverIds(ids: List<String>): Flow<Map<String, String?>> =
+		if (ids.isEmpty()) flowOf(emptyMap())
+		else songDao.observeCoverIds(ids).map { rows -> rows.associate { it.songId to it.coverArtId } }
+
 	suspend fun getAllSongs(): List<DomainSong> {
 		return songDao.getAllSongs().map { it.toDomainModel() }
 	}

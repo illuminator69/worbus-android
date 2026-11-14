@@ -20,6 +20,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -38,6 +41,7 @@ import app.worbus.domain.repositories.PlayerStateRepository
 import app.worbus.domain.repositories.SavedQueueRepository
 import app.worbus.domain.repositories.SongRepository
 import app.worbus.domain.repositories.stateToRestore
+import app.worbus.domain.repositories.withCurrentCovers
 import app.worbus.ui.core.PlayerUiState
 import app.worbus.util.Logger
 import kotlin.time.Duration.Companion.seconds
@@ -151,6 +155,10 @@ enum class QueueUndoKind { CLEAR, REMOVE, MOVE, REPLACE }
  * it without a reload; otherwise (the playing song was the one removed, the queue was cleared or
  * replaced) the snapshot is loaded whole.
  */
+/** B-437: the ids of the queue's library songs (not a preview's), each once. */
+internal fun queueSongIds(queue: List<DomainSong>): List<String> =
+	queue.asSequence().filterNot { it.isExternal }.map { it.id }.distinct().toList()
+
 internal fun undoKeepsPlayingSong(snap: QueueUndoSnapshot, now: PlayerUiState): Boolean {
 	val playing = now.currentSong ?: return false
 	return now.queue.isNotEmpty() &&
@@ -429,6 +437,7 @@ abstract class MediaPlayerViewModel(
 			// would mint a duplicate for the very first queue played after launch.
 			savedQueueRepository.primeIndex()
 			observeAndSaveState()
+			followRoomCovers()
 		}
 	}
 
@@ -753,9 +762,39 @@ abstract class MediaPlayerViewModel(
 		// to wait for the first state that did decode, which on a fresh install never came —
 		// and `primeIndex` and `observeAndSaveState` wait behind this call, so nothing was ever
 		// persisted either (Q-049).
-		val savedState = stateToRestore(stateRepository.savedState(), _uiState.value) ?: return
+		val restored = stateToRestore(stateRepository.savedState(), _uiState.value) ?: return
+		// B-437: with the cover ids Room holds now, before the player is given the songs (their artwork).
+		val savedState = withCurrentCovers(restored, roomCoverIds(restored.queue)) ?: restored
 		_uiState.value = savedState
 		syncPlayerWithState(savedState)
+	}
+
+	/** B-437: the queue's songs' cover ids as Room holds them; none when Room cannot be read. */
+	private suspend fun roomCoverIds(queue: List<DomainSong>): Map<String, String?> = try {
+		songRepository.observeCoverIds(queueSongIds(queue)).first()
+	} catch (e: Exception) {
+		if (e is kotlin.coroutines.cancellation.CancellationException) throw e
+		Logger.w("MediaPlayerViewModel", "Could not read the queue's cover ids", e)
+		emptyMap()
+	}
+
+	/**
+	 * B-437: the queue's cover ids follow Room for as long as the app runs. Room learns a new cover id from the
+	 * changed-albums sweep (a scan, B-429), an lb-bot landing or a full pull; the queue, the player's rows and the
+	 * persisted queue then draw it. Keyed by the queue's list itself, so the 200 ms progress ticks cost nothing.
+	 */
+	@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+	private fun followRoomCovers() {
+		viewModelScope.launch {
+			_uiState
+				.map { it.queue }
+				.distinctUntilChanged { a, b -> a === b }
+				.map(::queueSongIds)
+				.distinctUntilChanged()
+				.flatMapLatest { ids -> songRepository.observeCoverIds(ids) }
+				.catch { e -> Logger.w("MediaPlayerViewModel", "Queue cover ids stopped following Room", e) }
+				.collect { covers -> _uiState.update { withCurrentCovers(it, covers) ?: it } }
+		}
 	}
 
 	@OptIn(FlowPreview::class)
