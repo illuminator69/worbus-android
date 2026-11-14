@@ -259,6 +259,8 @@ class LoginManager(
 		// Worbus P2: sign out of the Worbus Server, stop the socket, drop the saved-queue cache.
 		hubManager.leaveForLogout()
 		sessionManager.logout()
+		// Stage 2 review M6: the next login's library is read from its own lastScan, not this one's.
+		preferenceManager.lastScanSeen = ""
 		nativeApi.forget()
 		scope.launch {
 			repository.removeEverything()

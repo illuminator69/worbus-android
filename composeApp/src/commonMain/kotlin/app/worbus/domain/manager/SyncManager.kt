@@ -205,8 +205,10 @@ class SyncManager(
 		if (scanWatchJob?.isActive == true) return
 		scanWatchJob = scope.launch {
 			// B-429: from the lastScan last acted on, so a scan that ran while the app was closed is seen at the
-			// first reading (at once, not 30 s in).
-			var state = ScanWatchState(lastScan = preferenceManager.lastScanSeen.ifBlank { null })
+			// first reading (at once, not 30 s in). Stage 2 review M6: this library's (server and user), not the last
+			// one's; a logout clears it, and the watch is started again after a login.
+			val owner = sessionManager.downloadOwner().let { scanSeenOwner(it?.server, it?.account) }
+			var state = ScanWatchState(lastScan = scanSeenRead(preferenceManager.lastScanSeen, owner))
 			var first = true
 			while (isActive) {
 				if (!first) delay(SCAN_WATCH_INTERVAL)
@@ -219,13 +221,16 @@ class SyncManager(
 					continue
 				}
 				val (next, due) = scanWatchStep(state, reading)
-				state = next
-				if (due) {
+				val swept = if (due) {
 					delay(SCAN_SETTLE_DELAY)
-					// Kept for the next start only once acted on: a sweep that failed is tried again then.
-					if (!syncChangedAlbums("Navidrome scan")) continue
-				}
-				next.lastScan?.let { preferenceManager.lastScanSeen = it }
+					syncChangedAlbums("Navidrome scan")
+				} else true
+				// Stage 2 review M6: a sweep that failed leaves the state as it was, so the next reading tries again.
+				state = scanWatchAfterSweep(state, next, due, swept)
+				// Kept for the next start only once acted on.
+				if (swept && owner.isNotEmpty()) state.lastScan?.let { preferenceManager.lastScanSeen = scanSeenWrite(owner, it) }
+				// Stage 2 review M7: an artist re-read a failed landing or sweep left owed.
+				repository.settleArtistList()
 			}
 		}
 	}

@@ -50,6 +50,7 @@ import app.worbus.domain.manager.NotificationIds
 import app.worbus.domain.manager.NotificationManager
 import app.worbus.domain.manager.SessionManager
 import app.worbus.domain.manager.artistListStale
+import app.worbus.domain.manager.ArtistListDebt
 import app.worbus.domain.manager.WriteQueue
 import app.worbus.domain.models.DomainArtist
 import app.worbus.util.Logger
@@ -444,17 +445,27 @@ class DbRepository(
 		Logger.i("DbRepository", "- Targeted sync: ${albums.size} album(s)")
 		// B-429: the artist list was read by the full pull only, so a new artist (its first album landed) stayed
 		// out of Library > Artists until a manual full sync. One `getArtists` brings it, and album counts, in.
+		// Stage 2 review M7: a read that fails is owed, and paid by the next pass (or scan tick, [settleArtistList]).
 		val artistIds = entities.map { it.first.artistId }
-		if (artistListStale(newAlbums, artistIds, heldArtistIds(artistIds))) {
-			try {
-				replaceArtists(sessionManager.fetchAlbumArtists().map { it.toEntity() })
-			} catch (e: Exception) {
-				if (e is CancellationException) throw e
-				Logger.w("DbRepository", "targeted sync: the artist list could not be read: ${e.message}")
-			}
-		}
+		readArtistsIf(artistListStale(newAlbums, artistIds, heldArtistIds(artistIds)), "targeted sync")
 		albums.size
 	}
+
+	/** Stage 2 review M7: Room's artist list re-read when it is stale or a re-read is still owed. */
+	private val artistDebt = ArtistListDebt()
+
+	private suspend fun readArtistsIf(stale: Boolean, why: String): Boolean = artistDebt.settle(
+		stale,
+		read = { replaceArtists(sessionManager.fetchAlbumArtists().map { it.toEntity() }) },
+		onFailure = { e -> Logger.w("DbRepository", "$why: the artist list could not be read: ${e.message}") }
+	)
+
+	/**
+	 * Stage 2 review M7: pay an artist re-read a failed one left owed; nothing when none is. The scan watch calls it at
+	 * every reading, so a transient `getArtists` failure is tried again 30 s on, not at the next full pull.
+	 */
+	suspend fun settleArtistList(): Boolean =
+		artistDebt.owed && runDbOp { readArtistsIf(stale = false, why = "artist re-read") }.getOrDefault(false)
 
 	/** What [forgetAlbumIfEmpty] did. */
 	enum class AlbumForgotten {
@@ -707,6 +718,7 @@ class DbRepository(
 			listed.map(overlay::artist).chunked(dbChunkSize).forEach { chunk -> artistDao.insertArtists(chunk) }
 		}
 		artistDao.deleteObsoleteArtists(listed.map { it.artistId }.toSet())
+		artistDebt.paid()
 	}
 
 	suspend fun syncRadios(): Result<Unit> = runDbOp {

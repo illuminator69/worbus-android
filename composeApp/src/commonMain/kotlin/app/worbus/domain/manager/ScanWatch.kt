@@ -37,3 +37,66 @@ internal fun scanWatchStep(prev: ScanWatchState, reading: ScanReading): Pair<Sca
  */
 internal fun artistListStale(newAlbums: Int, albumArtistIds: Collection<String>, heldArtistIds: Set<String>): Boolean =
 	newAlbums > 0 || albumArtistIds.any { it.isNotBlank() && it !in heldArtistIds }
+
+/**
+ * The watch's state after a reading [next] made a sweep [due] and the sweep [swept] or failed. Stage 2 review M6: a
+ * failed sweep keeps the state from before the reading ([prev]), so the next reading (30 s on, not a busy loop) sees
+ * the same change and tries again. The new state was taken before the sweep, so a failed one was tried again only at
+ * the next start or the hourly pull.
+ */
+internal fun scanWatchAfterSweep(prev: ScanWatchState, next: ScanWatchState, due: Boolean, swept: Boolean): ScanWatchState =
+	if (due && !swept) prev else next
+
+/**
+ * Stage 2 review M6: the [lastScanSeen][PreferenceManager.lastScanSeen] for [owner] (whose library: server and user,
+ * `scanSeenOwner`). One value for every server and user meant the first reading after a login elsewhere always
+ * differed: a whole-library sweep right after the login's own full pull. A value stored for another owner, or in
+ * this branch's first format (no owner), is none.
+ */
+internal fun scanSeenRead(stored: String, owner: String): String? {
+	val cut = stored.lastIndexOf(SCAN_SEEN_SEP)
+	if (cut < 0 || owner.isEmpty() || stored.substring(0, cut) != owner) return null
+	return stored.substring(cut + 1).ifBlank { null }
+}
+
+/** What [lastScanSeen][PreferenceManager.lastScanSeen] stores for [owner]'s [lastScan]. */
+internal fun scanSeenWrite(owner: String, lastScan: String): String = "$owner$SCAN_SEEN_SEP$lastScan"
+
+/** Whose library a `lastScan` is about: the server and the user ("" without a session). */
+internal fun scanSeenOwner(server: String?, user: String?): String =
+	if (server.isNullOrBlank() || user.isNullOrBlank()) "" else "${server.trimEnd('/')}\n$user"
+
+private const val SCAN_SEEN_SEP = '\u0000'
+
+/**
+ * Stage 2 review M7: whether Room's artist list is owed a re-read ([owed]), and the re-read. A `getArtists` that
+ * failed after a landing's albums were written was not tried again: on the next pass the album was no longer new, so
+ * the new artist stayed out of Library > Artists until a full pull. Now a failure is a debt, paid by the next pass
+ * that may read ([settle], each scan tick and each targeted sync), whether or not its own albums make the list stale.
+ * Held in memory: a process that dies owing it leaves the artist to the next full pull.
+ */
+internal class ArtistListDebt {
+	@kotlin.concurrent.Volatile
+	private var owes = false
+	val owed: Boolean get() = owes
+
+	/** True when [read] ran and succeeded. A failure is reported to [onFailure], kept as owed, and not thrown. */
+	suspend fun settle(stale: Boolean, read: suspend () -> Unit, onFailure: (Exception) -> Unit = {}): Boolean {
+		if (!stale && !owes) return false
+		owes = true
+		return try {
+			read()
+			owes = false
+			true
+		} catch (e: Exception) {
+			if (e is kotlin.coroutines.cancellation.CancellationException) throw e
+			onFailure(e)
+			false
+		}
+	}
+
+	/** A full pull read the whole list: nothing is owed. */
+	fun paid() {
+		owes = false
+	}
+}
