@@ -6,12 +6,13 @@ import kotlin.math.roundToInt
 
 /**
  * navi-connect I-042: the timing of page pushes and pops, Settings' and the album's slides, a root-tab
- * switch (and every chip's content swap, `ContentSwap.kt`), the cover's shared-element flight, bottom sheets
- * and the pace of Quick's folds, per [AnimationStyle], and
+ * switch (and every chip's content swap, `ContentSwap.kt`), the cover's shared-element flight and the pace of
+ * Quick's folds, per [AnimationStyle], and
  * scaled by the animation speed setting ([PreferenceManager.motionSpeed], I-075). Pure values and no Compose
- * imports, so a host test can lock them; [Material3Transitions], the cover `BoundsTransform`, `Fold`,
- * `ModalBottomSheet` and the custom radio's steps build their specs from it ([pageMotion]), so this one table
- * is every page and tab motion's time.
+ * imports, so a host test can lock them; [Material3Transitions], the cover `BoundsTransform`, `Fold` and the
+ * custom radio's steps build their specs from it ([pageMotion]), so this one table is every page and tab motion's
+ * time. Bottom sheets are not in it (B-442, the owner's walk of 2026-11-14): they open and close on the motion
+ * scheme's spatial spring, Material's own (`ModalBottomSheet.kt`).
  *
  * I-075 (the owner's ruling, 2026-11-13 evening): **Quick is the speed the owner saw on Expressive at
  * `4b592a4e`** ([QuickPageMotion]), and **Expressive (and Standard, which has always shared its table) is
@@ -33,8 +34,6 @@ data class PageMotion(
 	val exitFadeMs: Int,
 	val exitSlideMs: Int,
 	val exitSlideDp: Int,
-	val sheetShowMs: Int,
-	val sheetHideMs: Int,
 	/**
 	 * B-403 (the owner, 2026-11-13): a root-tab switch's fade-through, the old tab out over
 	 * [tabExitFadeMs], then the new one in over [tabEnterFadeMs]. It was a page push's fades (500 ms).
@@ -84,9 +83,8 @@ enum class PageEasing { Emphasized, EmphasizedDecelerate, EaseOutQuart }
  *   Material's fade-through (30 / 70): 100 out, 230 in. B-403 made it 90 + 210.
  * - **Back** is the pop of whichever motion runs (B-378's one back animation), so it has no time of its own.
  * - Folds: the motion scheme's springs.
- * - **Sheets** rise over 400 ms and fall over **300** (B-436, motion lane 2026-11-14): they fell over 600, slower
- *   than they rose, upstream's numbers. An exit is shorter than its enter (Material's guidance, and Quick's 300 /
- *   250 already); 300 rather than Material's 200-250 so a Quick sheet still never closes slower than this one.
+ * - **Sheets** are not timed here (B-442): Material's spring opens them and, since the owner's walk of 2026-11-14,
+ *   closes them too, the opening the other way. B-436's 400 / 300 tweens (and Quick's 300 / 250) are gone.
  */
 val DefaultPageMotion = PageMotion(
 	enterFadeMs = 325,
@@ -97,8 +95,6 @@ val DefaultPageMotion = PageMotion(
 	exitFadeMs = 175,
 	exitSlideMs = 500,
 	exitSlideDp = 30,
-	sheetShowMs = 400,
-	sheetHideMs = 300,
 	tabExitFadeMs = 100,
 	tabEnterFadeMs = 230,
 	slideMs = 500,
@@ -108,8 +104,7 @@ val DefaultPageMotion = PageMotion(
 /**
  * Quick (I-075, the owner's ruling): **the page motion Expressive had at `4b592a4e`**, every number this
  * session's B-378, B-403 and B-404 set: Settings' slide 300 ms on EaseOutQuart; the album slide and the cover's
- * flight 300 ms on Emphasized; a root tab 90 out then 210 in. Quick's own sheets, which this session did not
- * touch and which were already quicker than Expressive's, are kept.
+ * flight 300 ms on Emphasized; a root tab 90 out then 210 in.
  *
  * **Its folds** (B-436, motion lane 2026-11-14) are the motion scheme's spring, as every style's are, at Quick's
  * pace: 500 / 300, Quick's push against Expressive's, so stiffness × 2.78. They were tweens of 200 ms (280 for a
@@ -136,8 +131,6 @@ val QuickPageMotion = PageMotion(
 	exitFadeMs = 105,
 	exitSlideMs = 300,
 	exitSlideDp = 30,
-	sheetShowMs = 300,
-	sheetHideMs = 250,
 	tabExitFadeMs = 90,
 	tabEnterFadeMs = 210,
 	slideMs = 300,
@@ -184,8 +177,6 @@ fun PageMotion.atSpeed(speed: Float): PageMotion {
 		enterSlideMs = ms(enterSlideMs),
 		exitFadeMs = ms(exitFadeMs),
 		exitSlideMs = ms(exitSlideMs),
-		sheetShowMs = ms(sheetShowMs),
-		sheetHideMs = ms(sheetHideMs),
 		tabExitFadeMs = ms(tabExitFadeMs),
 		tabEnterFadeMs = ms(tabExitFadeMs + tabEnterFadeMs) - ms(tabExitFadeMs),
 		slideMs = ms(slideMs)

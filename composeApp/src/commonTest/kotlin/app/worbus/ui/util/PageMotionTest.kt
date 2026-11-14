@@ -23,8 +23,6 @@ class PageMotionTest {
 		exitFadeMs = 175,
 		exitSlideMs = 500,
 		exitSlideDp = 30,
-		sheetShowMs = 400,
-		sheetHideMs = 600,
 		tabExitFadeMs = 90,
 		tabEnterFadeMs = 210,
 		slideMs = 300,
@@ -39,7 +37,7 @@ class PageMotionTest {
 		assertEquals(
 			at4b592a4e.copy(
 				enterFadeMs = 195, enterFadeDelayMs = 105, enterSlideMs = 300, exitFadeMs = 105, exitSlideMs = 300,
-				sheetShowMs = 300, sheetHideMs = 250, foldPace = 500f / 300f
+				foldPace = 500f / 300f
 			),
 			quick
 		)
@@ -52,8 +50,6 @@ class PageMotionTest {
 		assertEquals(PageFadeWindows(0, 105, 105, 300), pageFadeWindows(quick))
 		assertEquals(300, quick.enterSlideMs)
 		assertEquals(300, quick.exitSlideMs)
-		// Quick's own sheets and folds, which this session did not touch, stay quicker than Expressive's.
-		assertTrue(quick.sheetShowMs < at4b592a4e.sheetShowMs && quick.sheetHideMs < at4b592a4e.sheetHideMs)
 	}
 
 	@Test
@@ -67,9 +63,6 @@ class PageMotionTest {
 			exitFadeMs = 175,
 			exitSlideMs = 500,
 			exitSlideDp = 30,
-			sheetShowMs = 400,
-			// B-436 (motion lane, 2026-11-14): a sheet closes faster than it opens; it was `bd39384d`'s 600.
-			sheetHideMs = 300,
 			// The old springs' cross-fade settled in ~330 ms; a fade-through of that length, 30 / 70.
 			tabExitFadeMs = 100,
 			tabEnterFadeMs = 230,
@@ -93,8 +86,6 @@ class PageMotionTest {
 			"enterSlide" to (q.enterSlideMs to e.enterSlideMs),
 			"exitFade" to (q.exitFadeMs to e.exitFadeMs),
 			"exitSlide" to (q.exitSlideMs to e.exitSlideMs),
-			"sheetShow" to (q.sheetShowMs to e.sheetShowMs),
-			"sheetHide" to (q.sheetHideMs to e.sheetHideMs),
 			"tabExitFade" to (q.tabExitFadeMs to e.tabExitFadeMs),
 			"tabEnterFade" to (q.tabEnterFadeMs to e.tabEnterFadeMs),
 			"slide" to (q.slideMs to e.slideMs)
@@ -119,7 +110,7 @@ class PageMotionTest {
 			assertEquals(base.enterSlideMs / 2, fast.enterSlideMs, "$style")
 			assertEquals(base.enterSlideMs * 2, slow.enterSlideMs, "$style")
 			assertEquals(base.slideMs / 2, fast.slideMs, "$style")
-			assertEquals(base.sheetHideMs * 2, slow.sheetHideMs, "$style")
+			assertEquals(base.exitFadeMs * 2, slow.exitFadeMs, "$style")
 			assertEquals(base.tabEnterFadeMs * 2, slow.tabEnterFadeMs, "$style")
 			assertEquals(base.enterFadeDelayMs * 2, slow.enterFadeDelayMs, "$style")
 			// Distances and curves do not move.
@@ -180,13 +171,8 @@ class PageMotionTest {
 		assertTrue(quick.foldPace > 1f, "Quick's folds are quicker than Expressive's")
 	}
 
-	@Test
-	fun b436_aSheetClosesFasterThanItOpensUnderEveryStyleAndSpeed() {
-		for (style in AnimationStyle.entries) for (speed in listOf(0.5f, 1f, 1.25f, 2f)) {
-			val m = pageMotionOf(style, speed)
-			assertTrue(m.sheetHideMs < m.sheetShowMs, "$style at $speed: hide ${m.sheetHideMs} >= show ${m.sheetShowMs}")
-		}
-	}
+	// B-436's "a sheet closes faster than it opens" was superseded by B-442 (the owner's walk, 2026-11-14): a sheet
+	// closes on the spring it opens on (`SheetCloseMotionTest`); sheets are no longer timed by the page motion.
 
 	@Test
 	fun theEnumIsAppendOnlyBecauseItIsStoredByOrdinal() {

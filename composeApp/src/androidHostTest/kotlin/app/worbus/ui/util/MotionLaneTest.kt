@@ -75,13 +75,7 @@ class MotionLaneTest {
 		assertTrue("PaneMotionDefaults" in src("ui/util/MotionSpeed.kt"), "two-pane motion is neither scaled nor listed")
 	}
 
-	@Test
-	fun b436_sheetsCloseFasterThanTheyOpen() {
-		for (style in AnimationStyle.entries) {
-			val m = pageMotionOf(style)
-			assertTrue(m.sheetHideMs < m.sheetShowMs, "$style: ${m.sheetShowMs} in, ${m.sheetHideMs} out")
-		}
-	}
+	// b436_sheetsCloseFasterThanTheyOpen: superseded by B-442 (SheetCloseMotionTest).
 
 	@Test
 	fun b436_everyStyleFoldsOnASpring() {

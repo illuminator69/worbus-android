@@ -51,9 +51,6 @@ import org.koin.compose.koinInject
 import app.worbus.domain.manager.PreferenceManager
 import app.worbus.ui.theme.NavicTheme
 import app.worbus.ui.util.CoverAmbient
-import app.worbus.ui.util.pageMotionOf
-import app.worbus.ui.util.sheetHideMotionSpec
-import app.worbus.ui.util.PageMotion
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
@@ -123,16 +120,15 @@ fun ModalBottomSheet(
 	// Initial pass and never consumed, so the sheet's own drag and the content's scrolling see
 	// every event as before.
 	var touched by remember { mutableStateOf(false) }
-	// B-442 / B-154: Material's sheet takes its show, hide and drag-settle specs from the motion scheme, in a
-	// SideEffect that runs on every recomposition of the sheet (BottomSheet, M3 1.5): `defaultSpatialSpec` to show
-	// and settle, `fastEffectsSpec` to hide. The specs this wrapper wrote into the sheet state once were overwritten
-	// on the sheet's first recomposition, so Back and the player's chevron closed on Material's fast spring (~100 ms
-	// on the VM AVD) whatever `PageMotion.sheetHideMs` said. The hide is given through the scheme instead
-	// ([SheetMotionScheme]), and the content gets the page's own scheme back ([outerMotion]).
-	val preferences = koinInject<PreferenceManager>()
-	val motion = pageMotionOf(preferences.animationStyle, preferences.motionSpeed)
+	// B-442 / B-154: a sheet closes on the spring it opens on (the owner's walk of `a7ea2fe1`: "it should just be the
+	// reverse of how they open"). Material's sheet takes its specs from the motion scheme, in a SideEffect on every
+	// recomposition of the sheet (BottomSheet, M3 1.5): `defaultSpatialSpec` to show and to settle a released drag,
+	// `fastEffectsSpec` to hide. `hide()` is what Back, the player's chevron and a tap on the scrim run, so they closed
+	// on an effects spring (~100 ms to 95 % on the VM AVD) while a dragged close settled on the opening's spring. The
+	// sheet's scheme ([sheetMotionScheme]) gives the hide that spring; the content gets the page's scheme back
+	// ([outerMotion]). Never through the sheet state: Material's SideEffect overwrites anything written there.
 	val outerMotion = MaterialTheme.motionScheme
-	val sheetMotion = remember(outerMotion, motion) { SheetMotionScheme(outerMotion, motion) }
+	val sheetMotion = remember(outerMotion) { sheetMotionScheme(outerMotion) }
 	val outerColors = MaterialTheme.colorScheme
 	val outerShapes = MaterialTheme.shapes
 	val outerType = MaterialTheme.typography
@@ -234,14 +230,16 @@ fun ModalBottomSheet(
 }
 
 /**
- * B-442: the motion scheme Material's sheet reads its hide from: [base] with `fastEffectsSpec` the sheet's hide
- * ([sheetHideMotionSpec], `PageMotion.sheetHideMs`). Its `defaultSpatialSpec`, which opens the sheet and also
- * settles every drag released on it, is left as [base]'s (a spring that follows the fling): a fixed-time tween
- * there would make a fling take [PageMotion.sheetShowMs] whatever its speed. Read by the sheet alone: its
- * content gets [base] back.
+ * B-442: the motion scheme Material's sheet reads its specs from: [base], with the hide (`fastEffectsSpec`, the only
+ * thing Material's sheet reads it for) on [base]'s `defaultSpatialSpec`, the spring the sheet opens on and settles a
+ * released drag on. So Back, the player's chevron and a tap above the sheet close it as a drag does: the opening's
+ * motion the other way, at the animation speed ([base] is the theme's, already at the speed). Read by the sheet alone:
+ * its content gets [base] back.
  */
-internal class SheetMotionScheme(private val base: MotionScheme, private val motion: PageMotion) : MotionScheme by base {
-	override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = sheetHideMotionSpec(motion)
+internal fun sheetMotionScheme(base: MotionScheme): MotionScheme = SheetMotionScheme(base)
+
+private class SheetMotionScheme(private val base: MotionScheme) : MotionScheme by base {
+	override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = base.defaultSpatialSpec()
 }
 
 /**
