@@ -1,18 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="title_library">Koleksi</string>
-    <string name="title_starred">Berbintang</string>
     <string name="title_playlists">Daftar Putar</string>
     <string name="title_settings">Pengaturan</string>
     <string name="title_search">Cari</string>
     <string name="title_appearance">Tampilan</string>
-    <string name="title_behaviour">Perilaku</string>
     <string name="title_now_playing">Sedang Diputar</string>
-    <string name="title_bottom_app_bar">Bilah Bawah</string>
     <string name="title_playback">Pemutaran</string>
     <string name="title_data_storage">Data &amp; Penyimpanan</string>
     <string name="title_sync_control">Kontrol Sinkronisasi</string>
-    <string name="title_cache_management">Manajemen Cache &amp; Penyimpanan</string>
     <string name="title_danger_zone">Zona Bahaya</string>
     <string name="title_developer">Opsi Developer</string>
     <string name="title_about">Tentang</string>
@@ -28,14 +24,11 @@
     <string name="info_sync_just_now">Baru saja</string>
     <string name="option_now_playing_slider_style_yoyo">Yoyo</string>
     <string name="subtitle_playback">Perilaku audio, scrobbling, lirik</string>
-    <string name="option_replay_gain">ReplayGain</string>
     <string name="option_downloaded_songs">Lagu yang diunduh</string>
     <string name="option_radio_stream_url">URL Streaming</string>
     <string name="action_clear_downloads">Hapus unduhan</string>
-    <string name="title_cellular">Seluler</string>
     <string name="info_syncing_albums">Menyinkronkan album...</string>
     <string name="title_bulk_download">Unduh Semua Album</string>
-    <string name="info_progress">Kemajuan</string>
     <string name="info_click_to_retry">Klik untuk mencoba lagi</string>
     <string name="subtitle_bottom_app_bar">Sesuaikan bilah bawah &amp; pemutar mini</string>
     <string name="title_mini_player">Pemutar Mini</string>
@@ -53,23 +46,19 @@
     <plurals name="count_playlists">
         <item quantity="other">%1$d daftar putar</item>
     </plurals>
-    <string name="action_clear_queue">Antrian kosong</string>
     <string name="theme_mode_system">Sistem</string>
     <string name="action_lyrics">Lirik</string>
     <string name="action_clear_image_cache">Hapus cache gambar</string>
     <string name="info_track_file_size">Ukuran file</string>
-    <string name="title_streaming_quality">Kualitas streaming</string>
     <plurals name="count_lines">
         <item quantity="other">%1$d baris terpilih</item>
     </plurals>
     <string name="info_download_failed">Pengunduhan gagal</string>
-    <string name="action_add_all_to_playlist">Tambahkan Semua ke Daftar Putar</string>
     <string name="action_update_app">Memperbarui</string>
     <string name="option_choose_theme">Tema aplikasi</string>
     <string name="title_songs">Lagu-lagu</string>
     <string name="info_lyrics_provider">Lirik disediakan oleh %1$s</string>
     <string name="action_search_history">Pencarian Terbaru</string>
-    <string name="info_login_description_middle">Navidrome</string>
     <string name="info_syncing_playlists">Menyinkronkan daftar putar...</string>
     <string name="action_remove_from_history">Hapus dari riwayat</string>
     <string name="option_mini_player_style_unified">Terpadu</string>
@@ -86,21 +75,18 @@
     <string name="subtitle_offline_mode">Menentukan kapan aplikasi harus beralih ke mode offline. Membutuhkan restart aplikasi</string>
     <string name="option_now_playing_slider_style_flat">Datar</string>
     <string name="option_animation_style">Gaya animasi</string>
-    <string name="info_library_download">Simpan semua musik yang disinkronkan untuk diputar secara offline</string>
     <string name="info_syncing_saved">Tersimpan.</string>
     <string name="option_audio_offload">Pengalihan audio</string>
     <string name="info_status_calculating">Menghitung...</string>
     <string name="action_cancel_download">Batalkan unduhan</string>
     <string name="subtitle_check_for_updates">Disarankan untuk tetap mengaktifkannya, karena beberapa pembaruan menyediakan perbaikan bug penting</string>
     <string name="option_playback_speed">Kecepatan pemutaran</string>
-    <string name="action_repeat">Mengulang</string>
     <string name="option_sort_rating">Peringkat</string>
     <string name="action_reorder">Susun ulang</string>
     <string name="action_view_on_musicbrainz">Lihat di MusicBrainz</string>
     <string name="option_navigation_bar_style_short">Pendek</string>
     <string name="info_no_artists">Tidak ada artis</string>
     <string name="action_dont_show_again">Jangan muncul lagi</string>
-    <string name="info_no_starred">Tidak ada yang diberi bintang</string>
     <string name="action_see_all">Lihat semua</string>
     <string name="option_lyrics_bright_inactive">Lirik tidak aktif yang terang</string>
     <string name="info_track_replay_gain">Trek ReplayGain</string>
@@ -109,13 +95,10 @@
     <string name="info_in_use">(sedang digunakan)</string>
     <string name="option_sort_random">Acak</string>
     <string name="info_update">Versi %1$s telah dirilis</string>
-    <string name="title_navigation_bar">Bilah Navigasi</string>
-    <string name="subtitle_enable_scrobbling">Scrobble mengirimkan trek yang telah diputar ke server Navidrome Anda</string>
     <plurals name="count_minutes">
         <item quantity="other">%1$d menit</item>
     </plurals>
     <string name="option_offline_mode_auto">Otomatis</string>
-    <string name="subtitle_streaming_quality">Sesuaikan kualitas musik yang diputar</string>
     <string name="option_check_for_updates">Periksa pembaruan</string>
     <string name="option_lyrics_autoscroll">Lirik bergulir otomatis</string>
     <string name="theme_mode_dark">Gelap</string>
@@ -137,10 +120,7 @@
     <string name="option_image_cache_size">Ukuran cache gambar</string>
     <string name="info_streaming_quality">Preset berkualitas lebih tinggi akan menggunakan lebih banyak data. Transcoding dapat sangat memengaruhi waktu pemuatan dan menyebabkan lirik menjadi tidak sinkron. Pilih Lossless jika Anda mengalami masalah apa pun.</string>
     <string name="option_playlist_name">Nama</string>
-    <string name="title_advanced">Transkode Tingkat Lanjut</string>
-    <string name="title_wifi">Wi-Fi</string>
     <string name="option_lyrics_keep_alive">Tetap nyalakan layar dalam tampilan lirik</string>
-    <string name="option_playlist_songs">Lagu-lagu</string>
     <string name="option_pending_actions">Tindakan sinkronisasi tertunda</string>
     <string name="action_shuffle">Acak</string>
     <string name="option_bottom_bar_collapse_mode_on_scroll">Pada gulungan</string>
@@ -149,7 +129,6 @@
     <string name="action_add_to_playlist">Tambahkan ke Daftar Putar</string>
     <string name="info_track_duration">Lamanya</string>
     <string name="option_bottom_bar_collapse_mode_never">Tidak pernah</string>
-    <string name="option_account_navidrome_instance">URL Instans</string>
     <string name="info_not_playing">Tidak Diputar</string>
     <string name="option_account_username">Nama pengguna</string>
     <string name="info_share_expires_in">Berakhir dalam %1$s</string>
@@ -162,7 +141,6 @@
     <string name="subtitle_developer">Debugging, pengujian</string>
     <string name="action_share_lyrics">Bagikan Lirik</string>
     <string name="option_bottom_bar_visibility_mode">Mode visibilitas</string>
-    <string name="option_now_playing_toolbar_position">Posisi bilah alat</string>
     <string name="option_account_password">Kata sandi</string>
     <string name="option_radio_name">Nama</string>
     <string name="option_radio_homepage_url">URL Beranda</string>
@@ -193,7 +171,6 @@
     <string name="title_shares">Berbagi</string>
     <string name="subtitle_rebuild_database">Menghapus semua metadata lokal dan memaksa sinkronisasi ulang</string>
     <string name="action_download">Unduh</string>
-    <string name="title_network">Jaringan</string>
     <string name="option_mini_player_progress_style">Gaya kemajuan pemain mini</string>
     <string name="title_albums">Album</string>
     <string name="option_live_status">Status langsung</string>
@@ -204,7 +181,6 @@
     <plurals name="count_hours">
         <item quantity="other">%1$d jam</item>
     </plurals>
-    <string name="info_syncing_saving">Menyimpan...</string>
     <string name="info_no_radios">Tidak ada radio</string>
     <string name="option_mini_player_progress_style_hidden">Tersembunyi</string>
     <string name="info_error">Terjadi kesalahan.</string>
@@ -218,7 +194,6 @@
     <string name="action_queue">Antre</string>
     <string name="title_genres">Genre</string>
     <string name="subtitle_appearance">Tema, warna, tata letak</string>
-    <string name="info_login_description_start">Masuk ke akun Anda</string>
     <string name="option_sort_alphabetical_by_name">Diurutkan berdasarkan abjad nama</string>
     <string name="info_no_genres">Tidak ada genre</string>
     <string name="info_image_failed_to_load">Gagal memuat</string>
@@ -228,7 +203,6 @@
     <string name="info_track_year">Tahun</string>
     <string name="subtitle_trigger_sync">Memaksa pengunduhan seluruh pustaka secara langsung</string>
     <string name="info_share_expired">Kedaluwarsa</string>
-    <string name="option_enable_scrobbling">Aktifkan scrobbling</string>
     <string name="info_not_available_offline">Tidak tersedia secara offline</string>
     <string name="info_track_channel_count">Jumlah saluran</string>
     <string name="option_gapless_playback">Pemutaran tanpa jeda</string>
@@ -239,23 +213,17 @@
     <string name="info_syncing_genres">Menyinkronkan genre...</string>
     <string name="option_now_playing_background_style_static">Statis</string>
     <string name="option_navigation_bar_style">Gaya bilah navigasi</string>
-    <string name="option_min_duration_to_scrobble">Durasi minimum untuk melakukan scrobble</string>
     <string name="option_now_playing_background_style">Gaya latar belakang</string>
     <string name="option_offline_mode_forced">Dipaksa</string>
-    <string name="info_share_expires_never">Tidak pernah kedaluwarsa</string>
     <string name="info_unknown_year">Tahun Tidak Diketahui</string>
-    <string name="title_miscellaneous">Aneka ragam</string>
     <string name="info_track_name">Nama</string>
     <string name="info_syncing_artists">Menyinkronkan artis...</string>
     <string name="info_track_disc_number">Nomor cakram</string>
     <string name="title_update">Pembaruan tersedia</string>
     <string name="option_sort_newest">Baru ditambahkan</string>
-    <string name="option_scrobble_percentage">Persentase scrobble</string>
-    <string name="info_error_hide">Sembunyikan detail</string>
     <string name="option_sort_alphabetical_by_artist">Diurutkan berdasarkan abjad menurut nama artis</string>
     <string name="action_sleep_timer">Pengatur waktu tidur</string>
     <string name="option_share_expires">Berakhir</string>
-    <string name="info_no_search_results">Tidak ada hasil</string>
     <string name="option_cover_art_quality">Kualitas sampul buku</string>
     <string name="action_delete">Menghapus</string>
     <string name="info_no_other_playlists">Anda tidak memiliki daftar putar lain selain yang ini.</string>
@@ -274,7 +242,6 @@
     <string name="subtitle_now_playing">Sesuaikan tampilan layar penuh saat sedang diputar</string>
     <string name="notice_queue_duplicate">Lagu ini sudah ada dalam antrean. Apakah Anda benar-benar ingin menambahkannya lagi?</string>
     <string name="option_sort_playlist_duration">Lamanya</string>
-    <string name="info_login_description_end">instans.</string>
     <string name="subtitle_pending_actions">%1$d item menunggu jaringan</string>
     <string name="info_track_replay_gain_effective">Nilai efektif ReplayGain</string>
     <string name="title_artists">Artis</string>
@@ -290,7 +257,6 @@
     <string name="action_star">Bintang</string>
     <string name="info_bulk_download_warning">Apakah Anda yakin ingin mengunduh setiap album oleh %1$s?\nIni mungkin memerlukan sejumlah besar penyimpanan dan data.</string>
     <string name="subtitle_about">Info aplikasi, versi, lisensi</string>
-    <string name="title_changelog">Catatan rilis</string>
     <string name="notice_loading_lyrics">Sedang memuat lirik...\nIni mungkin akan memakan waktu.</string>
     <string name="info_action_is_permanent">Tindakan ini tidak dapat dibatalkan</string>
     <string name="info_downloaded">Diunduh</string>
@@ -300,8 +266,6 @@
     <string name="info_sync_never">Tidak pernah</string>
     <string name="title_select_lyrics">Pilih Lirik</string>
     <string name="option_mini_player_style">Gaya pemain mini</string>
-    <string name="action_view_playlist">Lihat daftar putar</string>
-    <string name="option_max_bitrate_cellular">Kecepatan Bit Maksimum Seluler (kbps)</string>
     <string name="option_cover_art_size">Ukuran sampul karya seni</string>
     <string name="action_cancel">Membatalkan</string>
     <plurals name="count_artists">
@@ -319,7 +283,6 @@
     <string name="info_unknown">Tidak dikenal</string>
     <string name="option_navigation_bar_label_visibility">Visibilitas label</string>
     <string name="action_sleep_timer_enabled">Pengatur waktu tidur - %1$s tersisa</string>
-    <string name="option_max_bitrate_wifi">Kecepatan Bit Maksimum WiFi (kbps)</string>
     <string name="option_quality_lossless">Tanpa kehilangan data (tanpa transkode)</string>
     <string name="option_animation_style_expressive">Ekspresif</string>
     <string name="option_lyrics_beat_by_beat">Lirik per ketukan</string>

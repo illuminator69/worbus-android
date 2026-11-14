@@ -5,9 +5,7 @@
     <string name="title_settings">الإعدادات</string>
     <string name="title_search">دور</string>
     <string name="title_appearance">الشكل والمظهر</string>
-    <string name="title_behaviour">السلوك</string>
     <string name="title_now_playing">الي شغال دلوقتي</string>
-    <string name="title_bottom_app_bar">الشريط التحتاني</string>
     <string name="title_playback">التشغيل</string>
     <string name="title_developer">خيارات المطور</string>
     <string name="title_about">عن التطبيق</string>
@@ -26,9 +24,7 @@
     <string name="title_fonts_external">من بره</string>
     <string name="title_more_by_artist">أغاني تانية لـ %1$s</string>
     <string name="title_genres">الأنواع</string>
-    <string name="title_navigation_bar">شريط التنقل</string>
     <string name="title_mini_player">المشغل الصغير</string>
-    <string name="title_miscellaneous">متنوعات</string>
     <string name="title_layout">التصميم</string>
     <string name="subtitle_appearance">ثيمات، ألوان، تصميم</string>
     <string name="subtitle_now_playing">عدل شاشة التشغيل الكاملة</string>
@@ -39,7 +35,6 @@
     <string name="subtitle_playlist">قايمة التشغيل</string>
     <string name="subtitle_gapless_playback">محتاج تعيد تشغيل التطبيق. تجريبي. لو Audio Offload شغال، ممكن ما يشتغلش على بعض الأجهزة</string>
     <string name="subtitle_audio_offload">محتاج تعيد تشغيل التطبيق. تجريبي. لو التشغيل بدون فواصل شغال، ممكن ما يشتغلش على بعض الأجهزة</string>
-    <string name="subtitle_enable_scrobbling">يسجل الأغاني اللي اشتغلت على سيرفر Navidrome</string>
     <string name="subtitle_now_playing_background_style">اختار ثابت لو عندك مشاكل في الأداء</string>
     <string name="option_now_playing_background_style">نمط الخلفية</string>
     <string name="option_now_playing_background_style_static">ثابت</string>
@@ -55,7 +50,6 @@
     <string name="option_alphabetical_scroll">تمرير أبجدي</string>
     <string name="option_grid_items_per_row">حجم الشبكة</string>
     <string name="option_share_expires">بتنتهي امتى</string>
-    <string name="option_account_navidrome_instance">رابط الـ Instance</string>
     <string name="option_account_username">اسم المستخدم</string>
     <string name="option_account_password">كلمة السر</string>
     <string name="option_lyrics_autoscroll">تمرير الكلمات تلقائي</string>
@@ -74,16 +68,10 @@
     <string name="option_sort_playlist_duration">المدة</string>
     <string name="option_sort_ascending">من الأقل للأكتر</string>
     <string name="option_sort_descending">من الأكتر للأقل</string>
-    <string name="option_scrobble_percentage">نسبة الـ Scrobble</string>
-    <string name="option_min_duration_to_scrobble">أقل مدة للـ Scrobble</string>
     <string name="option_playlist_name">الاسم</string>
-    <string name="option_playlist_songs">الأغاني</string>
-    <string name="option_enable_scrobbling">فعّل الـ Scrobbling</string>
     <string name="option_choose_theme">ثيم التطبيق</string>
-    <string name="option_replay_gain">ReplayGain</string>
     <string name="option_gapless_playback">تشغيل بدون فواصل</string>
     <string name="option_audio_offload">Audio Offload</string>
-    <string name="option_now_playing_toolbar_position">مكان شريط الأدوات</string>
     <string name="option_position_top">فوق</string>
     <string name="option_position_bottom">تحت</string>
     <string name="option_bottom_bar_collapse_mode">وضع الطي</string>
@@ -128,14 +116,12 @@
     <string name="action_play">شغّل</string>
     <string name="action_new">جديد</string>
     <string name="action_shuffle">خلّط</string>
-    <string name="action_repeat">كرّر</string>
     <string name="action_delete">احذف</string>
     <string name="action_cancel">إلغاء</string>
     <string name="action_refresh">حدث</string>
     <string name="action_share">شارك</string>
     <string name="action_track_info">تفاصيل الأغنية</string>
     <string name="action_view_album">افتح الألبوم</string>
-    <string name="action_view_playlist">افتح قايمة التشغيل</string>
     <string name="action_view_artist">شوف الفنان</string>
     <string name="action_star">ضيف للمفضلة</string>
     <string name="action_remove_star">شيل من المفضلة</string>
@@ -147,7 +133,6 @@
     <string name="action_more">أكتر</string>
     <string name="action_add_to_playlist">ضيف لقايمة التشغيل</string>
     <string name="action_add_to_another_playlist">ضيف لقايمة تانية</string>
-    <string name="action_add_all_to_playlist">ضيف الكل لقايمة التشغيل</string>
     <string name="action_remove_from_playlist">شيل من قايمة التشغيل</string>
     <string name="action_see_all">شوف الكل</string>
     <string name="action_view_on_lastfm">افتح على Last.fm</string>
@@ -169,7 +154,6 @@
     <string name="info_action_is_permanent">الإجراء ده مش هيتراجع عنه</string>
     <string name="info_error">فيه حاجة غلط حصلت.</string>
     <string name="info_error_show">وريني التفاصيل</string>
-    <string name="info_error_hide">خبّي التفاصيل</string>
     <string name="info_unknown">مش معروف</string>
     <string name="info_unknown_album">ألبوم مجهول</string>
     <string name="info_unknown_year">سنة مجهولة</string>
@@ -197,7 +181,6 @@
     <string name="info_track_replay_gain_effective">قيمة ReplayGain الفعلية</string>
     <string name="info_shared_by">اتشارك من %1$s</string>
     <string name="info_share_expires_in">هتنتهي في %1$s</string>
-    <string name="info_share_expires_never">مش بتنتهي خالص</string>
     <string name="info_share_expired">خلصت</string>
     <string name="info_no_shares">مفيش مشاركات</string>
     <string name="info_no_lyrics">مفيش كلمات للأسف</string>

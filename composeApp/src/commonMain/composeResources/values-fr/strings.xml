@@ -6,9 +6,7 @@
     <string name="title_settings">Paramètres</string>
     <string name="title_search">Rechercher</string>
     <string name="title_appearance">Apparence</string>
-    <string name="title_behaviour">Comportement</string>
     <string name="title_now_playing">Lecture en cours</string>
-    <string name="title_bottom_app_bar">Barre inférieure</string>
     <string name="title_about">À propos</string>
     <string name="title_delete_playlist">Supprimer la liste de lecture ?</string>
     <string name="title_delete_share">Supprimer le partage ?</string>
@@ -25,7 +23,6 @@
     <string name="subtitle_bottom_app_bar">Personnalisez la barre de navigation et le lecteur</string>
     <string name="subtitle_about">Infos sur l'application, version, mises à jour, licenses</string>
     <string name="subtitle_playlist">Liste de lecture</string>
-    <string name="subtitle_enable_scrobbling">Scrobbler les morceaux écoutés vers votre serveur Navidrome</string>
     <string name="option_accent_colour">Palette d'accents</string>
     <string name="option_swipe_to_skip">Glisser pour passer les morceaux</string>
     <string name="option_artwork_shape">Forme des pochettes d'albums</string>
@@ -34,7 +31,6 @@
     <string name="option_alphabetical_scroll">Défilement alphabétique</string>
     <string name="option_grid_items_per_row">Taille de la grille</string>
     <string name="option_share_expires">Expiration</string>
-    <string name="option_account_navidrome_instance">URL de l'instance</string>
     <string name="option_account_username">Nom d'utilisateur</string>
     <string name="option_account_password">Mot de passe</string>
     <string name="option_lyrics_autoscroll">Défilement automatique des paroles</string>
@@ -48,11 +44,7 @@
     <string name="option_sort_starred">Favoris</string>
     <string name="option_sort_by_year">Par année</string>
     <string name="option_sort_by_genre">Par genre</string>
-    <string name="option_scrobble_percentage">Pourcentage de scrobble</string>
-    <string name="option_min_duration_to_scrobble">Durée min. pour scrobbler</string>
     <string name="option_playlist_name">Nom</string>
-    <string name="option_playlist_songs">Morceaux</string>
-    <string name="option_enable_scrobbling">Activer le scrobbling</string>
     <string name="option_choose_theme">Choisir le thème</string>
     <string name="theme_dynamic">Dynamique</string>
     <string name="theme_seeded">Teinté</string>
@@ -80,14 +72,12 @@
     <string name="action_play">Lecture</string>
     <string name="action_new">Nouveau</string>
     <string name="action_shuffle">Aléatoire</string>
-    <string name="action_repeat">Répéter</string>
     <string name="action_delete">Supprimer</string>
     <string name="action_cancel">Annuler</string>
     <string name="action_refresh">Actualiser</string>
     <string name="action_share">Partager</string>
     <string name="action_track_info">Voir les infos du morceau</string>
     <string name="action_view_album">Voir l'album</string>
-    <string name="action_view_playlist">Voir la liste de lecture</string>
     <string name="action_view_artist">Voir l'artiste</string>
     <string name="action_star">Favori</string>
     <string name="action_remove_star">Retirer des favoris</string>
@@ -99,7 +89,6 @@
     <string name="action_more">Plus</string>
     <string name="action_add_to_playlist">Ajouter à la liste de lecture</string>
     <string name="action_add_to_another_playlist">Ajouter à une autre liste de lecture</string>
-    <string name="action_add_all_to_playlist">Ajouter tout à la liste de lecture</string>
     <string name="action_remove_from_playlist">Retirer de la liste de lecture</string>
     <string name="action_see_all">Voir tout</string>
     <string name="action_view_on_lastfm">Voir sur last.fm</string>
@@ -117,7 +106,6 @@
     <string name="info_action_is_permanent">Cette action est irréversible</string>
     <string name="info_error">Une erreur s'est produite.</string>
     <string name="info_error_show">Afficher les détails</string>
-    <string name="info_error_hide">Masquer les détails</string>
     <string name="info_unknown">Inconnu</string>
     <string name="info_unknown_album">Album inconnu</string>
     <string name="info_unknown_year">Année inconnue</string>
@@ -139,7 +127,6 @@
     <string name="info_track_path">Chemin</string>
     <string name="info_shared_by">Partagé par %1$s</string>
     <string name="info_share_expires_in">Expire dans %1$s</string>
-    <string name="info_share_expires_never">N'expire jamais</string>
     <string name="info_share_expired">Expiré</string>
     <string name="info_no_shares">Aucun partage</string>
     <string name="title_playback">Lecture</string>
@@ -149,9 +136,7 @@
     <string name="title_fonts_external">Externe</string>
     <string name="title_more_by_artist">Plus par %1$s</string>
     <string name="title_genres">Genres</string>
-    <string name="title_navigation_bar">Barre de navigation</string>
     <string name="title_mini_player">Mini-lecteur</string>
-    <string name="title_miscellaneous">Divers</string>
     <string name="title_layout">Mise en forme</string>
     <string name="subtitle_playback">Comportement de l'audio et du scrobbling</string>
     <string name="subtitle_developer">Débogage, tests, logs</string>
@@ -169,10 +154,8 @@
     <string name="option_sort_playlist_duration">Par durée</string>
     <string name="option_sort_ascending">Ascendant</string>
     <string name="option_sort_descending">Descendant</string>
-    <string name="option_replay_gain">ReplayGain</string>
     <string name="option_gapless_playback">Lecture continue</string>
     <string name="option_audio_offload">Déchargement audio</string>
-    <string name="option_now_playing_toolbar_position">Position de la barre d'outils</string>
     <string name="option_position_top">Haut</string>
     <string name="option_position_bottom">Bas</string>
     <string name="option_bottom_bar_collapse_mode">Mode replié</string>
@@ -215,7 +198,6 @@
     <string name="info_image_failed_to_load">Échec du chargement</string>
     <string name="title_data_storage">Données &amp; Stockage</string>
     <string name="title_sync_control">Contrôle de la synchronisation</string>
-    <string name="title_cache_management">Gestion du stockage et du cache</string>
     <string name="title_danger_zone">Zone de danger</string>
     <string name="title_sort_by">Trier par</string>
     <string name="title_bulk_download">Télécharger tous les albums</string>
@@ -251,7 +233,6 @@
     <string name="info_sync_just_now">À l'instant</string>
     <string name="action_rebuild_database">Reconstruire la base de données</string>
     <string name="title_update">Nouvelle version disponible</string>
-    <string name="title_changelog">Liste des changements</string>
     <string name="subtitle_check_for_updates">Vérifier GitHub pour les mis-à-jour au lancement de l'application</string>
     <string name="option_lyrics_blur">Flou sur les bords</string>
     <string name="option_sort_downloaded">Téléchargé</string>
@@ -262,16 +243,12 @@
     <string name="action_dont_show_again">Ne plus montrer</string>
     <string name="info_update">La version %1$s est disponible</string>
     <string name="info_syncing">Synchronisation...</string>
-    <string name="info_syncing_saving">Sauvegarde...</string>
     <string name="info_syncing_saved">Sauvegardé.</string>
     <string name="info_syncing_finished">Terminé.</string>
     <string name="info_syncing_albums">Synchronisation des albums...</string>
     <string name="info_syncing_playlists">Synchronisation des listes de lecture...</string>
     <string name="info_syncing_genres">Synchronisation des genres...</string>
     <string name="info_syncing_artists">Synchronisation des artistes...</string>
-    <string name="info_login_description_start">Connectez-vous à votre</string>
-    <string name="info_login_description_middle">Navidrome</string>
-    <string name="info_login_description_end">instance.</string>
     <string name="info_exception_handler">Cela va immédiatement provoquer le plantage de l'application. Êtes-vous sûr ?</string>
     <string name="title_radios">Radios</string>
     <string name="title_create_radio">Ajouter une radio</string>
@@ -295,8 +272,6 @@
         <item quantity="many">%1$d minutes</item>
         <item quantity="other">%1$d minutes</item>
     </plurals>
-    <string name="title_wifi">Wi-Fi</string>
-    <string name="title_cellular">Données Mobiles</string>
     <string name="option_animation_style">Style d'animation</string>
     <string name="option_quality_lossless">Sans perte (pas de transcodage)</string>
     <string name="info_status_downloading">Téléchargement en cours...</string>
@@ -307,20 +282,13 @@
     <string name="title_disc_number">Disque %1$s</string>
     <string name="title_library_download">Télécharger la bibliothèque entière</string>
     <string name="title_select_lyrics">Sélectionner les paroles</string>
-    <string name="title_advanced">Transcodage avancé</string>
-    <string name="title_network">Réseau</string>
-    <string name="title_streaming_quality">Qualité du streaming</string>
-    <string name="subtitle_streaming_quality">Ajuster la qualité de la musique en streaming</string>
     <string name="option_now_playing_song_info">Afficher les informations techniques du morceau</string>
     <string name="option_now_playing_slider_style_yoyo">Yoyo</string>
     <string name="option_offline_mode">Mode hors-ligne</string>
     <string name="option_animation_style_expressive">Expressif</string>
     <string name="option_animation_style_standard">Standard</string>
-    <string name="option_max_bitrate_wifi">Débit maximal en Wi-Fi (kbps)</string>
-    <string name="option_max_bitrate_cellular">Débit Max en données mobiles (kbps)</string>
     <string name="option_cover_art_quality">Qualité de la pochette</string>
     <string name="info_library_download_warning">Êtes-vous sûr(e) de vouloir télécharger l'entièreté de votre bibliothèque ?\nCette fonction va ignorer les morceaux déjà téléchargés, mais cela pourrait quand même utiliser un montant significatif de stockage et de données.</string>
-    <string name="info_library_download">Enregistrer toutes les musiques synchronisées pour la lecture hors-ligne</string>
     <plurals name="count_rate_stars">
         <item quantity="one">Noter %1$d étoile</item>
         <item quantity="many">Noter %1$d étoiles</item>
@@ -332,8 +300,6 @@
         <item quantity="other">%1$d lignes sélectionnées</item>
     </plurals>
     <string name="action_play_next">Lire suivant</string>
-    <string name="action_clear_queue">Vider la file</string>
-    <string name="title_starred">Favoris</string>
     <string name="subtitle_offline_mode">Impose dans quel contexte l'appli doit se mettre en mode hors-ligne. Un redémarrage de l'application est nécessaire</string>
     <string name="option_off">Désactivé</string>
     <string name="option_now_playing_slider_style_slim">Fin</string>
@@ -344,27 +310,17 @@
     <string name="option_quality_low">Basse</string>
     <string name="option_quality_medium">Moyenne</string>
     <string name="option_quality_high">Haute</string>
-    <string name="info_progress">Progression</string>
     <string name="info_in_use">(actuellement utilisé)</string>
     <string name="option_navigation_bar_label_visibility">Visibilité de l'intitulé</string>
     <string name="option_navigation_bar_label_visibility_only_selected">Seulement celui sélectionné</string>
-    <string name="info_no_starred">Vous n'avez rien ajouté en favori</string>
-    <string name="info_no_search_results">Aucun résultat</string>
     <string name="title_logs">Journal</string>
     <string name="title_palette">Palettes de couleurs</string>
     <string name="title_theme_mode">Thème</string>
-    <string name="title_account">Compte</string>
     <string name="option_artist_image_shape">Forme de l'image de l'artiste</string>
-    <string name="option_stream_custom_quality">Utiliser une qualité de diffusion personnalisée</string>
-    <string name="option_stream_format_wifi">Format du flux en Wi-Fi</string>
-    <string name="option_stream_format_cellular">Format du flux en données mobiles</string>
     <string name="option_palette_style">Style de palette</string>
-    <string name="option_palette_specification">Spécifications de la palette</string>
-    <string name="option_explicit_playback">Lecture de contenus pour adultes</string>
     <string name="option_explicit_playback_allowed">Autorisée</string>
     <string name="option_explicit_playback_skip">Passer le contenus pour adultes</string>
     <string name="option_explicit_playback_skip_session">Passer le contenu pour adulte pour cette session uniquement</string>
-    <string name="info_transcoding_defaults">Si vous laissez l'un de ces champs vide, il sera ignoré et le serveur décidera à votre place.</string>
     <string name="option_navigation_bar_label_visibility_never">Jamais</string>
     <string name="action_next_song">Morceau suivant</string>
     <string name="action_previous_song">Morceau précédent</string>
@@ -383,26 +339,17 @@
     <string name="info_repeat_all">Répétition de tous</string>
     <string name="title_download_quality">Qualité des téléchargements</string>
     <string name="title_track_info">Informations sur la piste</string>
-    <string name="subtitle_download_quality">Ajuster la qualité des morceaux téléchargés</string>
     <string name="subtitle_dynamic_theming">Thème dynamique pour l'affichage des albums et des artistes, en fonction de l'illustration de couverture</string>
-    <string name="subtitle_local_network_denied">Vous devez autoriser Worbus à accéder à votre réseau local pour que votre serveur soit accessible.</string>
     <string name="option_sort_year">Année</string>
     <string name="option_choose_app_icon">Icône de l'application</string>
-    <string name="option_download_custom_quality">Utiliser une qualité de téléchargement personnalisée</string>
-    <string name="option_download_format_wifi">Format des téléchargement en Wi-Fi</string>
-    <string name="option_download_format_cellular">Format des téléchargement en données mobiles</string>
     <string name="option_dynamic_theming">Thème dynamique</string>
     <string name="action_open_settings">Ouvrir les paramètres</string>
-    <string name="notice_local_network_denied">Permission refusée</string>
-    <string name="info_download_quality">Les préréglages de meilleure qualité occupent davantage d'espace de stockage et de données. Le transcodage peut allonger les délais de téléchargement. Sélectionnez « Sans perte » si vous rencontrez des problèmes.</string>
     <string name="info_app_icon">Android requiert de fermer Worbus afin de changer l'icône de l'application . Certaines icônes peuvent sembler identique sur votre écran d'accueil si votre lanceur d'application modifie dynamiquement la couleur des icônes.</string>
     <string name="option_cover_art_action">Appui sur l'illustration de couverture</string>
     <string name="option_cover_art_action_disabled">Désactivé</string>
     <string name="option_cover_art_action_show_lyrics">Montrer les paroles</string>
     <string name="subtitle_equaliser">Configurer et personnaliser l'audio</string>
     <string name="subtitle_equaliser_disabled">Indisponible lorsque le déchargement audio est activé</string>
-    <string name="option_auto_fill_queue">Compléter automatiquement la file d'attente</string>
-    <string name="subtitle_auto_fill_queue">Ajouter automatiquement une chanson au hasard dans la file d'attente lorsqu'il n'en reste plus qu'une</string>
     <string name="option_equaliser">Égaliseur</string>
     <string name="option_list_view_mode">Mode de vue</string>
     <string name="option_list_view_mode_grid">Grille</string>
@@ -411,10 +358,7 @@
     <string name="info_external_song_description">Cette chanson a été marquée comme externe par votre serveur, il se peut donc que vous ne puissiez pas l'écouter.</string>
     <string name="action_reset">Réinitialiser</string>
     <string name="info_equaliser_unsupported">Votre appareil ne supporte pas cette fonctionnalité.</string>
-    <string name="title_discord_server">Serveur Discord</string>
     <string name="title_lyric_providers">Fournisseur de paroles</string>
-    <string name="title_github">GitHub</string>
-    <string name="title_codeberg">Codeberg</string>
     <string name="subtitle_configure_lyric_providers">Choisir d'où les paroles sont récupérées</string>
     <string name="option_equaliser_mode_disabled">Désactivé</string>
     <string name="title_link_confirmation">Sortir de Worbus</string>
@@ -436,10 +380,6 @@
         <item quantity="many">Il y'a %1$d jours</item>
         <item quantity="other">Il y'a %1$d jours</item>
     </plurals>
-    <string name="action_start">Démarrer</string>
-    <string name="action_sleep_timer_songs_enabled">Minuteur d'arrêt - %1$d morceaux restants</string>
-    <string name="action_sleep_timer_queue_enabled">Minuteur d'arrêt - fin de la file d'attente</string>
-    <string name="action_sleep_timer_songs">Arrêter après %1$d morceaux</string>
     <string name="action_sleep_timer_queue">Arrêter à la fin de la file d'attente</string>
     <string name="title_sleep_timer_time">Temps</string>
     <string name="title_sleep_timer_songs">Morceaux</string>
@@ -449,6 +389,5 @@
     <string name="info_dynamic_replay_gain">ReplayGain dynamique</string>
     <string name="info_equaliser_mode_not_builtin">Veuillez régler l'égaliseur externe via son application dédiée.</string>
     <string name="info_lyric_provider_disclaimer">L'utilisation de LRCLIB et/ou de LyricsPlus entraînera l'envoi de requêtes à des services Web externes et non affiliés.</string>
-    <string name="title_audio_effects">Effets Audio</string>
     <string name="subtitle_audio_effects">Ajuster comment la musique sonne</string>
 </resources>
