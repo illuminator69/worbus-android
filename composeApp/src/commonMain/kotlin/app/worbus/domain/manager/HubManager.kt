@@ -2636,7 +2636,8 @@ class HubManager(
 		// `applied`, then this, then the player, so a report that carries the new number has
 		// seen the mark, and one that has not seen it carries the old number and is dropped.
 		val left = mediaPlayer.localUiState.value
-		if (left.queue !== songs) heldAfterFailedLoad.value = HeldQueue(left.queue)
+		// By the songs, not the list (stage 2 M2): a player that took the load's songs holds no other queue.
+		if (!HeldQueue.of(songs).holds(left.queue)) heldAfterFailedLoad.value = HeldQueue.of(left.queue)
 		return EchoReport.OfFailedLoad(index, positionMs)
 	}
 
@@ -2825,8 +2826,9 @@ class HubManager(
 				if (held != null) {
 					// Paused over a queue the hub does not have: nothing true to say about
 					// the session's index or position. Any change ends it: playing publishes
-					// this queue (above), and a new queue is no longer the one held.
-					if (current.isPaused && current.queue === held.queue) return@collect
+					// this queue (above), and other songs are no longer the queue held. A cover
+					// refresh (B-437) is the same songs, so it keeps the hold (stage 2 M2).
+					if (held.stillShownBy(current)) return@collect
 					heldAfterFailedLoad.compareAndSet(held, null)
 				}
 
@@ -3159,8 +3161,23 @@ private sealed interface EchoReport {
 	data class OfFailedLoad(val index: Int, val positionMs: Long) : EchoReport
 }
 
-/** A queue by identity: the list object the player holds, not what is in it. */
-private class HeldQueue(val queue: List<DomainSong>)
+/**
+ * The queue a failed load left the player holding, by its songs: their ids in order, what [queueSig] publishes.
+ * Stage 2 M2: by the list object it was, and B-437's cover refresh (`withCurrentCovers`) rewrites the list with the
+ * same songs, which ended the hold and let the next tick report the old queue's index and position as the session's.
+ */
+internal class HeldQueue private constructor(private val ids: List<String>) {
+	/** The player [state] still shows the held queue (the same songs, in order), paused. */
+	fun stillShownBy(state: PlayerUiState): Boolean = state.isPaused && holds(state.queue)
+
+	/** [queue] is the held one: the same songs in the same order, whatever their cover ids. */
+	fun holds(queue: List<DomainSong>): Boolean =
+		queue.size == ids.size && queue.indices.all { queue[it].id == ids[it] }
+
+	companion object {
+		fun of(queue: List<DomainSong>) = HeldQueue(queue.map { it.id })
+	}
+}
 
 // Small helpers for tolerant JSON access ------------------------------------
 
