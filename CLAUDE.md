@@ -2376,7 +2376,17 @@ true of invented *album art*, and not of an icon naming the kind.
   compose in their first frame; an artist page with nothing in memory slides in on its spinner and shows its Room
   read only once its slide has ended (`FirstShowHold`, at most `SEEDED_READ_WAIT_MS`), where it used to land mid-slide
   (`ArtistFirstShowTest`). The page says it has settled through `OnPageSettled`; a page that holds or defers work on it
-  must call it. **The bundled font is stored, not deflated** (`androidResources.noCompress += "ttf"` in
+  must call it. **The album page reads its artist's page ahead** (B-446 follow-up, `PrefetchArtistPage` in
+  `ArtistPagePrefetch.kt`, `ArtistPagePrefetcher`): once its own slide has ended and its album is shown, with the artist
+  page's own Room read (`ArtistPageReader`, `ArtistPageRead.kt`: the page's `loadArtistData` and the read-ahead run the
+  same functions, `ArtistPrefetchSkeletonAboutTest` holds that), into a lane of `ArtistPageMemory` of its own (4, beside
+  the 8 shown; a read-ahead never pushes out a visited artist and never replaces one, `ArtistPagePrefetchTest`), plus the
+  artist photo's colours and the photo decoded into Coil under its id. Nothing from the network but that photo; the
+  page's network half comes after its slide, as on a revisit. **An artist page with nothing to open on shows its own
+  shape** (`ArtistPageSkeleton`: the hero at `artistHeroHeight`, the disabled action row, five row shapes, in the page's
+  scheme), never a spinner. **A block that arrives after a page's first frame folds in** (`Fold`, as the gaps box): the
+  album page's About slot is always in the list (`about`), its text kept once shown (`rememberAboutTeaser`; its notes are
+  a network read, so they cannot be in the first frame). **The bundled font is stored, not deflated** (`androidResources.noCompress += "ttf"` in
   `androidApp/build.gradle.kts`, `BundledFontStoredTest`): every `defaultFont(grade, round)` variation is a Typeface
   of its own, loaded on the main thread at its first use, and `Font.Builder` maps a stored asset but inflated the
   deflated 4 MB Google Sans into a new buffer each time, ~45 ms (VM) inside the first album page's content frame.
