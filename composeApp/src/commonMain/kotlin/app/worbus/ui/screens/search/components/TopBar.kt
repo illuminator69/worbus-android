@@ -67,6 +67,12 @@ fun SearchScreenTopBar(
 		}
 	}
 
+	// B-449: a result opened from here was pushed with the keyboard still up over it: the field kept its focus while
+	// another page covered Search. It lets go the moment anything is pushed on top (and the keyboard with it).
+	val depthAtArrival = remember { backStack.size }
+	val covered = searchCovered(depthAtArrival, backStack.size)
+	LaunchedEffect(covered) { if (covered) focusManager.clearFocus(true) }
+
 	// System Back on an active root search clears it first, as the arrow does; only an empty
 	// Search lets Back leave the page.
 	NavigationBackHandler(
@@ -179,3 +185,6 @@ fun SearchScreenTopBar(
 		}
 	}
 }
+
+/** B-449: whether a page has been pushed over Search ([depthNow] above the back stack's depth when Search arrived). */
+internal fun searchCovered(depthAtArrival: Int, depthNow: Int): Boolean = depthNow > depthAtArrival
