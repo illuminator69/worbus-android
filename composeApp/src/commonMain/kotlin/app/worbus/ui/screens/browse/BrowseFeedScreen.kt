@@ -1,6 +1,7 @@
 package app.worbus.ui.screens.browse
 
 import app.worbus.ui.util.SwapRows
+import app.worbus.ui.util.rememberRowSwap
 import app.worbus.ui.util.ClaimAfterFirstFrame
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -111,14 +112,16 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 	val title = stringResource(if (kind == BrowseKind.CHARTS) Res.string.search_tile_charts else Res.string.search_tile_picks)
 	val line = stringResource(if (kind == BrowseKind.CHARTS) Res.string.browse_charts_line else Res.string.browse_picks_line)
 	val pickGenre = stringResource(Res.string.browse_pick_genre)
+	val rowSwap = rememberRowSwap()
 
 	Scaffold(
 		topBar = { NestedTopBar({ Text(title) }) },
 		snackbarHost = { SnackbarHost(snackbarHostState) }
 	) { padding ->
-		// The genre chips swap the tiles once the new chart lands: they fade through (ContentSwap.kt's SwapRows).
-		// The chips are an item of the grid, on screen when tapped: no scroll reset.
-		SwapRows { LazyVerticalGrid(
+		// The genre chips swap the tiles once the new chart lands: they fade through (ContentSwap.kt's SwapRows), that
+		// change only (review L7: the chip arms it, the chart's landing runs it). The chips are an item of the grid,
+		// on screen when tapped: no scroll reset.
+		SwapRows(rowSwap, state.albums) { LazyVerticalGrid(
 			modifier = Modifier.fillMaxSize(),
 			columns = GridCells.Adaptive(150.dp),
 			horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -144,7 +147,7 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 						options = state.genres.map { it.id },
 						selected = state.genre,
 						label = { id -> state.genres.firstOrNull { it.id == id }?.name ?: id },
-						onSelect = { viewModel.setGenre(it) },
+						onSelect = { rowSwap.chipTapped(); viewModel.setGenre(it) },
 						contentPadding = PaddingValues(horizontal = 8.dp),
 						modifier = Modifier.padding(vertical = 8.dp)
 					)

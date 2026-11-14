@@ -20,10 +20,10 @@ class ContentSwapGuardTest {
 		"ui/screens/library/LibraryScreen.kt" to "ContentSwap(",
 		"ui/screens/matches/LibraryMatchesScreen.kt" to "ContentSwap(",
 		"ui/screens/sourcehistory/SourceHistoryScreen.kt" to "ContentSwap(",
-		"ui/screens/savedqueues/SavedQueuesScreen.kt" to "SwapRows {",
-		"ui/screens/search/SearchScreen.kt" to "SwapRows {",
-		"ui/screens/fresh/FreshScreen.kt" to "SwapRows {",
-		"ui/screens/browse/BrowseFeedScreen.kt" to "SwapRows {"
+		"ui/screens/savedqueues/SavedQueuesScreen.kt" to "SwapRows(rowSwap, ",
+		"ui/screens/search/SearchScreen.kt" to "SwapRows(rowSwap, ",
+		"ui/screens/fresh/FreshScreen.kt" to "SwapRows(rowSwap, ",
+		"ui/screens/browse/BrowseFeedScreen.kt" to "SwapRows(rowSwap, "
 	)
 
 	/**

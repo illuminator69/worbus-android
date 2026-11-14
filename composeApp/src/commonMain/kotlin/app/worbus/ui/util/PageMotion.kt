@@ -285,6 +285,15 @@ data class SlideTiming(val durationMs: Int, val easing: PageEasing)
  */
 fun coverSlideTiming(motion: PageMotion): SlideTiming = SlideTiming(motion.slideMs, motion.enterEasing)
 
+/**
+ * Motion lane review L3 (2026-11-14): the time and curve of a shared element's flight (a cover, the bottom bar's
+ * bounds) in a page change. A bar tap ([tabTap], `TabTapMotion`) fades through in [tabFadeWindows]' time (Expressive
+ * 330 ms), so its flights take that time: on the album slide's 500 the cover landed after the page had (B-404's rule
+ * the other way round), and the bar's bounds held every tab tap at 500 ms. Any other change is [coverSlideTiming].
+ */
+fun sharedFlightTiming(motion: PageMotion, tabTap: Boolean): SlideTiming =
+	if (tabTap) SlideTiming(tabFadeWindows(motion).enterEndMs, motion.enterEasing) else coverSlideTiming(motion)
+
 private const val PAGE_KIND_KEY = "app.worbus.pageKind"
 
 /** An entry's metadata saying what page it is ([PageKind]). */

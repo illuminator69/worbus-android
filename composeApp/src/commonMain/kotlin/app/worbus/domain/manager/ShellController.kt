@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import app.worbus.ui.navigation.ShellTab
-import app.worbus.ui.navigation.TabTapMotion
 import app.worbus.ui.navigation.chipRequestAfterTap
 
 /**
@@ -88,9 +87,6 @@ class ShellController {
 	fun libraryChipShown() {
 		_libraryChip.value = null
 	}
-
-	/** B-434: the stack the last bar or rail tap made, so its page change fades through ([TabTapMotion]). */
-	val tabTaps = TabTapMotion()
 
 	/** A bar or rail tap: any tab but the Library's drops a pending chip request ([chipRequestAfterTap]). */
 	fun onTabTapped(tab: ShellTab) {

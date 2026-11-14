@@ -2,7 +2,9 @@ package app.worbus.ui.navigation
 
 import androidx.navigation3.runtime.NavKey
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /*
@@ -54,5 +56,38 @@ class TabTapMotionTest {
 	@Test
 	fun nothingTappedIsNoTabSwitch() {
 		assertFalse(TabTapMotion().isTabTap(listOf(home)))
+	}
+
+	/** Review L5: a resize, a fold or a rotation re-runs NavDisplay's transition on the same stack, after the tap's. */
+	@Test
+	fun theMarkEndsWhenTheTapsTransitionHasRun() {
+		val motion = TabTapMotion()
+		val stack = mutableListOf(home, page)
+		tap(motion, stack, ShellTab.Home)
+		assertEquals(listOf(home), motion.mark)
+		motion.settled(listOf(home))
+		assertFalse(motion.isTabTap(stack), "a scene change on the same stack fades through")
+		assertNull(motion.mark)
+	}
+
+	@Test
+	fun anOlderTapsEndLeavesANewerTapsMark() {
+		val motion = TabTapMotion()
+		val stack = mutableListOf(home, page)
+		tap(motion, stack, ShellTab.Library)
+		val first = motion.mark!!
+		tap(motion, stack, ShellTab.Home)
+		motion.settled(first)
+		assertTrue(motion.isTabTap(stack), "the Library tap's end took Home's mark")
+	}
+
+	/** Review L5: one mark per activity; another activity's tap is not this one's. */
+	@Test
+	fun eachActivityHasItsOwnMark() {
+		val one = TabTapMotion()
+		val two = TabTapMotion()
+		val stack = mutableListOf(home, page)
+		tap(one, stack, ShellTab.Home)
+		assertFalse(two.isTabTap(stack))
 	}
 }

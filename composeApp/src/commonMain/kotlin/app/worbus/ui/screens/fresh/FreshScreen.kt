@@ -1,6 +1,9 @@
 package app.worbus.ui.screens.fresh
 
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import app.worbus.ui.util.SwapRows
+import app.worbus.ui.util.chipTapped
+import app.worbus.ui.util.rememberRowSwap
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.Icon
@@ -136,6 +139,12 @@ fun FreshScreen(nested: Boolean = false) {
 	val openKey = app.worbus.ui.navigation.rememberKeyOpener()
 	val state by viewModel.state.collectAsStateWithLifecycle()
 	val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+	// Both chip rows filter the one grid (review M2): each resets its scroll and fades its rows through, by the one
+	// call (RowSwap.chipTapped, ContentSwap.kt). The scope chips sit in the header, above the grid: without the reset
+	// a scrolled grid kept its first visible key, the rows that came in landed above the view and the chip looked
+	// inert (B-161).
+	val gridState = rememberLazyGridState()
+	val rowSwap = rememberRowSwap()
 	// Every visit, not only the ViewModel's first: a root tab keeps it for the process. A Room
 	// read, plus one request only when the cached feed has gone stale (FreshViewModel.revalidate).
 	LaunchedEffect(Unit) { viewModel.revalidate() }
@@ -157,7 +166,7 @@ fun FreshScreen(nested: Boolean = false) {
 				val title = @Composable { Text(stringResource(Res.string.title_fresh)) }
 				if (!nested) RootTopBar(title, scrollBehavior, actions)
 				else NestedTopBar(title, actions = actions)
-				FreshScopeChips(state = state, onScope = { viewModel.setScope(it) })
+				FreshScopeChips(state = state, onScope = { rowSwap.chipTapped(gridState); viewModel.setScope(it) })
 			}
 		},
 		bottomBar = {
@@ -180,12 +189,13 @@ fun FreshScreen(nested: Boolean = false) {
 		) {
 			// Upstream's grid: its columns follow the user's grid size on a phone and the cover
 			// size beyond, so a tablet shows as many as the album list does rather than two.
-			// The type chips filter one list: its rows fade through (ContentSwap.kt's SwapRows). The chips are the
-			// grid's first item, on screen when tapped, so the rows that come in arrive below them: no scroll reset.
-			SwapRows { ArtGrid(
+			// The scope and type chips filter one list: its rows fade through (ContentSwap.kt's SwapRows), from the
+			// grid's top (rowSwap above).
+			SwapRows(rowSwap, state.groups) { ArtGrid(
 				modifier = if (!nested) {
 					Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
 				} else Modifier,
+				state = gridState,
 				contentPadding = innerPadding.withoutTop()
 			) {
 				item(span = { GridItemSpan(maxLineSpan) }, key = "types") {
@@ -193,7 +203,7 @@ fun FreshScreen(nested: Boolean = false) {
 						options = FreshType.entries,
 						selected = state.type,
 						label = { type -> typeLabel(type) + " (${state.typeCounts[type] ?: 0})" },
-						onSelect = { viewModel.setType(it) },
+						onSelect = { rowSwap.chipTapped(gridState); viewModel.setType(it) },
 						contentPadding = PaddingValues(0.dp)
 					)
 				}

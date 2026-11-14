@@ -1,6 +1,8 @@
 package app.worbus.ui.screens.search
 
 import app.worbus.ui.util.SwapRows
+import app.worbus.ui.util.rememberRowSwap
+import app.worbus.ui.util.chipTapped
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -267,6 +269,7 @@ fun SearchScreen(
 	val topBarScrimColor = MaterialTheme.colorScheme.surface
 
 	val shown = capped(ui.hits, selectedCategory)
+	val rowSwap = rememberRowSwap()
 	val external = externalRows(ui.artists, ui.albums, selectedCategory)
 	val categoryHasExternal = selectedCategory == SearchCategory.ALL ||
 		selectedCategory == SearchCategory.ARTISTS || selectedCategory == SearchCategory.ALBUMS
@@ -314,8 +317,9 @@ fun SearchScreen(
 						label = { stringResource(it.res) },
 						onSelect = {
 							selectedCategory = it
-							// A chip that swaps the rows resets the scroll in the same frame (§7).
-							viewModel.gridState.requestScrollToItem(0)
+							// A chip that swaps the rows resets the scroll in the same frame (§7), and only its change
+							// fades the rows through (review L7: a query's answer keeps the list's own motion).
+							rowSwap.chipTapped(viewModel.gridState)
 						},
 						modifier = Modifier.padding(bottom = 8.dp)
 					)
@@ -331,7 +335,7 @@ fun SearchScreen(
 		}
 	) { contentPadding ->
 		// The categories filter one list: its rows fade through (ContentSwap.kt's SwapRows), never both at once.
-		SwapRows {
+		SwapRows(rowSwap, shown to external) {
 		LazyVerticalGrid(
 			modifier = Modifier.fillMaxSize(),
 			columns = GridCells.Fixed(2),

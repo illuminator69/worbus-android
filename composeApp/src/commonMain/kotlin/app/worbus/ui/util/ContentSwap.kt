@@ -2,12 +2,27 @@ package app.worbus.ui.util
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,9 +53,12 @@ import app.worbus.domain.manager.PreferenceManager
  * - **Chips that filter one list** ([SwapRows]): Saved queues, Search, Fresh, Charts and Editor's picks. Rows that
  *   stay are the same rows, and the owner approved them sliding to their new places (I-039, B-161), so the list
  *   is kept and its items fade through instead ([swapItemMotionOf]): rows that leave fade out first, then the rows
- *   that stay slide and the new ones fade in. A chip under a page's own header resets the scroll in the same frame
- *   (I-039, CLAUDE.md §7: Saved queues, Search); where the chips are an item of the list itself (Fresh, Charts),
- *   they are on screen when tapped, so the rows that come in arrive below them and there is nothing to reset.
+ *   that stay slide and the new ones fade in. **Only a chip's change does** ([RowSwap], review L7): a search's
+ *   answer, a hub update, a row an action removes keep the list's ordinary item motion. A chip that sits above
+ *   the list resets the scroll in the same frame (I-039, B-161, CLAUDE.md §7: Saved queues, Search, and Fresh's
+ *   scope chips in its header, review M2), through [RowSwap.chipTapped]; Fresh's type chips, the grid's first
+ *   item, go through the same call. Charts' genre chips are the grid's first item, on screen when tapped, and the
+ *   new chart lands later: they arm the swap without a reset.
  *
  * A source guard (`ContentSwapGuardTest`) fails on a chip page that switches with an `AnimatedContent` or
  * `Crossfade` of its own.
@@ -63,6 +81,8 @@ fun <S> ContentSwap(
 	modifier: Modifier = Modifier,
 	key: (S) -> Any? = { it },
 	keepState: Boolean = false,
+	// Review L6: whether the change from the first to the second runs the swap; false shows the new one at once.
+	animate: (S, S) -> Boolean = { _, _ -> true },
 	contentAlignment: Alignment = Alignment.TopStart,
 	label: String = "contentSwap",
 	content: @Composable (S) -> Unit
@@ -73,7 +93,11 @@ fun <S> ContentSwap(
 		targetState = target,
 		modifier = modifier,
 		// The body is as large as the page: a size change between two sections is not animated.
-		transitionSpec = { contentSwapTransform(prefs.pageMotion()) using SizeTransform(clip = false) { _, _ -> snap() } },
+		transitionSpec = {
+			val swap = if (animate(initialState, targetState)) contentSwapTransform(prefs.pageMotion())
+			else EnterTransition.None togetherWith ExitTransition.None
+			swap using SizeTransform(clip = false) { _, _ -> snap() }
+		},
 		contentAlignment = contentAlignment,
 		contentKey = key,
 		label = label
@@ -106,12 +130,90 @@ fun swapItemMotionOf(motion: PageMotion): ItemMotion {
 }
 
 /**
- * [content] (a lazy list whose chips filter its rows) with its items' `animatedItem` motion set to the content
- * swap's ([swapItemMotionOf]). A row an action removes moves the same way: fade out, then the gap closes.
+ * Which change of a [SwapRows] list is a chip's (motion lane review L7, 2026-11-14). The swap's item motion used to
+ * be the list's for good, so every change was held back by the swap's out window and staged: each new answer to a
+ * Search query, every saved-queues update from the hub, a row an action removed, nested rows. Now a chip's tap arms
+ * it ([chipTapped]); the next change of the rows takes the swap's motion for the swap's time; every other change
+ * keeps the list's ordinary motion. The next change, not the tap's frame: Charts' new chart lands seconds after its
+ * genre chip. A chip whose answer is the rows already shown leaves it armed until the rows next change.
+ */
+@Stable
+class RowSwap {
+	internal var armed by mutableStateOf(false)
+	internal var swapping by mutableStateOf(false)
+	internal var generation by mutableIntStateOf(0)
+
+	/** A chip changed what the list shows: its next change of rows fades through. */
+	fun chipTapped() {
+		armed = true
+	}
+
+	/** Whether rows composed now take the swap's motion; [changed]: they differ from the rows composed before. */
+	internal fun swapMotion(changed: Boolean): Boolean = swapping || (armed && changed)
+
+	/** A composition showed rows; when they [changed] while armed, the swap runs ([settled] ends it). */
+	internal fun rowsShown(changed: Boolean) {
+		if (changed && armed) {
+			armed = false
+			swapping = true
+			generation++
+		}
+	}
+
+	/** The swap [generation] started has had its time; a later one keeps running. */
+	internal fun settled(generation: Int) {
+		if (generation == this.generation) swapping = false
+	}
+}
+
+@Composable
+fun rememberRowSwap(): RowSwap = remember { RowSwap() }
+
+/**
+ * A chip above a list (I-039, B-161; CLAUDE.md §7): the list starts at its top in the same frame, and its rows fade
+ * through ([RowSwap]). Without the reset a list keeps its first visible KEY in place, so the rows that came in above
+ * it did so out of sight and the chip looked inert.
+ */
+fun RowSwap.chipTapped(list: LazyListState) {
+	list.requestScrollToItem(0)
+	chipTapped()
+}
+
+/** [chipTapped] for a lazy grid. */
+fun RowSwap.chipTapped(grid: LazyGridState) {
+	grid.requestScrollToItem(0)
+	chipTapped()
+}
+
+/**
+ * [content] (a lazy list whose chips filter its [rows]) with its items' `animatedItem` motion set to the content
+ * swap's ([swapItemMotionOf]) for the change a chip made ([swap]), and the list's ordinary motion otherwise.
+ * [rows] is what the list shows (compared by equality).
  */
 @Composable
-fun SwapRows(content: @Composable () -> Unit) {
+fun SwapRows(swap: RowSwap, rows: Any?, content: @Composable () -> Unit) {
 	val motion = koinInject<PreferenceManager>().pageMotion()
-	val items = remember(motion) { swapItemMotionOf(motion) }
-	CompositionLocalProvider(LocalItemMotion provides items, content = content)
+	val swapItems = remember(motion) { swapItemMotionOf(motion) }
+	val ordinary = LocalItemMotion.current
+	val shown = remember { ShownRows(rows) }
+	val changed = shown.rows != rows
+	val useSwap = swap.swapMotion(changed)
+	SideEffect {
+		if (changed) {
+			shown.rows = rows
+			swap.rowsShown(true)
+		}
+	}
+	val generation = swap.generation
+	LaunchedEffect(swap, generation) {
+		if (!swap.swapping) return@LaunchedEffect
+		// The swap's whole time on the animation clock (the system's animator scale stretches both alike).
+		animate(0f, 1f, animationSpec = tween(durationMillis = contentSwapWindows(motion).enterEndMs, easing = LinearEasing)) { _, _ -> }
+		withFrameNanos { }
+		swap.settled(generation)
+	}
+	CompositionLocalProvider(LocalItemMotion provides if (useSwap) swapItems else ordinary, content = content)
 }
+
+/** The rows a [SwapRows] composed last (a plain holder: written after a composition is applied). */
+private class ShownRows(var rows: Any?)

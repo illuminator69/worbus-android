@@ -1,5 +1,10 @@
 package app.worbus.ui.navigation
 
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
@@ -128,14 +133,16 @@ fun onShellTabTapped(
 	tab: ShellTab,
 	backStack: NavBackStack<NavKey>,
 	rootViewModel: RootViewModel,
-	shellController: ShellController
+	shellController: ShellController,
+	// B-434: this activity's ([LocalTabTapMotion]).
+	tabTaps: TabTapMotion
 ) {
 	shellController.onTabTapped(tab)
 	when (shellTap(tab, backStack.lastOrNull())) {
 		ShellTap.ScrollToTop -> rootViewModel.requestScrollToTop()
 		is ShellTap.Navigate -> stackAfterTap(backStack, tab)?.let {
 			// B-434: the page change this makes is a tab switch, whichever way NavDisplay reads it.
-			shellController.tabTaps.tapped(it)
+			tabTaps.tapped(it)
 			backStack.becomeStack(it)
 		}
 		ShellTap.OpenNew -> shellController.openNew()
@@ -153,18 +160,40 @@ fun onShellTabTapped(
  * exactly that stack ([isTabTap]), and the mark goes with the next change that is not the tap's ([stackChanged]):
  * Back to the same stack later is the ordinary pop again.
  */
+@Stable
 class TabTapMotion {
-	private var tapped: List<NavKey>? = null
+	// Snapshot state, so App.kt can wait out the tap's transition from the moment it is marked (review L5).
+	private var tapped by mutableStateOf<List<NavKey>?>(null)
+
+	/** The stack the last tap made, while its page change is still the tap's; null otherwise. */
+	val mark: List<NavKey>? get() = tapped
 
 	fun tapped(stack: List<NavKey>) {
 		tapped = stack.toList()
 	}
 
 	/** Whether the page change to [stack] is the bar tap's. */
-	fun isTabTap(stack: List<NavKey>): Boolean = tapped != null && tapped == stack.toList()
+	fun isTabTap(stack: List<NavKey>): Boolean = tapped.let { it != null && it == stack.toList() }
 
 	/** The stack changed to [stack]; a change that is not the tap's ends the mark. */
 	fun stackChanged(stack: List<NavKey>) {
 		if (tapped != stack.toList()) tapped = null
 	}
+
+	/**
+	 * Motion lane review L5 (2026-11-14): the tap to [stack] has had its transition (`awaitTabTapTransition`), so the
+	 * mark ends. It lived until the stack changed again, and NavDisplay also re-runs its transition on the SAME stack
+	 * when the scene changes (a multi-window resize, a fold, a rotation the activity handles): that read the mark and
+	 * faded through instead of running the page or pane motion. A newer tap's mark is left alone.
+	 */
+	fun settled(stack: List<NavKey>) {
+		if (tapped == stack) tapped = null
+	}
 }
+
+/**
+ * The activity's [TabTapMotion] (review L5: one per activity, provided by `App.kt`, where it was the
+ * [ShellController] single's and two live activities, the B-181 shape, shared one mark). Outside `App` a fresh one,
+ * which no transition reads.
+ */
+val LocalTabTapMotion = staticCompositionLocalOf { TabTapMotion() }

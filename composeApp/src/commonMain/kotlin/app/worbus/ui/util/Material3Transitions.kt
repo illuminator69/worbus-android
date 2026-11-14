@@ -5,8 +5,10 @@ import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Easing
-import androidx.compose.animation.core.PathEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -14,21 +16,15 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import org.koin.compose.koinInject
 import app.worbus.domain.manager.PreferenceManager
+import app.worbus.di.LocalNavStack
+import app.worbus.ui.navigation.LocalTabTapMotion
 
-private val pathForAnimation =
-	Path().apply {
-		moveTo(0f, 0f)
-		cubicTo(0.05f, 0f, 0.133333f, 0.06f, 0.166666f, 0.4f)
-		cubicTo(0.208333f, 0.82f, 0.25f, 1f, 1f, 1f)
-	}
-
-val EmphasizedEasing = PathEasing(pathForAnimation)
-// EmphasizedAccelerateEasing and EmphasizedDecelerateEasing are in Easings.kt (motion lane, 2026-11-14).
+// EmphasizedEasing, EmphasizedAccelerateEasing and EmphasizedDecelerateEasing are in Easings.kt (motion lane,
+// 2026-11-14; review L8: no android.graphics.Path is built when this file's class loads).
 
 // navi-connect I-042: a sheet's opening and closing times follow the animation style
 // (PageMotion.kt); the vals are the Expressive/Standard timing, unchanged.
@@ -49,15 +45,30 @@ fun sheetHideMotionSpec(motion: PageMotion) = tween<Float>(
  */
 @Composable
 fun rememberCoverBoundsTransform(): BoundsTransform {
-	val timing = coverSlideTiming(koinInject<PreferenceManager>().pageMotion())
-	return remember(timing) {
+	val motion = koinInject<PreferenceManager>().pageMotion()
+	// Review L3: a bar tap's flights take the tap's fade-through time (sharedFlightTiming), read when the flight starts.
+	val tabTaps = LocalTabTapMotion.current
+	val stack = LocalNavStack.current
+	return remember(motion, tabTaps, stack) {
 		BoundsTransform { _, _ ->
+			val timing = sharedFlightTiming(motion, tabTap = tabTaps.isTabTap(stack))
 			tween(
 				durationMillis = timing.durationMs,
 				easing = timing.easing.curve()
 			)
 		}
 	}
+}
+
+/**
+ * Suspends for as long as a bar tap's page change runs: the tab fade-through's whole time ([tabFadeWindows]: the old
+ * page out, then the new one in; the cover's flight and the bar's bounds take the same time on a tap, review L3), on
+ * the animation clock, so the system's animator duration scale stretches it as it stretches the transition, then two
+ * frames more. App.kt ends the mark (`TabTapMotion.settled`) after it.
+ */
+suspend fun awaitTabTapTransition(motion: PageMotion) {
+	animate(0f, 1f, animationSpec = tween(durationMillis = tabFadeWindows(motion).enterEndMs, easing = LinearEasing)) { _, _ -> }
+	repeat(2) { withFrameNanos { } }
 }
 
 /** The curve a [PageEasing] names. */

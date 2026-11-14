@@ -53,6 +53,7 @@ import app.worbus.domain.models.Mix
 import app.worbus.domain.models.MixKind
 import app.worbus.domain.models.YOUR_MIX_ID
 import app.worbus.ui.navigation.ShellTab
+import app.worbus.ui.navigation.LocalTabTapMotion
 import app.worbus.ui.navigation.onShellTabTapped
 import app.worbus.ui.screens.library.LibraryChip
 import app.worbus.ui.screens.mixes.MixArtwork
@@ -156,6 +157,7 @@ fun HomeScreen() {
 	val frequent by viewModel.frequent.collectAsStateWithLifecycle()
 	val mixTiles by viewModel.mixTiles.collectAsStateWithLifecycle()
 	val shell = koinInject<ShellController>()
+	val tabTaps = LocalTabTapMotion.current
 	// Worbus P1: lb-bot's first index build, while lb-bot is up (the hub keeps the last progress while
 	// it is away).
 	val lbBot = koinInject<LbBotManager>()
@@ -456,7 +458,7 @@ fun HomeScreen() {
 						// "See all" is the Library on its Mixes chip: the Library tab, as a tab tap opens it.
 						onSeeAll = dropUnlessResumed {
 							shell.showLibraryChip(LibraryChip.Mixes.name)
-							onShellTabTapped(ShellTab.Library, backStack, rootViewModel, shell)
+							onShellTabTapped(ShellTab.Library, backStack, rootViewModel, shell, tabTaps)
 						},
 						// A tile opens the mix's page (P5 round 2); it never starts the mix.
 						onOpen = { tile -> backStack.add(Screen.MixDetail(tile.key)) }

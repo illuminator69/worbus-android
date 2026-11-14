@@ -59,7 +59,6 @@ import androidx.navigation3.ui.NavDisplay.predictivePopTransitionSpec
 import androidx.navigation3.ui.NavDisplay.transitionSpec
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.snapshotFlow
-import app.worbus.domain.manager.ShellController
 import app.worbus.ui.util.coverSlideTiming
 import app.worbus.ui.util.curve
 import worbus.composeapp.generated.resources.Res
@@ -76,6 +75,9 @@ import app.worbus.di.LocalBottomBarScrollManager
 import app.worbus.di.LocalNavStack
 import app.worbus.di.LocalPlatformContext
 import app.worbus.di.LocalSharedTransitionScope
+import app.worbus.ui.navigation.LocalTabTapMotion
+import app.worbus.ui.navigation.TabTapMotion
+import app.worbus.ui.util.awaitTabTapTransition
 import app.worbus.di.LocalSnackBarState
 import app.worbus.di.rememberPlatformContext
 import app.worbus.domain.manager.BottomBarScrollManager
@@ -270,10 +272,20 @@ fun App() {
 	// A tab's own page is a root (P6: Home stays under Search and the Library, so it is no longer
 	// "the stack holds one entry"). Back on one still pops only at two entries or more, below.
 	val isRoot by remember(backStack) { derivedStateOf { isRootPage(backStack.lastOrNull()) } }
-	// B-434: a bar tap fades through whatever page it leaves (TabTapMotion); the mark ends with the next change
-	// that is not the tap's.
-	val shell = koinInject<ShellController>()
-	LaunchedEffect(backStack) { snapshotFlow { backStack.toList() }.collect { shell.tabTaps.stackChanged(it) } }
+	// B-434: a bar tap fades through whatever page it leaves (TabTapMotion). The mark ends with the next change that
+	// is not the tap's, and (motion lane review L5) once the tap's own fade-through has run: a resize, a fold or a
+	// rotation re-runs NavDisplay's transition on the same stack, and it faded through. One per activity (L5: it was
+	// the ShellController single's, which two live activities would share).
+	val tabTaps = remember(backStack) { TabTapMotion() }
+	LaunchedEffect(tabTaps) { snapshotFlow { backStack.toList() }.collect { tabTaps.stackChanged(it) } }
+	LaunchedEffect(tabTaps) {
+		snapshotFlow { tabTaps.mark }.collectLatest { mark ->
+			if (mark != null) {
+				awaitTabTapTransition(preferenceManager.pageMotion())
+				tabTaps.settled(mark)
+			}
+		}
+	}
 	val entries = remember(backStack, isRoot) { entryProvider(isRoot) { preferenceManager.pageMotion() } }
 
 	// The individual strategies were already remembered; the enclosing list was not, so
@@ -414,134 +426,143 @@ fun App() {
 		)
 	}
 
-	SharedTransitionLayout {
-		CompositionLocalProvider(
-			LocalPlatformContext provides platformContext,
-			LocalNavStack provides backStack,
-			LocalSnackBarState provides snackBarState,
-			LocalSharedTransitionScope provides this@SharedTransitionLayout,
-			LocalBottomBarScrollManager provides scrollManager,
-			LocalExpressiveBlur provides expressiveBlur
-		) {
-			NavicTheme {
-				// navi-connect P1: the avatar menu is composed ONCE, around the page and the rail, and opened from
-				// any header avatar through ShellController. A fork line: drop it and the avatar opens nothing.
-				AvatarMenuDrawer {
-					Row(modifier = Modifier.fillMaxSize()) {
-						if (platformContext.sizeClass.widthSizeClass >= WindowWidthSizeClass.Medium
-							&& Screen.Login !in backStack) {
-							// navi-connect (B-008): the cover's scheme while a washed page is on top.
-							RailAmbient { SideBar() }
-						}
-						Scaffold(
-							modifier = Modifier.nestedScroll(scrollManager.connection),
-							snackbarHost = {
-								SnackbarHost(hostState = snackBarState) { snackBarData ->
-									NavicSnackBar(snackBarData = snackBarData)
-								}
+	CompositionLocalProvider(
+		LocalPlatformContext provides platformContext,
+		LocalNavStack provides backStack,
+		LocalSnackBarState provides snackBarState,
+		LocalTabTapMotion provides tabTaps,
+		LocalBottomBarScrollManager provides scrollManager,
+		LocalExpressiveBlur provides expressiveBlur
+	) {
+		NavicTheme {
+			// navi-connect P1: the avatar menu is composed ONCE, around the page and the rail, and opened from
+			// any header avatar through ShellController. A fork line: drop it and the avatar opens nothing.
+			AvatarMenuDrawer {
+				Row(modifier = Modifier.fillMaxSize()) {
+					if (platformContext.sizeClass.widthSizeClass >= WindowWidthSizeClass.Medium
+						&& Screen.Login !in backStack) {
+						// navi-connect (B-008): the cover's scheme while a washed page is on top.
+						RailAmbient { SideBar() }
+					}
+					Scaffold(
+						modifier = Modifier.nestedScroll(scrollManager.connection),
+						snackbarHost = {
+							SnackbarHost(hostState = snackBarState) { snackBarData ->
+								NavicSnackBar(snackBarData = snackBarData)
 							}
-						) {
-							// navi-connect P1 round 2: the playing cover's wash is drawn HERE, behind the pages, and a
-							// washed page draws none of its own (`AppWash`). A page change used to flash the colours and a
-							// back gesture showed a white bar, both of them the neutral surface showing between or through
-							// the pages; now what shows is the colour the page already is. The blur source is the whole of
-							// it, backdrop included, as the pages' own wash was. A fork line: drop it and the flash is back.
-							AppWash(
-								modifier = Modifier
-									.weight(1f)
-									.consumeWindowInsets(
-										WindowInsets.safeDrawing.only(WindowInsetsSides.Start)
-									)
-									.background(rememberLibraryTabBackground())
-									.expressiveBlurSource(expressiveBlur)
-							) {
-								NavDisplay(
-									modifier = Modifier.fillMaxSize(),
-									backStack = backStack,
-									sceneStrategies = sceneStrategies,
-									// Upstream's, restored: it arrived at alpha42 and no fork merge ever
-									// carried it (App.kt is taken fork-whole), and NavDisplay's default is
-									// the saveable-state decorator ALONE. Without the ViewModel-store decorator every ViewModel
-									// lived in the activity's store for the life of the process — every
-									// artist page ever opened stayed alive and re-read on every library
-									// bump. With it, a ViewModel dies when its entry leaves the back stack —
-									// and a tab switch clears the back stack, so every root tab and the
-									// lyrics opt out through `PersistentViewModelStoreOwner` (the list of
-									// sites is CLAUDE.md §2 rule 14; the decorator and the opt-outs are one
-									// change and must not be merged apart). navigation3 keys each store by the
-									// entry's content key, so an entry that is merely covered (a sheet over
-									// it, a detail pane beside it) keeps its ViewModel. Merge rule: navic-gaps
-									// CLAUDE.md §2 — both decorators, in this order.
-									entryDecorators = listOf(
-										rememberSaveableStateHolderNavEntryDecorator(),
-										rememberViewModelStoreNavEntryDecorator()
-									),
-									onBack = {
-										if (backStack.size >= 2) {
-											backStack.removeLastOrNull()
-										}
-									},
-									entryProvider = entries,
-									// navi-connect I-042: page timing follows the animation style (PageMotion.kt).
-									// B-403: which motion is the two pages' (pageChangeOf): Settings slides.
-									// B-434: a bar tap fades through, push or pop, whatever page it leaves (TabTapMotion).
-									transitionSpec = {
-										if (shell.tabTaps.isTabTap(backStack)) Material3Transitions.tab(preferenceManager.pageMotion())
-										else Material3Transitions.page(
-											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
-											pop = false, preferenceManager.pageMotion(), density
-										)
-									},
-									popTransitionSpec = {
-										if (shell.tabTaps.isTabTap(backStack)) Material3Transitions.tab(preferenceManager.pageMotion())
-										else Material3Transitions.page(
-											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
-											pop = true, preferenceManager.pageMotion(), density
-										)
-									},
-									// B-378 (the owner, 2026-11-09): ONE back animation. A dragged Back drives
-									// the same transform as the button by its progress; it was a
-									// full-width slide of its own, or, with predictive animations off, no
-									// transition at all (the page under the finger was simply gone).
-									predictivePopTransitionSpec = {
-										Material3Transitions.page(
-											pageChangeOf(initialState.pageKind(), targetState.pageKind()),
-											pop = true, preferenceManager.pageMotion(), density
-										)
-									}
+						}
+					) {
+						// navi-connect P1 round 2: the playing cover's wash is drawn HERE, behind the pages, and a
+						// washed page draws none of its own (`AppWash`). A page change used to flash the colours and a
+						// back gesture showed a white bar, both of them the neutral surface showing between or through
+						// the pages; now what shows is the colour the page already is. The blur source is the whole of
+						// it, backdrop included, as the pages' own wash was. A fork line: drop it and the flash is back.
+						AppWash(
+							modifier = Modifier
+								.weight(1f)
+								.consumeWindowInsets(
+									WindowInsets.safeDrawing.only(WindowInsetsSides.Start)
 								)
+								.background(rememberLibraryTabBackground())
+								.expressiveBlurSource(expressiveBlur)
+						) {
+							// Motion lane review M1 (2026-11-14): the shared-element layout holds the PAGES only. A matched
+							// shared element (the bottom bar during a page change, a cover's flight) is drawn in its overlay,
+							// over everything inside the layout, and the layout wrapped the avatar menu drawer, its scrim and
+							// the app's snackbar too: opening a page from the menu drew the bar through the closing drawer,
+							// and a page change hid a snackbar under it. Here the drawer, the snackbar, the hosts below and
+							// the volume HUD are drawn after it, so above it. A fork line: wrap the shell again and the bar
+							// is back over the drawer.
+							SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
+								CompositionLocalProvider(LocalSharedTransitionScope provides this@SharedTransitionLayout) {
+									NavDisplay(
+										modifier = Modifier.fillMaxSize(),
+										backStack = backStack,
+										sceneStrategies = sceneStrategies,
+										// Upstream's, restored: it arrived at alpha42 and no fork merge ever
+										// carried it (App.kt is taken fork-whole), and NavDisplay's default is
+										// the saveable-state decorator ALONE. Without the ViewModel-store decorator every ViewModel
+										// lived in the activity's store for the life of the process — every
+										// artist page ever opened stayed alive and re-read on every library
+										// bump. With it, a ViewModel dies when its entry leaves the back stack —
+										// and a tab switch clears the back stack, so every root tab and the
+										// lyrics opt out through `PersistentViewModelStoreOwner` (the list of
+										// sites is CLAUDE.md §2 rule 14; the decorator and the opt-outs are one
+										// change and must not be merged apart). navigation3 keys each store by the
+										// entry's content key, so an entry that is merely covered (a sheet over
+										// it, a detail pane beside it) keeps its ViewModel. Merge rule: navic-gaps
+										// CLAUDE.md §2 — both decorators, in this order.
+										entryDecorators = listOf(
+											rememberSaveableStateHolderNavEntryDecorator(),
+											rememberViewModelStoreNavEntryDecorator()
+										),
+										onBack = {
+											if (backStack.size >= 2) {
+												backStack.removeLastOrNull()
+											}
+										},
+										entryProvider = entries,
+										// navi-connect I-042: page timing follows the animation style (PageMotion.kt).
+										// B-403: which motion is the two pages' (pageChangeOf): Settings slides.
+										// B-434: a bar tap fades through, push or pop, whatever page it leaves (TabTapMotion).
+										transitionSpec = {
+											if (tabTaps.isTabTap(backStack)) Material3Transitions.tab(preferenceManager.pageMotion())
+											else Material3Transitions.page(
+												pageChangeOf(initialState.pageKind(), targetState.pageKind()),
+												pop = false, preferenceManager.pageMotion(), density
+											)
+										},
+										popTransitionSpec = {
+											if (tabTaps.isTabTap(backStack)) Material3Transitions.tab(preferenceManager.pageMotion())
+											else Material3Transitions.page(
+												pageChangeOf(initialState.pageKind(), targetState.pageKind()),
+												pop = true, preferenceManager.pageMotion(), density
+											)
+										},
+										// B-378 (the owner, 2026-11-09): ONE back animation. A dragged Back drives
+										// the same transform as the button by its progress; it was a
+										// full-width slide of its own, or, with predictive animations off, no
+										// transition at all (the page under the finger was simply gone).
+										predictivePopTransitionSpec = {
+											Material3Transitions.page(
+												pageChangeOf(initialState.pageKind(), targetState.pageKind()),
+												pop = true, preferenceManager.pageMotion(), density
+											)
+										}
+									)
+								}
 							}
 						}
 					}
 				}
-				// release builds never ask (updateChecksOffered)
-				if (preferenceManager.checkForUpdates
-					&& updateChecksOffered(
-						platformContext.platformType,
-						fdroid = BuildInfo.FDROID,
-						debugBuild = platformContext.isDebugBuild
-					)
-				) {
-					ChangelogSheet()
-				}
-				// navi-connect I-022: "Fix album match", composed ONCE above the pages. A retag
-				// changes the album's Navidrome id, so the album's page is left when lb-bot
-				// finishes — and the sheet must go on saying what was written. A fork line:
-				// without it the "Fix album match" and "Wrong edition?" rows open nothing.
-				AlbumMatchHost()
-				// navi-connect P1: the New sheet, composed ONCE like the one above and opened by the bar's New
-				// button from any page. A fork line: drop it and New opens nothing.
-				NewSheetHost()
-				// Worbus P3: the post-sign-in offer of the one Worbus Server found beside Navidrome,
-				// composed ONCE like the two above. A fork line: drop it and the offer never shows.
-				FoundServerSheetHost()
-				// navi-connect: the level the phone's volume buttons set on the device that is
-				// playing, drawn by the app itself. A fork line, like the one above.
-				RemoteVolumeHud()
-				// navi-connect I-043: keeps cover colours ready before a page needs them (the last
-				// playing cover for the cold start, then the prefetch). A fork line, like the two above.
-				ColourArrivalEffects()
 			}
+			// release builds never ask (updateChecksOffered)
+			if (preferenceManager.checkForUpdates
+				&& updateChecksOffered(
+					platformContext.platformType,
+					fdroid = BuildInfo.FDROID,
+					debugBuild = platformContext.isDebugBuild
+				)
+			) {
+				ChangelogSheet()
+			}
+			// navi-connect I-022: "Fix album match", composed ONCE above the pages. A retag
+			// changes the album's Navidrome id, so the album's page is left when lb-bot
+			// finishes — and the sheet must go on saying what was written. A fork line:
+			// without it the "Fix album match" and "Wrong edition?" rows open nothing.
+			AlbumMatchHost()
+			// navi-connect P1: the New sheet, composed ONCE like the one above and opened by the bar's New
+			// button from any page. A fork line: drop it and New opens nothing.
+			NewSheetHost()
+			// Worbus P3: the post-sign-in offer of the one Worbus Server found beside Navidrome,
+			// composed ONCE like the two above. A fork line: drop it and the offer never shows.
+			FoundServerSheetHost()
+			// navi-connect: the level the phone's volume buttons set on the device that is
+			// playing, drawn by the app itself. A fork line, like the one above.
+			RemoteVolumeHud()
+			// navi-connect I-043: keeps cover colours ready before a page needs them (the last
+			// playing cover for the cold start, then the prefetch). A fork line, like the two above.
+			ColourArrivalEffects()
 		}
 	}
 }

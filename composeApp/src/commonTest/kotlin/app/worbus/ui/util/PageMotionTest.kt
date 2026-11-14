@@ -198,4 +198,20 @@ class PageMotionTest {
 		assertEquals(1, AnimationStyle.Standard.ordinal)
 		assertEquals(2, AnimationStyle.Quick.ordinal)
 	}
+
+	/**
+	 * Motion lane review L3 (2026-11-14): on a bar tap the cover's flight and the bar's bounds take the tap's
+	 * fade-through time, so the cover never lands after the page (B-404's rule) and a tap is not held at 500 ms.
+	 */
+	@Test
+	fun aBarTapsFlightsLandWithItsFadeThrough() {
+		for (style in AnimationStyle.entries) for (speed in listOf(0.5f, 1f, 1.5f, 2f)) {
+			val m = pageMotionOf(style, speed)
+			val tap = sharedFlightTiming(m, tabTap = true)
+			assertEquals(tabFadeWindows(m).enterEndMs, tap.durationMs, "$style at $speed")
+			assertTrue(tap.durationMs <= coverSlideTiming(m).durationMs, "$style at $speed: a tap outlasts a push")
+			assertEquals(coverSlideTiming(m), sharedFlightTiming(m, tabTap = false), "$style at $speed")
+		}
+		assertEquals(330, sharedFlightTiming(pageMotionOf(AnimationStyle.Expressive), tabTap = true).durationMs)
+	}
 }
