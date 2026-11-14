@@ -339,6 +339,9 @@ class ArtistDetailViewModel(
 		settled.complete(Unit)
 	}
 
+	/** B-446: a page opened with nothing in [pageMemory] shows its first content once its slide has ended. */
+	private val firstShow = FirstShowHold(settled, SEEDED_READ_WAIT_MS)
+
 	/**
 	 * B-405 review L2: the page's own Room read has given it the artist (the state, the mirror observed).
 	 * A library bump waits for it: on a page opened on [pageMemory] a bump in the seeded window took the
@@ -366,6 +369,8 @@ class ArtistDetailViewModel(
 				loadArtistData()
 			}
 		} else {
+			// B-446: nothing to open on, so the read's answer is shown once the slide has ended, not in it.
+			firstShow.hold()
 			loadArtistData()
 		}
 		viewModelScope.launch {
@@ -500,6 +505,8 @@ class ArtistDetailViewModel(
 				// beyond Room (the guest albums, the similar artists the server answered) until its own reads
 				// say otherwise, instead of emptying a shelf it shows and filling it again.
 				val shown = (artistState.value as? UiState.Success)?.data
+				// B-446: a page that opened on its spinner composes all of this once it is at rest.
+				firstShow.beforeFirstShow()
 				artistState.value = UiState.Success(
 					ArtistState(
 						artist = domainArtist,

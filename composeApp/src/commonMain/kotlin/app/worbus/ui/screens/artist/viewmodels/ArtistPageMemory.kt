@@ -1,5 +1,8 @@
 package app.worbus.ui.screens.artist.viewmodels
 
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.withTimeoutOrNull
+
 /**
  * B-405 (the owner's re-walk, 2026-11-13): what an artist's page last showed, so the next page of the
  * same artist opens on it.
@@ -81,3 +84,32 @@ fun DiscographyUi.seeded(): DiscographyUi = DiscographyUi(
 	sections = sections,
 	unresolved = unresolved
 )
+
+/**
+ * B-446 (the owner, 2026-11-14: "the stutter ... now happens when opening ... an artist page for the first
+ * time. it's gone after the pages are cached"): an artist page with nothing in [ArtistPageMemory] slid in on
+ * its spinner, and its Room read landed during the slide, so the whole page (hero, top songs, the shelf, the
+ * artist photo's scheme) was composed and measured in one frame of the transition, beside the shared
+ * transition's lookahead pass: one 60-250 ms frame mid-slide on the VM AVD. A page opened on the memory
+ * composes in its first frame, before anything moves, and slides smoothly; that is the cached open.
+ *
+ * So a page that opened on nothing ([hold]) shows its first content only once its slide has ended
+ * ([settled], the page's `OnPageSettled`), at most [waitMs] after the read: the spinner slides in as before
+ * and the page fades in at rest. Once only: everything after the first show (the server's similar artists, a
+ * star) is shown as it comes.
+ */
+class FirstShowHold(private val settled: Deferred<Unit>, private val waitMs: Long) {
+	private var holding = false
+
+	/** The page opened with nothing to show: its first content waits for the slide. */
+	fun hold() {
+		holding = true
+	}
+
+	/** Before the page's first content: waits for the slide to end (at most [waitMs]) when held, once. */
+	suspend fun beforeFirstShow() {
+		if (!holding) return
+		holding = false
+		withTimeoutOrNull(waitMs) { settled.await() }
+	}
+}
