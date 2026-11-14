@@ -155,7 +155,7 @@ private fun SourceCardBody(
 ) {
 	// The card grows by itself when it is chosen (its file listing opens), so the cards under it
 	// move down with the height rather than jumping.
-	val motion = rememberFoldMotion(tall = true)
+	val motion = rememberFoldMotion()
 	Column(
 		Modifier.animateContentSize(motion.spatial<IntSize>()).padding(vertical = 4.dp),
 		verticalArrangement = Arrangement.spacedBy(2.dp)

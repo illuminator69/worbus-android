@@ -72,7 +72,7 @@ fun ContinueListeningPill(
 	modifier: Modifier = Modifier
 ) {
 	// The capsule's own motion is the fold's, so it follows the animation style with the box it opens.
-	val motion = rememberFoldMotion(tall = true)
+	val motion = rememberFoldMotion()
 	val corner by animateDpAsState(
 		targetValue = if (expanded) 18.dp else 21.dp,
 		animationSpec = motion.spatial()
@@ -118,7 +118,7 @@ fun ContinueListeningPill(
 					modifier = Modifier.size(20.dp).rotate(turn)
 				)
 			}
-			Fold(visible = expanded, tall = true) {
+			Fold(visible = expanded) {
 				LazyRow(
 					horizontalArrangement = Arrangement.spacedBy(10.dp),
 					contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 14.dp)

@@ -3,7 +3,6 @@ package app.worbus.ui.util
 import app.worbus.domain.models.settings.AnimationStyle
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -40,7 +39,7 @@ class PageMotionTest {
 		assertEquals(
 			at4b592a4e.copy(
 				enterFadeMs = 195, enterFadeDelayMs = 105, enterSlideMs = 300, exitFadeMs = 105, exitSlideMs = 300,
-				sheetShowMs = 300, sheetHideMs = 250, foldMs = 200, foldTallMs = 280
+				sheetShowMs = 300, sheetHideMs = 250, foldPace = 500f / 300f
 			),
 			quick
 		)
@@ -69,7 +68,8 @@ class PageMotionTest {
 			exitSlideMs = 500,
 			exitSlideDp = 30,
 			sheetShowMs = 400,
-			sheetHideMs = 600,
+			// B-436 (motion lane, 2026-11-14): a sheet closes faster than it opens; it was `bd39384d`'s 600.
+			sheetHideMs = 300,
 			// The old springs' cross-fade settled in ~330 ms; a fade-through of that length, 30 / 70.
 			tabExitFadeMs = 100,
 			tabEnterFadeMs = 230,
@@ -127,8 +127,8 @@ class PageMotionTest {
 			assertEquals(base.exitSlideDp, fast.exitSlideDp)
 			assertEquals(base.enterEasing, fast.enterEasing)
 			assertEquals(base.slideEasing, fast.slideEasing)
-			// Springs stay springs; Quick's folds scale.
-			assertEquals(base.foldMs?.let { it * 2 }, slow.foldMs, "$style")
+			// A fold's pace is relative to the motion scheme, which NavicTheme scales by the speed itself.
+			assertEquals(base.foldPace, slow.foldPace, "$style")
 			// The structure holds at every speed: fades never overlap, the fade in ends with the slide, the
 			// cover lands with the album slide.
 			for (speed in listOf(0.5f, 0.75f, 1.25f, 1.5f, 1.75f, 2f)) {
@@ -172,18 +172,20 @@ class PageMotionTest {
 
 	@Test
 	fun aFoldFollowsTheStyle() {
-		// Expressive and Standard have no number of their own: the fold takes the motion scheme's springs
-		// (the scheme `NavicTheme` builds for the style), so the two differ as the rest of the app does.
-		for (style in listOf(AnimationStyle.Expressive, AnimationStyle.Standard)) {
-			assertNull(foldMs(pageMotionOf(style), tall = false), "$style")
-			assertNull(foldMs(pageMotionOf(style), tall = true), "$style")
-		}
-		// Quick: short, a box that holds a list longer than a few lines, and both under 350 ms.
+		// B-436: every style folds on the motion scheme's spring; Expressive and Standard at its own pace (the two
+		// differ as the rest of the app does), Quick at its page motion's pace, 500 / 300.
+		for (style in listOf(AnimationStyle.Expressive, AnimationStyle.Standard)) assertEquals(1f, pageMotionOf(style).foldPace, "$style")
 		val quick = pageMotionOf(AnimationStyle.Quick)
-		val short = foldMs(quick, tall = false)!!
-		val tall = foldMs(quick, tall = true)!!
-		assertTrue(short in 1..tall, "$short .. $tall")
-		assertTrue(tall <= 350, "$tall ms > 350")
+		assertEquals(pageMotionOf(AnimationStyle.Expressive).enterSlideMs.toFloat() / quick.enterSlideMs, quick.foldPace)
+		assertTrue(quick.foldPace > 1f, "Quick's folds are quicker than Expressive's")
+	}
+
+	@Test
+	fun b436_aSheetClosesFasterThanItOpensUnderEveryStyleAndSpeed() {
+		for (style in AnimationStyle.entries) for (speed in listOf(0.5f, 1f, 1.25f, 2f)) {
+			val m = pageMotionOf(style, speed)
+			assertTrue(m.sheetHideMs < m.sheetShowMs, "$style at $speed: hide ${m.sheetHideMs} >= show ${m.sheetShowMs}")
+		}
 	}
 
 	@Test
