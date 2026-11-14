@@ -99,16 +99,24 @@ fun FillRow(
 	lbBotOnly: Boolean = false,
 	/** A state pill at the row's end (Source history, the Activity board's), beside a Dismiss. */
 	pill: Pill? = null,
+	/** Whether Open album leads anywhere (stage 2 M4: a library album, or a release group). */
+	canOpen: Boolean = fill.rgid.isNotBlank(),
+	/** Worbus P1 (stage 2 M3): whether lb-bot can download; off, the row offers nothing that fetches. */
+	downloadsOn: Boolean = true,
+	/** A line under the fill's words (stage 2 M4: a gap's "N tracks missing"). */
+	note: String? = null,
+	/** The row's picture; lb-bot's release-group cover when none is given (stage 2 M4: a library album's own). */
+	cover: (@Composable () -> Unit)? = null,
 	modifier: Modifier = Modifier
 ) {
 	val preferenceManager = koinInject<PreferenceManager>()
 	// Every word and every button comes from the shared vocabulary (PROTOCOL §15.2), the table
 	// Worbus for desktop renders from too.
 	val described = describeFill(fill, now.value, wishlistAvailable, tooOld = rememberLbTooOld())
-	val view = if (lbBotOnly) described.copy(
-		buttons = listOfNotNull(FillButton.OPEN_ALBUM.takeIf { fill.rgid.isNotBlank() }),
-		explain = null
-	) else described
+	val buttons = fillRowButtons(described.buttons, lbBotOnly, canOpen, downloadsOn, wishlistAvailable, fill.rgid)
+	// A row that offers no retry says nothing of what one would do: one only lb-bot knows, or any while
+	// downloading is off.
+	val view = described.copy(buttons = buttons, explain = described.explain.takeIf { !lbBotOnly && downloadsOn })
 	val failed = fill.settled && !fill.succeeded
 	SegmentedListItem(
 		onClick = {},
@@ -116,7 +124,7 @@ fun FillRow(
 		shapes = shapes,
 		colors = fillRowColors(),
 		contentPadding = SongRowDefaults.ContentPadding,
-		leadingContent = {
+		leadingContent = cover ?: {
 			RemoteCoverArt(
 				url = fill.coverUrl,
 				modifier = Modifier.size(50.dp),
@@ -139,6 +147,9 @@ fun FillRow(
 					maxLines = 1,
 					overflow = TextOverflow.Ellipsis
 				)
+				note?.let { line ->
+					Text(text = line, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+				}
 				// lb-bot's reason, verbatim, is among these: it is the only thing that
 				// distinguishes "no peer had it" from "every source was rejected for format".
 				view.sublines.forEach { line ->
@@ -194,6 +205,33 @@ fun FillRow(
 			}
 		} else null
 	)
+}
+
+/**
+ * A fill row's buttons, from the vocabulary's ([described]).
+ * - A row only lb-bot knows: Open album alone, where it leads somewhere ([canOpen]: a library album, stage 2 M4, or a
+ *   release group).
+ * - While lb-bot can download: the vocabulary's.
+ * - While it cannot (Worbus P1; stage 2 M3, the rule To fix's album rows had): nothing that fetches. Open album,
+ *   Wishlist (offered here, with a release group to wishlist) and Dismiss where the vocabulary offers it (a row this
+ *   device holds); Retry, Try another source and Allow MP3 would be refused by lb-bot, silently (a downloads-off
+ *   refusal raises no snackbar).
+ */
+internal fun fillRowButtons(
+	described: List<FillButton>,
+	lbBotOnly: Boolean,
+	canOpen: Boolean,
+	downloadsOn: Boolean,
+	wishlistAvailable: Boolean,
+	rgid: String
+): List<FillButton> = when {
+	lbBotOnly -> listOfNotNull(FillButton.OPEN_ALBUM.takeIf { canOpen })
+	downloadsOn -> described
+	else -> buildList {
+		if (canOpen) add(FillButton.OPEN_ALBUM)
+		if (wishlistAvailable && rgid.isNotBlank()) add(FillButton.WISHLIST)
+		if (FillButton.DISMISS in described) add(FillButton.DISMISS)
+	}
 }
 
 val FillButton.label: StringResource

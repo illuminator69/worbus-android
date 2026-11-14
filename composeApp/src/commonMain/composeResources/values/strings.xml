@@ -1112,6 +1112,12 @@
 	<string name="attention_artists_to_check_hint">Worth a look in Library Matches.</string>
 	<string name="attention_failed">Failed</string>
 	<string name="attention_needs_pick">Needs your pick</string>
+	<!-- Stage 2 M3/M4: Source history's rows, while downloading is off, and a gap's missing tracks. -->
+	<string name="attention_missing_off">Missing</string>
+	<plurals name="attention_tracks_missing">
+		<item quantity="one">%1$d track missing</item>
+		<item quantity="other">%1$d tracks missing</item>
+	</plurals>
 	<string name="attention_matched">Matched</string>
 	<string name="attention_unidentified_folder">Unidentified folder</string>
 	<plurals name="attention_files">

@@ -60,6 +60,14 @@ class SourceHistoryViewModel(private val lbBot: LbBotManager) : ViewModel() {
 
 	val lbConfigured: Boolean get() = lbBot.isConfigured
 
+	/**
+	 * Worbus P1 (stage 2 M3): whether lb-bot can download; off, the rows offer nothing that fetches, the rule To fix's
+	 * album rows had before B-450 moved them here.
+	 */
+	val downloadsOn: StateFlow<Boolean> = lbBot.downloads
+		.map { it.isOn }
+		.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), lbBot.downloadsOn)
+
 	private val _loading = MutableStateFlow(false)
 	/** A read of lb-bot is out. */
 	val loading: StateFlow<Boolean> = _loading.asStateFlow()

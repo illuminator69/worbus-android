@@ -109,6 +109,14 @@ import app.worbus.ui.components.common.Pill
 import app.worbus.ui.components.sheets.lbUnavailableRes
 import app.worbus.ui.components.sheets.rememberLbTooOld
 import app.worbus.ui.util.animatedItem
+import app.worbus.domain.manager.HistoryOpen
+import app.worbus.domain.manager.historyOpenTarget
+import app.worbus.ui.components.common.LibraryRowCover
+import app.worbus.ui.components.common.LibraryRowDefaults
+import app.worbus.ui.components.common.RemoteCoverArt
+import org.jetbrains.compose.resources.pluralStringResource
+import worbus.composeapp.generated.resources.attention_missing_off
+import worbus.composeapp.generated.resources.attention_tracks_missing
 
 /**
  * Source history (P6; it was the Downloads page's Fills and Wishlist chips, "Activity" in the avatar
@@ -134,6 +142,7 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 	val lifecycleOwner = LocalLifecycleOwner.current
 	val scope = rememberCoroutineScope()
 	val now = rememberFillClock()
+	val downloadsOn by viewModel.downloadsOn.collectAsStateWithLifecycle()
 
 	var section by rememberSaveable { mutableStateOf(initial) }
 	var refreshing by remember { mutableStateOf(false) }
@@ -164,9 +173,16 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 	}
 	val shown = section.takeIf { it in sections } ?: SourceHistorySection.Requests
 
-	val openAlbum = { row: HistoryRow ->
-		if (row.rgid.isNotBlank()) {
-			backStack.add(Screen.ExternalAlbum(rgid = row.rgid, artistName = row.artist, title = row.album))
+	// Stage 2 M4: a gap opens the library's album with its gaps box, as To fix did (`historyOpenTarget`); the
+	// opener reads Room's cover for it (B-404 review M2).
+	val openLibraryAlbum = app.worbus.ui.navigation.rememberAlbumPageOpener()
+	val openAlbum: (HistoryRow) -> Unit = { row ->
+		when (val target = historyOpenTarget(row)) {
+			is HistoryOpen.Library -> openLibraryAlbum(target.albumId, "attention", target.gaps)
+			is HistoryOpen.External -> {
+				backStack.add(Screen.ExternalAlbum(rgid = target.rgid, artistName = row.artist, title = row.album))
+			}
+			null -> Unit
 		}
 	}
 
@@ -261,9 +277,9 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 							}
 							if (empty == HistoryEmpty.Skeleton) rowPlaceholders("history")
 							historyGroup("running", Res.string.source_history_running, groups.running, now,
-								actions, wishlisted, openAlbum)
+								actions, wishlisted, downloadsOn, openAlbum)
 							historyGroup("earlier", Res.string.source_history_earlier, groups.earlier, now,
-								actions, wishlisted, openAlbum)
+								actions, wishlisted, downloadsOn, openAlbum)
 						}
 						SourceHistorySection.NeedYou -> {
 							if (groups.needYou.isEmpty()) {
@@ -276,7 +292,7 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 								}
 							}
 							historyGroup("need-you", Res.string.source_history_need_you, groups.needYou, now,
-								actions, wishlisted, openAlbum)
+								actions, wishlisted, downloadsOn, openAlbum)
 						}
 						SourceHistorySection.Transfers -> transferRows(transfers)
 						SourceHistorySection.Wishlist -> wishlistSection(
@@ -312,6 +328,7 @@ private fun LazyListScope.historyGroup(
 	now: State<Long>,
 	actions: DownloadCenterViewModel,
 	wishlisted: Set<String>,
+	downloadsOn: Boolean,
 	onOpenAlbum: (HistoryRow) -> Unit
 ) {
 	if (rows.isEmpty()) return
@@ -331,7 +348,13 @@ private fun LazyListScope.historyGroup(
 			// A row only lb-bot knows is opened, never retried, cancelled or dismissed from here:
 			// it expires in lb-bot by itself, 6 to 24 hours on.
 			lbBotOnly = !mine,
-			pill = historyPill(entry),
+			pill = historyPill(entry, downloadsOn),
+			canOpen = historyOpenTarget(row) != null,
+			downloadsOn = downloadsOn,
+			note = row.libraryAlbum.missingCount.takeIf { entry.isGap && it > 0 }?.let { n ->
+				pluralStringResource(Res.plurals.attention_tracks_missing, n, n)
+			},
+			cover = historyCover(row),
 			onAction = { button ->
 				when (button) {
 					FillButton.RETRY -> actions.retryFill(entry.key)
@@ -348,9 +371,40 @@ private fun LazyListScope.historyGroup(
 	}
 }
 
-/** The Activity board's pill for a request that has ended; a running one has its bar instead. */
-private fun historyPill(entry: LbFillEntry): Pill? {
+/**
+ * Stage 2 M4: a request's picture as To fix drew it: the library album's own cover when lb-bot names one (Room's, read
+ * by the album id), else lb-bot's cover for it; null leaves the row its release group's.
+ */
+private fun historyCover(row: HistoryRow): (@Composable () -> Unit)? {
+	val album = row.libraryAlbum
+	return when {
+		album.albumId.isNotBlank() -> {
+			{ LibraryRowCover(coverArtId = album.albumId, name = row.album, fallbackAlbumId = album.albumId) }
+		}
+		album.coverUrl.isNotBlank() -> {
+			{
+				val preferenceManager = koinInject<PreferenceManager>()
+				RemoteCoverArt(
+					url = album.coverUrl,
+					modifier = Modifier.size(LibraryRowDefaults.ArtSize),
+					shape = preferenceManager.coverArtShape.decreasedShape
+				)
+			}
+		}
+		else -> null
+	}
+}
+
+/**
+ * The Activity board's pill for a request that has ended; a running one has its bar instead. While lb-bot cannot
+ * download (stage 2 M3, To fix's rule), a failed request or one waiting on a pick is one plain "Missing": no failure
+ * of something nobody can retry.
+ */
+internal fun historyPill(entry: LbFillEntry, downloadsOn: Boolean = true): Pill? {
 	if (!entry.settled) return null
+	if (!downloadsOn && (entry.outcome == LbBotManager.OUTCOME_FAILED || entry.outcome == LbBotManager.OUTCOME_NEEDS_PICK)) {
+		return Pill(FillText.Res(Res.string.attention_missing_off), PillTone.NEUTRAL)
+	}
 	val (words, tone) = when {
 		entry.outcome == LbBotManager.OUTCOME_DONE && entry.verifyGaveUp -> Res.string.source_history_placed to PillTone.OK
 		entry.outcome == LbBotManager.OUTCOME_DONE -> Res.string.source_history_verified to PillTone.GOOD

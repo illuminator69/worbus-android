@@ -121,7 +121,9 @@ data class HistoryRow(
 	 */
 	val drawn: LbFillEntry? = null,
 	/** [drawn] is [entry] with lb-bot's newer state laid on it ([withServerState]): its buttons are this device's. */
-	val overlaid: Boolean = false
+	val overlaid: Boolean = false,
+	/** Stage 2 M4: the library album lb-bot names for the request (a gap's), when it names one. */
+	val libraryAlbum: RequestAlbum = RequestAlbum()
 ) {
 	val shown: LbFillEntry get() = drawn ?: entry ?: server!!.asLedgerRow()
 
@@ -141,6 +143,50 @@ data class HistoryRow(
 }
 
 private val RUNNING_STATES = setOf("searching", "queued", "downloading", "placing")
+
+/**
+ * Stage 2 M4: the library album a request is about, as lb-bot names it (`albumId` on an activity or attention row),
+ * with a gap's missing-track count and lb-bot's cover for it. Empty when lb-bot names none.
+ */
+data class RequestAlbum(val albumId: String = "", val missingCount: Int = 0, val coverUrl: String = "")
+
+/** Where a request's Open album leads. */
+sealed interface HistoryOpen {
+	/** The library's own album page; [gaps]: with its gaps box open (a gap). */
+	data class Library(val albumId: String, val gaps: Boolean) : HistoryOpen
+
+	/** The release group's page, for an album the library does not hold. */
+	data class External(val rgid: String) : HistoryOpen
+}
+
+/**
+ * Where [row]'s Open album leads, or null when nowhere. To fix's order (stage 2 M4): a gap is an album the library
+ * partly holds, so its own page with the gaps box open; else the release group's page; else the library album.
+ */
+fun historyOpenTarget(row: HistoryRow): HistoryOpen? {
+	val albumId = row.libraryAlbum.albumId
+	return when {
+		row.shown.isGap && albumId.isNotBlank() -> HistoryOpen.Library(albumId, gaps = true)
+		row.rgid.isNotBlank() -> HistoryOpen.External(row.rgid)
+		albumId.isNotBlank() -> HistoryOpen.Library(albumId, gaps = false)
+		else -> null
+	}
+}
+
+/**
+ * Stage 2 M4: the library album lb-bot names for a request ([theirs]: lb-bot's rows of it), the deciding row's first
+ * ([decided]), then the newest that names one; a gap's missing count and cover from its attention row.
+ */
+internal fun requestAlbum(theirs: List<NeedYouServerEntry>, decided: NeedYouServerEntry?): RequestAlbum {
+	val byNewest = theirs.sortedByDescending { it.updatedAt }
+	val albumId = decided?.albumId?.ifBlank { null } ?: byNewest.firstOrNull { it.albumId.isNotBlank() }?.albumId.orEmpty()
+	val attention = byNewest.mapNotNull { it.attention }
+	return RequestAlbum(
+		albumId = albumId,
+		missingCount = attention.firstOrNull { it.kind == "gap" }?.missingCount ?: 0,
+		coverUrl = attention.firstOrNull { it.coverUrl.isNotBlank() }?.coverUrl.orEmpty()
+	)
+}
 
 /** Whether lb-bot's [state] says what a settled ledger row's [outcome] says. */
 private fun serverAgrees(state: String, outcome: String): Boolean = when (state) {
@@ -242,7 +288,8 @@ private fun historyRow(g: RequestGroup): HistoryRow {
 		entry = mine,
 		server = activity,
 		drawn = drawn,
-		overlaid = overlaid
+		overlaid = overlaid,
+		libraryAlbum = requestAlbum(g.theirs, lbbot)
 	)
 }
 

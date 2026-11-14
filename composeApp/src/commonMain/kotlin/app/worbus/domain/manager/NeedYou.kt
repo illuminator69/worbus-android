@@ -64,6 +64,8 @@ data class NeedYouServerEntry(
 	val fromAttention: Boolean,
 	val failureKind: String = "",
 	val reason: String = "",
+	/** Stage 2 M4: the library album lb-bot names (the desktop's `albumId`), or "". */
+	val albumId: String = "",
 	/** Review L3: null for an attention album, which says nothing (read as [gap], the desktop's `retryable ?? gap`). */
 	val retryable: Boolean? = null,
 	/** Epoch seconds, lb-bot's clock. */
@@ -76,7 +78,13 @@ data class NeedYouServerEntry(
 }
 
 /** One Need you item. [ledger]: this device's row of it (its buttons act on it). [server]: lb-bot's row when it decided. */
-data class NeedYouItem(val key: String, val ledger: LbFillEntry?, val server: NeedYouServerEntry?)
+data class NeedYouItem(
+	val key: String,
+	val ledger: LbFillEntry?,
+	val server: NeedYouServerEntry?,
+	/** Stage 2 M4: the library album lb-bot names for the request. */
+	val album: RequestAlbum = RequestAlbum()
+)
 
 /** What lb-bot's state means for Need you: failed, waiting on a pick, or nobody's. */
 fun serverNeedOutcome(state: String): String? = when (state) {
@@ -100,12 +108,12 @@ internal fun AttentionAlbum.kept(): Boolean =
 
 private fun ActivityRequest.entry() = NeedYouServerEntry(
 	releaseMbid, groupId, rgid, artist, album, state, gap = gapFill, fromAttention = false,
-	failureKind = failureKind, reason = reason, retryable = retryable, updatedAt = updatedAt, activity = this
+	failureKind = failureKind, reason = reason, albumId = albumId, retryable = retryable, updatedAt = updatedAt, activity = this
 )
 
 private fun AttentionAlbum.entry() = NeedYouServerEntry(
-	releaseMbid, groupId, rgid, artist, album, state, gap = kind == "gap", fromAttention = true, updatedAt = updatedAt,
-	attention = this
+	releaseMbid, groupId, rgid, artist, album, state, gap = kind == "gap", fromAttention = true, albumId = albumId,
+	updatedAt = updatedAt, attention = this
 )
 
 /** When a device row last moved, as the desktop's `sortAt`: its settle, else its start. */
@@ -245,7 +253,7 @@ fun needYouItems(
 		// A request this device holds no row of is keyed by its smallest identity: the same on every read.
 		val key = if (mine != null) "here:${mine.key}" else "lb:${g.ids.sorted().firstOrNull().orEmpty()}"
 		out += (if (d.lbbotDecides) lbbot!!.updatedAtMs else mine!!.sortAt()) to
-			NeedYouItem(key, mine, if (d.lbbotDecides) lbbot else null)
+			NeedYouItem(key, mine, if (d.lbbotDecides) lbbot else null, requestAlbum(g.theirs, lbbot))
 	}
 	return out.sortedWith(compareByDescending<Pair<Long, NeedYouItem>> { it.first }.thenBy { it.second.key }).map { it.second }
 }
@@ -377,6 +385,7 @@ fun NeedYouItem.asHistoryRow(): HistoryRow {
 		entry = ledger,
 		server = server?.activity,
 		drawn = row,
-		overlaid = ledger != null && server != null
+		overlaid = ledger != null && server != null,
+		libraryAlbum = album
 	)
 }
