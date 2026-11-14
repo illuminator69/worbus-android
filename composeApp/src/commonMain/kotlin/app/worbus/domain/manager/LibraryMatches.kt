@@ -64,8 +64,29 @@ internal fun matchesSectionToShow(
  * It followed the live counts for the whole visit: a Retry or a Dismiss that took the to-fix number to 0
  * swapped the whole list to To check under the snackbar it had just raised ("acting on a row must not
  * move you off it").
+ *
+ * B-444: **an unknown is not a none.** Until the hub has said who this user is ([rolesKnown]: To fix is not
+ * offered yet and may be in a moment) and, for an admin, until lb-bot's to-fix list has answered ([toFixRead]),
+ * the choice is not final: it was made final the moment To check was read, so a page opened before the role or
+ * the to-fix number was known kept Artists for the whole visit while To fix (41) was then offered.
  */
-internal fun matchesFirstChoiceFinal(offered: List<MatchesSection>, toFixCount: Int, toCheckRead: Boolean): Boolean =
+internal fun matchesFirstChoiceFinal(
+	offered: List<MatchesSection>,
+	toFixCount: Int,
+	toCheckRead: Boolean,
+	toFixRead: Boolean,
+	rolesKnown: Boolean
+): Boolean = rolesKnown && (
+	(MatchesSection.TO_FIX in offered && toFixCount > 0) ||
+		(toCheckRead && (MatchesSection.TO_FIX !in offered || toFixRead))
+	)
+
+/**
+ * B-444: whether the page shows a section before its first choice is final ([matchesFirstChoiceFinal]): as soon as
+ * the To check list is read, or To fix has something, as before. Until the role and the to-fix number are known the
+ * section shown may still move, once, to the one they choose (To fix when lb-bot then counts something).
+ */
+internal fun matchesFirstChoiceShown(offered: List<MatchesSection>, toFixCount: Int, toCheckRead: Boolean): Boolean =
 	(MatchesSection.TO_FIX in offered && toFixCount > 0) || toCheckRead
 
 /** A section's chip: its name, and its count once the list has been loaded ([count] non-null). */

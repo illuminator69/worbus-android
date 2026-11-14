@@ -2,6 +2,8 @@ package app.worbus.ui.screens.matches
 
 import app.worbus.ui.screens.attention.toFixNumber
 import app.worbus.domain.manager.matchesFirstChoiceFinal
+import app.worbus.domain.manager.matchesFirstChoiceShown
+import app.worbus.domain.manager.AttentionPage
 import app.worbus.ui.screens.attention.toFixItems
 import app.worbus.ui.screens.attention.rememberToFixUi
 import androidx.compose.material3.SnackbarHostState
@@ -176,7 +178,13 @@ fun LibraryMatchesScreen(
 	var chosen by rememberSaveable { mutableStateOf(opening) }
 	val section = matchesSectionToShow(chosen, offered, if (matchesKnown) matches.rows.size else 0, toFixNumber ?: 0)
 	// B-406 review M3: the page's first choice, once made on known numbers, is kept for the visit.
-	val firstChoiceFinal = matchesFirstChoiceFinal(offered, toFixNumber ?: 0, toCheckRead = matches.data != LbPanelData.READING)
+	val toCheckRead = matches.data != LbPanelData.READING
+	// B-444: final only on known numbers: the role, and (for an admin) lb-bot's to-fix list answered.
+	val firstChoiceFinal = matchesFirstChoiceFinal(
+		offered, toFixNumber ?: 0, toCheckRead,
+		toFixRead = toFix != null && toFix.page !is AttentionPage.Loading,
+		rolesKnown = roles.known
+	)
 	LaunchedEffect(section, firstChoiceFinal) { if (chosen == null && firstChoiceFinal) chosen = section }
 
 	val openArtist: (String) -> (() -> Unit)? = { id ->
@@ -275,7 +283,7 @@ fun LibraryMatchesScreen(
 		// nothing is shown until that choice is made on known numbers (`matchesFirstChoiceFinal`, the rule that
 		// then keeps it for the visit) or the user picks a chip, and the first section shown comes in at once.
 		// Only a change from one section to another fades through.
-		val sectionShown = section.takeIf { chosen != null || firstChoiceFinal }
+		val sectionShown = section.takeIf { chosen != null || firstChoiceFinal || matchesFirstChoiceShown(offered, toFixNumber ?: 0, toCheckRead) }
 		ContentSwap(sectionShown, Modifier.fillMaxSize(), animate = { from, _ -> from != null }, label = "matchesSection") { section ->
 		if (section != null) LazyColumn(
 			modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),

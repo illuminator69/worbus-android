@@ -91,10 +91,10 @@ class LibraryMatchesTest {
 	@Test
 	fun thePagesFirstChoiceIsFinalOnceItsNumbersAreKnown() {
 		val withFix = listOf(MatchesSection.TO_FIX) + all
-		assertTrue(matchesFirstChoiceFinal(withFix, toFixCount = 1, toCheckRead = false), "To fix wins whatever To check says")
-		assertFalse(matchesFirstChoiceFinal(withFix, toFixCount = 0, toCheckRead = false), "To check vs Artists not decided yet")
-		assertTrue(matchesFirstChoiceFinal(withFix, toFixCount = 0, toCheckRead = true))
-		assertTrue(matchesFirstChoiceFinal(all, toFixCount = 0, toCheckRead = true))
+		assertTrue(matchesFirstChoiceFinal(withFix, toFixCount = 1, toCheckRead = false, toFixRead = true, rolesKnown = true), "To fix wins whatever To check says")
+		assertFalse(matchesFirstChoiceFinal(withFix, toFixCount = 0, toCheckRead = false, toFixRead = true, rolesKnown = true), "To check vs Artists not decided yet")
+		assertTrue(matchesFirstChoiceFinal(withFix, toFixCount = 0, toCheckRead = true, toFixRead = true, rolesKnown = true))
+		assertTrue(matchesFirstChoiceFinal(all, toFixCount = 0, toCheckRead = true, toFixRead = false, rolesKnown = true))
 		// Kept: once `chosen` holds the first choice, a count that drops does not move the page.
 		val first = matchesSectionToShow(null, withFix, toCheckCount = 106, toFixCount = 1)
 		assertEquals(MatchesSection.TO_FIX, first)
