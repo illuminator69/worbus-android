@@ -87,6 +87,15 @@ extensions.configure<ApplicationExtension> {
 		}
 	}
 
+	// B-446: the bundled Google Sans (a 4 MB variable font in Compose resources' assets) is stored, not
+	// deflated. Every variation the pages ask for (`defaultFont(grade, round)`, each a Typeface of its own)
+	// is loaded through `android.graphics.fonts.Font.Builder`, which maps a stored asset in place but has
+	// to inflate a deflated one into a fresh 4 MB buffer: on the VM AVD ~45 ms of the main thread inside
+	// the album page's first content frame, the first time a page used a variation in the process.
+	androidResources {
+		noCompress += "ttf"
+	}
+
 	packaging {
 		resources {
 			excludes += "/okhttp3/**"
