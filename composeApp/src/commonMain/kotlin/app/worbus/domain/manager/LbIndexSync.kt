@@ -240,8 +240,7 @@ class LbIndexSync(
 		if (feedMissing) return Outcome.SKIPPED
 		runSkip = if (lbBotManager.isConfigured) LbIndexSkip.LB_BOT_DOWN else LbIndexSkip.NOT_SET_UP
 		if (!proven && !lbBotManager.ensureAvailability()) {
-			// B-443: refused as too old for this user, not out of reach.
-			if (lbBotManager.lbAccess.value == LbAccess.TOO_OLD) runSkip = LbIndexSkip.TOO_OLD
+			runSkip = indexProbeSkip(lbBotManager.isConfigured, lbBotManager.lbAccess.value)
 			return Outcome.SKIPPED
 		}
 		runSkip = LbIndexSkip.NO_FEED
@@ -458,3 +457,13 @@ data class LbMirroredRelease(
 	val release: LbRelease,
 	val artist: LbIndexArtistEntity?
 )
+
+/**
+ * Why a pass did not pull when lb-bot's probe failed: B-443, refused as too old for this user ([LbAccess.TOO_OLD]),
+ * not out of reach; else down, or never set up.
+ */
+internal fun indexProbeSkip(configured: Boolean, access: LbAccess): LbIndexSkip = when {
+	access == LbAccess.TOO_OLD -> LbIndexSkip.TOO_OLD
+	configured -> LbIndexSkip.LB_BOT_DOWN
+	else -> LbIndexSkip.NOT_SET_UP
+}

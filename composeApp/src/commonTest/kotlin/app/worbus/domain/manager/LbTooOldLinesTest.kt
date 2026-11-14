@@ -31,4 +31,12 @@ class LbTooOldLinesTest {
 			indexRunLine(LbIndexRun.Skipped(1L, LbIndexSkip.TOO_OLD))
 		)
 	}
+
+	@Test
+	fun theMirrorsFailedProbeIsTooOldWhenTheHubSaysSo() {
+		// Review N3: the wiring, not only the line. A probe refused as too old for this user is TOO_OLD.
+		assertEquals(LbIndexSkip.TOO_OLD, indexProbeSkip(configured = true, access = LbAccess.TOO_OLD))
+		assertEquals(LbIndexSkip.LB_BOT_DOWN, indexProbeSkip(configured = true, access = LbAccess.OPEN))
+		assertEquals(LbIndexSkip.NOT_SET_UP, indexProbeSkip(configured = false, access = LbAccess.OPEN))
+	}
 }
