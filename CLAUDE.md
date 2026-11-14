@@ -2252,11 +2252,19 @@ true of invented *album art*, and not of an icon naming the kind.
   the Library is the ordinary pop, and only Home leaves the app; its animation, predictive gesture included, is the root
   tabs' cross-fade from `navtabMetadata`, not a slide: seen on the phone's release build 2026-10-27 and kept by the owner,
   fix round N6). **A bar tap fades through whatever page it leaves** (B-434, motion lane 2026-11-14): the tap marks the
-  stack it makes (`ShellController.tabTaps`, `TabTapMotion` in `ShellTab.kt`) and `NavDisplay`'s own specs run
-  `Material3Transitions.tab` for a change to that stack; Home's tap from a page pushed over Home is a pop and ran that
-  page's slide. **One bottom bar while pages change**: every page's `Scaffold` draws its own `RootBottomBar`, which is
-  a shared element across the two pages (one key, under the cover's flight), so a whole-width slide no longer carries
-  two bars side by side; a page with no bar takes nothing. A tab's own page is still
+  stack it makes (`TabTapMotion` in `ShellTab.kt`, one per activity: `App.kt` remembers it and provides
+  `LocalTabTapMotion`) and `NavDisplay`'s own specs run `Material3Transitions.tab` for a change to that stack; Home's tap
+  from a page pushed over Home is a pop and ran that page's slide. The mark ends with the next change that is not the
+  tap's and once the tap's own fade-through has run (`awaitTabTapTransition`, on the animation clock), so a resize, a fold
+  or a rotation on the same stack runs the page motion (review L5). A tap's shared flights (a cover, the bar's bounds)
+  take the fade-through's time (`sharedFlightTiming`), never the album slide's 500 ms (review L3). **One bottom bar while
+  pages change**: every page's `Scaffold` draws its own `RootBottomBar`, which is a shared element across the two pages
+  (one key, under the cover's flight), so a whole-width slide no longer carries two bars side by side; a page with no
+  bar takes nothing. **The `SharedTransitionLayout` wraps `NavDisplay` only** (inside `AppWash`): a matched shared element
+  is drawn in its overlay over everything inside it, and it used to wrap the avatar menu drawer and the app's snackbar,
+  so a page opened from the menu drew the bar through the closing drawer (review M1). Keep the drawer, the snackbar and
+  the hosts outside it. The bar's selection reads the committed stack (`LocalNavStack`), so a predictive Back that is
+  cancelled never flips it. A tab's own page is still
   a root for the transitions (`isRootPage`); a restored stack that starts with Search or the Library gets Home put under
   it once (`normalizedStack`, before anything reads it). **Anything outside `NavDisplay` that takes Back must be added
   AFTER it**: the dispatcher asks the last-added handler, and with Home under them `NavDisplay`'s handler is enabled on
@@ -2306,7 +2314,13 @@ true of invented *album art*, and not of an icon naming the kind.
     no row animates across sections; `keepState` keeps each section's saved state, the Library's, for Recents'
     arrival gate and each chip's place). Chips that filter one list (Saved queues, Search, Fresh, Charts / Editor's
     picks) keep the list and fade its rows through (`SwapRows`: leaving rows out, then staying rows slide as new ones
-    fade in), with the scroll reset above where the chips sit above the list. `ContentSwapGuardTest` fails on a chip
+    fade in), **for the change a chip made only** (`RowSwap`: the chip arms it, the next change of the rows runs it for
+    the swap's time; a Search answer, a hub update, a removed row keep the list's own motion, review L7). A chip above
+    the list resets the scroll in the same frame through `RowSwap.chipTapped(listState)`: Saved queues, Search, and
+    Fresh, whose scope chips sit in its header (review M2; its type chips, the grid's first item, use the same call).
+    Charts' genre chips arm the swap without a reset (the chart lands seconds later). Library Matches' own first section
+    (before the counts are known) is not a swap: nothing is shown until that choice is final, then it comes in at once
+    (`ContentSwap(animate = …)`, review L6). `ContentSwapGuardTest` fails on a chip
     page with an `AnimatedContent` or `Crossfade` of its own. Tabs inside a page (the queue's Up next / Related) move
     as pages do (`Material3Transitions.inPageAxis`, B-433).
   - **A glitch is fixed without removing the animation.** Material 1.5's `FilterChip` eases its own
