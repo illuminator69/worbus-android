@@ -17,6 +17,7 @@ import app.worbus.icons.Icons
 import app.worbus.icons.outlined.Note
 import app.worbus.ui.components.common.ContentUnavailable
 import app.worbus.ui.core.UiState
+import app.worbus.ui.util.animatedItem
 
 fun LazyListScope.songListScreenContent(
 	state: UiState<ImmutableList<DomainSong>>,
@@ -42,7 +43,7 @@ fun LazyListScope.songListScreenContent(
 		itemsIndexed(data) { index, song ->
 			val download = downloadsBySong[song.id]
 			SongListScreenItem(
-				modifier = Modifier.animateItem(),
+				modifier = animatedItem(),
 				index = index,
 				count = data.size,
 				song = song,

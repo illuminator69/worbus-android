@@ -16,8 +16,7 @@ import app.worbus.domain.manager.ActivityTransfer
 import app.worbus.domain.manager.HistoryGroups
 import app.worbus.domain.manager.LbActivity
 import app.worbus.domain.manager.LbBotManager
-import app.worbus.domain.manager.historyGroups
-import app.worbus.domain.manager.mergeHistory
+import app.worbus.domain.manager.sourceHistoryGroups
 
 /**
  * What lb-bot said last ([last], null before its first good answer, read at [lastAt] epoch ms) and how
@@ -48,8 +47,12 @@ class SourceHistoryViewModel(private val lbBot: LbBotManager) : ViewModel() {
 		)
 	}.stateIn(viewModelScope, SharingStarted.Eagerly, SourceHistoryServer())
 
-	val groups: StateFlow<HistoryGroups> = combine(lbBot.activityAnswer, lbBot.ledger) { answer, ledger ->
-		historyGroups(mergeHistory(answer?.requests.orEmpty(), ledger, answer?.readAt))
+	// Follow-up 2026-11-14: the badge's own reading (`sourceHistoryGroups`): lb-bot's activity, its attention answer
+	// (the gaps' state), the ledger and what was dismissed here; Need you by the desktop's rule.
+	val groups: StateFlow<HistoryGroups> = combine(
+		lbBot.activityAnswer, lbBot.ledger, lbBot.attention, lbBot.dismissedRequests
+	) { answer, ledger, attention, dismissed ->
+		sourceHistoryGroups(ledger, answer, attention, dismissed)
 	}.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HistoryGroups(emptyList(), emptyList()))
 
 	val transfers: StateFlow<List<ActivityTransfer>> = lbBot.activityAnswer.map { it?.transfers.orEmpty() }
@@ -63,6 +66,9 @@ class SourceHistoryViewModel(private val lbBot: LbBotManager) : ViewModel() {
 
 	/** A good answer replaces the last; an older lb-bot forgets it; a failure keeps it on screen (the manager's). */
 	fun load(): Job = viewModelScope.launch {
+		// Follow-up 2026-11-14: the gaps' own state (a pick waiting) is `/lb/attention`'s; read it beside (at most
+		// every 30 s, the manager's rule), not first.
+		launch { lbBot.refreshAttention() }
 		_loading.value = true
 		val read = try {
 			lbBot.activity()

@@ -51,6 +51,8 @@ import app.worbus.ui.util.AmbientColorHolder
 import app.worbus.ui.navigation.AlbumPageOpener
 import app.worbus.data.database.dao.AlbumDao
 import app.worbus.ui.screens.artist.viewmodels.ArtistPageMemory
+import app.worbus.ui.screens.artist.viewmodels.ArtistPagePrefetcher
+import app.worbus.ui.screens.artist.viewmodels.ArtistPageReader
 import app.worbus.ui.util.CoverSeedPrefetcher
 import app.worbus.ui.util.CoverSeedStore
 
@@ -58,6 +60,11 @@ val managerModule = module {
 	singleOf(::AmbientColorHolder)
 	// B-405: what an artist's page last showed, for the next page of that artist.
 	single { ArtistPageMemory { get<SessionManager>().sessionGeneration } }
+	// B-446 follow-up: the album page reads its artist's page ahead into that memory.
+	single {
+		val reader = ArtistPageReader(get(), get(), get(), get(), get())
+		ArtistPagePrefetcher(reader::snapshot, get())
+	}
 	// B-404 review M2: an album opened from an id alone carries Room's cover in its key.
 	single {
 		AlbumPageOpener(

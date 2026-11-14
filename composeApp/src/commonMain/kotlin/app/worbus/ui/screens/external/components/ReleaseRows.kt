@@ -125,7 +125,7 @@ fun ReleaseRows(
 				Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
 					section.entries.take(first).forEachIndexed { index, entry -> row(index, entry) }
 					if (section.entries.size > first) {
-						Fold(visible = open, tall = true) {
+						Fold(visible = open) {
 							Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
 								section.entries.drop(first).forEachIndexed { i, entry -> row(first + i, entry) }
 							}

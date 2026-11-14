@@ -1,5 +1,6 @@
 package app.worbus.ui.components.sheets
 
+import app.worbus.ui.util.atSpeed
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
@@ -163,7 +164,9 @@ fun ModalBottomSheet(
 			// in and out with the finger made a fresh node on the finger's lift, which takes its
 			// first measurement as its starting size, so a tap that changes the content (the new
 			// mix form's kind: Mood Flow's few rows to Genre's list) landed at full height at once.
-			val eased = if (animateContentHeight) Modifier.easedHeight(ease = !touched) else Modifier
+			// B-435 (motion lane, 2026-11-14): the height's spring at the animation speed.
+			val heightSpeed = koinInject<PreferenceManager>().motionSpeed
+			val eased = if (animateContentHeight) Modifier.easedHeight(ease = !touched, speed = heightSpeed) else Modifier
 			if (ambient != null) {
 				val insets = contentWindowInsets()
 				NavicTheme(ambient.scheme, contentColor = ambient.onAmbient) {
@@ -227,12 +230,13 @@ fun ModalBottomSheet(
  * on screen. `animateContentSize()`'s spring, clipped as it clips; the eased height is kept
  * within what the sheet gives.
  */
-private fun Modifier.easedHeight(ease: Boolean): Modifier = clipToBounds() then EasedHeightElement(ease)
+private fun Modifier.easedHeight(ease: Boolean, speed: Float): Modifier = clipToBounds() then EasedHeightElement(ease, speed)
 
-private data class EasedHeightElement(val ease: Boolean) : ModifierNodeElement<EasedHeightNode>() {
-	override fun create() = EasedHeightNode(ease)
+private data class EasedHeightElement(val ease: Boolean, val speed: Float) : ModifierNodeElement<EasedHeightNode>() {
+	override fun create() = EasedHeightNode(ease, speed)
 
 	override fun update(node: EasedHeightNode) {
+		node.speed = speed
 		node.update(ease)
 	}
 
@@ -242,7 +246,7 @@ private data class EasedHeightElement(val ease: Boolean) : ModifierNodeElement<E
 	}
 }
 
-private class EasedHeightNode(private var ease: Boolean) : Modifier.Node(), LayoutModifierNode {
+private class EasedHeightNode(private var ease: Boolean, var speed: Float) : Modifier.Node(), LayoutModifierNode {
 	private var height: Animatable<Int, AnimationVector1D>? = null
 	private var target = 0
 
@@ -273,7 +277,7 @@ private class EasedHeightNode(private var ease: Boolean) : Modifier.Node(), Layo
 			target = measured
 			if (ease) {
 				coroutineScope.launch {
-					anim.animateTo(measured, spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = 1))
+					anim.animateTo(measured, spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = 1).atSpeed(speed))
 				}
 			} else {
 				snap()

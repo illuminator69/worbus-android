@@ -25,6 +25,7 @@ import app.worbus.ui.components.common.LetterHeader
 import app.worbus.ui.components.layouts.artGridPlaceholder
 import app.worbus.ui.core.UiState
 import app.worbus.ui.screens.album.components.AlbumListScreenGridItem
+import app.worbus.ui.util.animatedItem
 
 fun LazyGridScope.albumListScreenContent(
 	state: UiState<List<DomainAlbum>>,
@@ -55,7 +56,7 @@ fun LazyGridScope.albumListScreenContent(
 				itemsIndexed(albums, { _, it -> it.id }) { index, album ->
 					if (selectedViewMode == ListViewMode.Grid) {
 						AlbumListScreenGridItem(
-							modifier = Modifier.animateItem(),
+							modifier = animatedItem(),
 							tab = "albums",
 							album = album.selectedOr(selectedAlbum),
 							selected = album.id == selectedAlbum?.id,
@@ -71,7 +72,7 @@ fun LazyGridScope.albumListScreenContent(
 						)
 					} else {
 						AlbumListScreenListItem(
-							modifier = Modifier.animateItem(),
+							modifier = animatedItem(),
 							index = index,
 							count = albums.size,
 							album = album.selectedOr(selectedAlbum),
@@ -93,7 +94,7 @@ fun LazyGridScope.albumListScreenContent(
 			itemsIndexed(data, { _, it -> it.id }) { index, album ->
 				if (selectedViewMode == ListViewMode.Grid) {
 					AlbumListScreenGridItem(
-						modifier = Modifier.animateItem(),
+						modifier = animatedItem(),
 						tab = "albums",
 						album = album.selectedOr(selectedAlbum),
 						selected = album.id == selectedAlbum?.id,
@@ -109,7 +110,7 @@ fun LazyGridScope.albumListScreenContent(
 					)
 				} else {
 					AlbumListScreenListItem(
-						modifier = Modifier.animateItem(),
+						modifier = animatedItem(),
 						index = index,
 						count = data.size,
 						album = album.selectedOr(selectedAlbum),

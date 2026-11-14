@@ -1,5 +1,7 @@
 package app.worbus.ui.screens.browse
 
+import app.worbus.ui.util.SwapRows
+import app.worbus.ui.util.rememberRowSwap
 import app.worbus.ui.util.ClaimAfterFirstFrame
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -71,6 +73,7 @@ import app.worbus.ui.util.COVER_FADE_MS
 import app.worbus.ui.util.arrive
 import app.worbus.ui.util.placeholderBrush
 import app.worbus.ui.util.rememberArrivalGate
+import app.worbus.ui.util.animatedItem
 
 private const val PLACEHOLDER_TILES = 8
 
@@ -109,12 +112,16 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 	val title = stringResource(if (kind == BrowseKind.CHARTS) Res.string.search_tile_charts else Res.string.search_tile_picks)
 	val line = stringResource(if (kind == BrowseKind.CHARTS) Res.string.browse_charts_line else Res.string.browse_picks_line)
 	val pickGenre = stringResource(Res.string.browse_pick_genre)
+	val rowSwap = rememberRowSwap()
 
 	Scaffold(
 		topBar = { NestedTopBar({ Text(title) }) },
 		snackbarHost = { SnackbarHost(snackbarHostState) }
 	) { padding ->
-		LazyVerticalGrid(
+		// The genre chips swap the tiles once the new chart lands: they fade through (ContentSwap.kt's SwapRows), that
+		// change only (review L7: the chip arms it, the chart's landing runs it). The chips are an item of the grid,
+		// on screen when tapped: no scroll reset.
+		SwapRows(rowSwap, state.albums) { LazyVerticalGrid(
 			modifier = Modifier.fillMaxSize(),
 			columns = GridCells.Adaptive(150.dp),
 			horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -140,7 +147,7 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 						options = state.genres.map { it.id },
 						selected = state.genre,
 						label = { id -> state.genres.firstOrNull { it.id == id }?.name ?: id },
-						onSelect = { viewModel.setGenre(it) },
+						onSelect = { rowSwap.chipTapped(); viewModel.setGenre(it) },
 						contentPadding = PaddingValues(horizontal = 8.dp),
 						modifier = Modifier.padding(vertical = 8.dp)
 					)
@@ -157,7 +164,7 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 						album = album,
 						rank = if (kind == BrowseKind.CHARTS) index + 1 else null,
 						onClick = { open(album) },
-						modifier = Modifier.animateItem().arrive(gate, key, index)
+						modifier = animatedItem().arrive(gate, key, index)
 					)
 				}
 				state.loading -> items(PLACEHOLDER_TILES, span = { GridItemSpan(1) }) { index ->
@@ -170,7 +177,7 @@ fun BrowseFeedScreen(kind: BrowseKind) {
 					FeedNote(stringResource(Res.string.browse_empty), onRetry = null)
 				}
 			}
-		}
+		} }
 	}
 }
 

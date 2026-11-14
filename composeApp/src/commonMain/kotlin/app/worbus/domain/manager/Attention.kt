@@ -115,7 +115,11 @@ data class LbAttention(
 	val version: Int = 0,
 	val serverTime: Double = 0.0,
 	val counts: AttentionCounts? = null,
-	val albums: List<AttentionAlbum> = emptyList(),
+	/**
+	 * Review L3 (follow-ups): null when lb-bot sent no `albums` (an lb-bot from before the rows): "nothing to say",
+	 * never "nothing listed", as the desktop's `attentionAlbums` reads it. The To fix page reads it as none.
+	 */
+	val albums: List<AttentionAlbum>? = null,
 	val folders: List<AttentionFolder> = emptyList(),
 	val truncated: AttentionTruncated = AttentionTruncated()
 )
@@ -148,6 +152,9 @@ fun attentionRead(status: Int, body: String): AttentionRead = when (status) {
 	}
 	404 -> if (bodyCode(body).isBlank()) AttentionRead.Older else AttentionRead.Unavailable
 	405 -> AttentionRead.Older
+	// Review M3 (follow-ups), the desktop's `screenRead`: the hub calling lb-bot too old for this user is "no
+	// answer" for this read as for `/lb/activity` (Need you is then the ledger's), not a failure that keeps the last.
+	503 -> if (bodyCode(body) == "lbbot_too_old") AttentionRead.Older else AttentionRead.Unavailable
 	else -> AttentionRead.Unavailable
 }
 
@@ -195,8 +202,12 @@ fun attentionBadge(state: AttentionState, ledger: List<LbFillEntry>, downloadsOn
 
 /**
  * B-406 (second re-walk): Source history's menu badge, Worbus for desktop's Activity badge
- * (`attentionCount`): this phone's own settled fills that wait on the user, failed or waiting on a pick.
+ * (`attentionCount`): settled fills that wait on the user, failed or waiting on a pick.
  * They were added into the To fix number, which the desktop never did.
+ *
+ * Follow-up 2026-11-14 (the owner: "no separation for requests between clients"): every request lb-bot lists
+ * as failed or waiting on a pick, **from any client**, plus this phone's ledger rows lb-bot does not list: one
+ * set, one number, by the desktop's rule ([needYouItems], a port of `need-you.ts`).
  *
  * Review M1: **it is the size of Source history's Need you chip** ([HistoryGroups.needYou]), counted over
  * the same rows the page draws ([mergeHistory] of lb-bot's last answer, [activity], read at its
@@ -209,8 +220,12 @@ fun attentionBadge(state: AttentionState, ledger: List<LbFillEntry>, downloadsOn
  * the badge, and Source history's row stays in the menu for them ([avatarMenuItems]), as the desktop keeps
  * Activity (`sidebar-groups.ts`: "which would otherwise be unreachable").
  */
-fun sourceHistoryBadge(ledger: List<LbFillEntry>, activity: ActivityAnswer? = null): Int =
-	historyGroups(mergeHistory(activity?.requests.orEmpty(), ledger, activity?.readAt)).needYou.size
+fun sourceHistoryBadge(
+	ledger: List<LbFillEntry>,
+	activity: ActivityAnswer? = null,
+	attention: AttentionState? = null,
+	dismissed: List<DismissedRequest> = emptyList()
+): Int = needYouItems(activity?.requests, attention?.last?.albums, dismissed, ledger).size
 
 /**
  * Whether the avatar's dot is drawn: something to fix, the dot not turned off, and a hub configured.
@@ -391,7 +406,7 @@ fun attentionPage(
 	}
 
 	val claimed = mutableSetOf<String>()
-	val serverRows = answer.albums.mapNotNull { album ->
+	val serverRows = answer.albums.orEmpty().mapNotNull { album ->
 		val entry = ledger.firstOrNull { it.key !in claimed && sameFill(album.releaseMbid, album.groupId, it) }
 		if (entry != null) claimed += entry.key
 		// The ledger is newer than any read for the rows it names (a fill frame or a poll moves it
@@ -467,6 +482,28 @@ fun fillFrameForcesAttention(frame: JsonObject): Boolean {
 }
 
 private val ATTENTION_FORCING_STATES = setOf("failed", "needs_match", "picking")
+
+/**
+ * Review M2 (follow-ups): whether a `fill` frame re-reads Need you's two answers (`/lb/activity` and `/lb/attention`),
+ * forced: the desktop's `ACTIVITY_MOVES` (a fill that starts or settles, the frames the hub drops those caches for,
+ * PROTOCOL §15.6), plus `needs_match`, which Android already read on. Never a progress frame.
+ */
+fun fillFrameMovesNeedYou(frame: JsonObject): Boolean {
+	fun str(key: String) = (frame[key] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+	return str("state") in NEED_YOU_MOVES || str("status") in NEED_YOU_MOVES
+}
+
+private val NEED_YOU_MOVES = setOf("cancelled", "complete", "failed", "needs_match", "picking", "placed", "searching", "verified")
+
+/** Review M2: Need you's reads while the app is in the foreground, as the desktop's `refetchInterval`. */
+const val NEED_YOU_POLL_MS = 60_000L
+
+/**
+ * Review M1 (follow-ups): whether this user may hold an admin's lb-bot answers (`/lb/activity`, `/lb/attention`,
+ * other clients' album names). Only a hub that has SAID who the user is takes them away: [HubRoles.NOTHING_YET]
+ * (a reconnect, before its welcome) keeps what this same account read, since an account change forgets them anyway.
+ */
+fun adminReadsAllowed(roles: HubRoles): Boolean = roles.admin || !roles.known
 
 /**
  * What [LbBotManager.attention] holds: the last good answer and when it was read ([lastAt]), when

@@ -33,7 +33,7 @@ class RootTabFadeThroughTest {
 	fun theRootTabsFadeThrough() {
 		val tabs = app.substringAfter("val navtabMetadata").substringBefore("val imageViewMetadata")
 		assertTrue("fadeIn()" !in tabs && "fadeOut()" !in tabs, "no simultaneous default fades:\n$tabs")
-		assertTrue("Material3Transitions.tabEnter" in tabs && "Material3Transitions.tabExit" in tabs, tabs)
+		assertTrue(Regex("Material3Transitions\\.tab\\(").findAll(tabs).count() == 3, tabs)
 		assertTrue(Regex("(?i)transitionSpec \\{").findAll(tabs).count() == 3, "all three specs (push, pop, predictive pop):\n$tabs")
 	}
 }

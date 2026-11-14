@@ -1,5 +1,6 @@
 package app.worbus.ui.screens.sourcehistory
 
+import app.worbus.ui.util.ContentSwap
 import app.worbus.domain.manager.historyRereadWanted
 import app.worbus.domain.manager.historyRead
 import app.worbus.domain.manager.historyEmptyState
@@ -7,7 +8,6 @@ import app.worbus.domain.manager.formatListenedAt
 import app.worbus.domain.manager.HistoryEmpty
 import worbus.composeapp.generated.resources.attention_notice_unreachable
 import kotlinx.datetime.TimeZone
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -108,6 +108,7 @@ import app.worbus.ui.components.common.PillTone
 import app.worbus.ui.components.common.Pill
 import app.worbus.ui.components.sheets.lbUnavailableRes
 import app.worbus.ui.components.sheets.rememberLbTooOld
+import app.worbus.ui.util.animatedItem
 
 /**
  * Source history (P6; it was the Downloads page's Fills and Wishlist chips, "Activity" in the avatar
@@ -211,7 +212,10 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 			},
 			modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
 		) {
-			AnimatedContent(shown, modifier = Modifier.fillMaxSize()) { current ->
+			// B-435 (motion lane, 2026-11-14): the one content swap (ContentSwap.kt), old out then new in on the
+			// page motion's times, so it follows the style and the speed. It was AnimatedContent's default, a
+			// fade-through with a scale on fixed times the speed did not reach.
+			ContentSwap(shown, modifier = Modifier.fillMaxSize(), label = "sourceHistorySection") { current ->
 				LazyColumn(
 					modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
 					contentPadding = innerPadding.withoutTop() + PaddingValues(top = 8.dp, bottom = 24.dp),
@@ -242,7 +246,7 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 										notice,
 										style = MaterialTheme.typography.bodyMedium,
 										color = MaterialTheme.colorScheme.onSurfaceVariant,
-										modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp).animateItem()
+										modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp).then(animatedItem())
 									)
 								}
 							}
@@ -265,7 +269,7 @@ fun SourceHistoryScreen(initial: SourceHistorySection = SourceHistorySection.Req
 							if (groups.needYou.isEmpty()) {
 								item(key = "need-you-empty") {
 									ContentUnavailable(
-										modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp).animateItem(),
+										modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp).then(animatedItem()),
 										icon = Icons.Outlined.Check,
 										label = stringResource(Res.string.source_history_need_you_empty)
 									)
@@ -312,13 +316,13 @@ private fun LazyListScope.historyGroup(
 ) {
 	if (rows.isEmpty()) return
 	item(key = "header-$key") {
-		GroupHeader(stringResource(title), count = rows.size, modifier = Modifier.animateItem())
+		GroupHeader(stringResource(title), count = rows.size, modifier = animatedItem())
 	}
 	itemsIndexed(rows, key = { _, row -> "request:${row.key}" }) { index, row ->
 		// Review M1: drawn as its state is (lb-bot's later state wins), and with this device's buttons only
-		// while it is drawn as this device's row.
+		// while it is drawn as this device's row, itself or with lb-bot's newer state on it (follow-ups L1).
 		val entry: LbFillEntry = row.shown
-		val mine = row.entry != null && entry === row.entry
+		val mine = row.mine
 		FillRow(
 			fill = entry,
 			now = now,
@@ -339,7 +343,7 @@ private fun LazyListScope.historyGroup(
 					FillButton.OPEN_ALBUM -> onOpenAlbum(row)
 				}
 			},
-			modifier = Modifier.animateItem()
+			modifier = animatedItem()
 		)
 	}
 }
@@ -363,7 +367,7 @@ private fun LazyListScope.transferRows(transfers: List<ActivityTransfer>) {
 	itemsIndexed(transfers, key = { _, t -> "transfer:${t.id}" }) { index, t ->
 		SegmentedListItem(
 			onClick = {},
-			modifier = Modifier.animateItem(),
+			modifier = animatedItem(),
 			shapes = segmentedShapes(index = index, count = transfers.size),
 			colors = fillRowColors(),
 			contentPadding = SongRowDefaults.ContentPadding,

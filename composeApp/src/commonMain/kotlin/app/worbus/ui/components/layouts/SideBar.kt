@@ -62,6 +62,7 @@ import app.worbus.ui.components.common.WideNavigationRailItem
 import app.worbus.ui.navigation.Screen
 import app.worbus.ui.navigation.ShellTab
 import app.worbus.ui.navigation.isSelected
+import app.worbus.ui.navigation.LocalTabTapMotion
 import app.worbus.ui.navigation.onShellTabTapped
 import app.worbus.ui.viewmodel.RootViewModel
 
@@ -70,6 +71,7 @@ fun SideBar() {
 	val rootViewModel = koinViewModel<RootViewModel>()
 	val shellController = koinInject<ShellController>()
 	val backStack = LocalNavStack.current
+	val tabTaps = LocalTabTapMotion.current
 	val top = backStack.lastOrNull()
 
 	val railState = rememberWideNavigationRailState()
@@ -131,7 +133,7 @@ fun SideBar() {
 				WideNavigationRailItem(
 					selected = selected,
 					onClick = dropUnlessResumed {
-						onShellTabTapped(tab, backStack, rootViewModel, shellController)
+						onShellTabTapped(tab, backStack, rootViewModel, shellController, tabTaps)
 					},
 					icon = {
 						if (selected) {

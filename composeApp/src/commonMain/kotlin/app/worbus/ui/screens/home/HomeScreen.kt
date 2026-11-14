@@ -53,6 +53,7 @@ import app.worbus.domain.models.Mix
 import app.worbus.domain.models.MixKind
 import app.worbus.domain.models.YOUR_MIX_ID
 import app.worbus.ui.navigation.ShellTab
+import app.worbus.ui.navigation.LocalTabTapMotion
 import app.worbus.ui.navigation.onShellTabTapped
 import app.worbus.ui.screens.library.LibraryChip
 import app.worbus.ui.screens.mixes.MixArtwork
@@ -103,6 +104,7 @@ import app.worbus.domain.manager.homeMoods
 import app.worbus.domain.manager.queuesFromMood
 import app.worbus.ui.util.Fold
 import app.worbus.ui.viewmodel.RootViewModel
+import app.worbus.ui.util.animatedItem
 
 /** How many tinted boxes a shelf shows while its first read is out. */
 private const val RECENT_PLACEHOLDERS = 5
@@ -155,6 +157,7 @@ fun HomeScreen() {
 	val frequent by viewModel.frequent.collectAsStateWithLifecycle()
 	val mixTiles by viewModel.mixTiles.collectAsStateWithLifecycle()
 	val shell = koinInject<ShellController>()
+	val tabTaps = LocalTabTapMotion.current
 	// Worbus P1: lb-bot's first index build, while lb-bot is up (the hub keeps the last progress while
 	// it is away).
 	val lbBot = koinInject<LbBotManager>()
@@ -296,7 +299,7 @@ fun HomeScreen() {
 			if (chipsVisible) {
 				item(key = "moods") {
 					MoodChipRow(
-						modifier = Modifier.animateItem(),
+						modifier = animatedItem(),
 						moods = homeMoods,
 						selected = selectedMood?.id,
 						onTap = { viewModel.tapMood(it) },
@@ -310,8 +313,8 @@ fun HomeScreen() {
 			// it, and the whole list slid off the bottom of the screen and back (seen on the VM AVD). The pixel is the
 			// Box's: a Fold that is fully hidden lays nothing out, its modifier included.
 			item(key = "mood-body") {
-				Box(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).heightIn(min = onePixel)) {
-				Fold(visible = selectedMood != null, tall = true) {
+				Box(animatedItem(fadeIn = false, fadeOut = false).heightIn(min = onePixel)) {
+				Fold(visible = selectedMood != null) {
 					shownMood?.let { mood ->
 						MoodBody(
 							mood = mood,
@@ -337,7 +340,7 @@ fun HomeScreen() {
 
 			if (HomeSection.ContinueListening in sections) {
 				item(key = "continue") {
-					Fold(visible = shelves, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					ContinueListeningPill(
 						modifier = Modifier,
 						queues = continueQueues,
@@ -360,7 +363,7 @@ fun HomeScreen() {
 			// card then pushes the page down there, and further down it unfolds out of sight as before. The
 			// pixel is the Box's: a Fold that is fully hidden lays nothing out, its modifier included.
 			item(key = "index") {
-				Box(Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null).heightIn(min = onePixel)) {
+				Box(animatedItem(fadeIn = false, fadeOut = false).heightIn(min = onePixel)) {
 					Fold(visible = shelves && HomeSection.IndexProgress in sections) {
 						shownBar?.let { IndexProgressCard(it) }
 					}
@@ -369,7 +372,7 @@ fun HomeScreen() {
 
 			if (showRecent) {
 				item(key = "recent") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					if (recentAlbums.isNotEmpty()) {
 						albumShelf(
 							Modifier, recentTitle, recentAlbums, RECENT_TAB, 0,
@@ -389,7 +392,7 @@ fun HomeScreen() {
 
 			if (showFresh) {
 				item(key = "fresh") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					if (fresh.isNotEmpty()) {
 						HomeShelf(
 							modifier = Modifier,
@@ -421,7 +424,7 @@ fun HomeScreen() {
 
 			if (HomeSection.RecentlyPlayed in sections) {
 				item(key = "played") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					albumShelf(
 						Modifier, playedTitle, played, PLAYED_TAB, laterShelfIndex,
 						Screen.AlbumList(nested = true, listType = DomainAlbumListType.Recent)
@@ -432,7 +435,7 @@ fun HomeScreen() {
 
 			if (HomeSection.FrequentlyPlayed in sections) {
 				item(key = "frequent") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					albumShelf(
 						Modifier, frequentTitle, frequent, FREQUENT_TAB, laterShelfIndex,
 						Screen.AlbumList(nested = true, listType = DomainAlbumListType.Frequent)
@@ -443,7 +446,7 @@ fun HomeScreen() {
 
 			if (HomeSection.YourMixes in sections) {
 				item(key = "mixes") {
-					Fold(visible = shelves, tall = true, modifier = Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)) {
+					Fold(visible = shelves, modifier = animatedItem(fadeIn = false, fadeOut = false)) {
 					YourMixesShelf(
 						modifier = Modifier,
 						title = yourMixesTitle,
@@ -455,7 +458,7 @@ fun HomeScreen() {
 						// "See all" is the Library on its Mixes chip: the Library tab, as a tab tap opens it.
 						onSeeAll = dropUnlessResumed {
 							shell.showLibraryChip(LibraryChip.Mixes.name)
-							onShellTabTapped(ShellTab.Library, backStack, rootViewModel, shell)
+							onShellTabTapped(ShellTab.Library, backStack, rootViewModel, shell, tabTaps)
 						},
 						// A tile opens the mix's page (P5 round 2); it never starts the mix.
 						onOpen = { tile -> backStack.add(Screen.MixDetail(tile.key)) }

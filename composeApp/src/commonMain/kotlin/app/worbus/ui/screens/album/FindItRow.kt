@@ -36,6 +36,7 @@ import app.worbus.domain.manager.LbFindItLink
 import app.worbus.icons.Icons
 import app.worbus.icons.outlined.Link
 import app.worbus.icons.outlined.Search
+import app.worbus.ui.util.animatedItem
 
 /*
  * Worbus P1 (N4): "Find it" on a missing album's page. lb-bot's `findIt` (`/lb/meta/album`) lists where
@@ -137,8 +138,7 @@ fun LazyListScope.findItRow(links: List<LbFindItLink>?) {
 	item(key = "find-it") {
 		val uriHandler = LocalUriHandler.current
 		Column(
-			modifier = Modifier
-				.animateItem()
+			modifier = animatedItem()
 				.fillMaxWidth()
 				.padding(horizontal = 16.dp, vertical = 8.dp)
 		) {

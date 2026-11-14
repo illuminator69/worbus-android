@@ -1,5 +1,7 @@
 package app.worbus.ui.screens.share
 
+import app.worbus.ui.util.motionMs
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +50,7 @@ import app.worbus.ui.core.UiState
 import app.worbus.ui.screens.share.components.ShareListScreenItem
 import app.worbus.ui.screens.share.viewmodels.ShareListViewModel
 import app.worbus.ui.util.withoutTop
+import app.worbus.ui.util.animatedItem
 
 @Composable
 fun ShareListScreen() {
@@ -81,7 +84,8 @@ fun ShareListScreen() {
 			onRefresh = { viewModel.refreshShares() },
 			key = listOf(sharesState, isRefreshingFlow)
 		) {
-			Crossfade(sharesState) { stateValue ->
+			// B-435 (motion lane, 2026-11-14): Crossfade's default 300 ms at the animation speed.
+			Crossfade(sharesState, animationSpec = tween(motionMs(300))) { stateValue ->
 				LazyVerticalGrid(
 					modifier = Modifier.fillMaxSize(),
 					columns = GridCells.Fixed(1),
@@ -100,7 +104,7 @@ fun ShareListScreen() {
 						is UiState.Success -> {
 							items(stateValue.data, { it.id }) { share ->
 								ShareListScreenItem(
-									modifier = Modifier.animateItem(fadeInSpec = null),
+									modifier = animatedItem(fadeIn = false),
 									share = share,
 									onClick = { viewModel.updateSelection(share) },
 									onSwipeToDelete = { deletionId = share.id }

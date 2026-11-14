@@ -22,6 +22,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
@@ -132,7 +134,8 @@ class LbBotManager(
 	 * `welcome.user` and the `user` frame ([applyRoles]). Every admin and primary-only flag here reads
 	 * it, so a gate moves in place when a `user` frame arrives. Today's behaviour until a hub says.
 	 */
-	private val _roles = MutableStateFlow(HubRoles.EVERYTHING)
+	// Review M1 (follow-ups): as HubManager starts, not "everything": a signed-in device waits for the hub to say.
+	private val _roles = MutableStateFlow(hubRolesOf(null, hubAuth.signedIn))
 	val roles: StateFlow<HubRoles> = _roles.asStateFlow()
 
 	/**
@@ -340,12 +343,68 @@ class LbBotManager(
 	val activityAnswer: StateFlow<ActivityAnswer?> = _activityAnswer.asStateFlow()
 
 	/**
-	 * Source history's menu badge: this phone's own failures and picks as Source history draws them, its Need
-	 * you chip ([sourceHistoryBadge]), the desktop's Activity badge. With [attentionBadge] it lights the
-	 * avatar's dot. Not turned off with downloading (review L3).
+	 * Review M1 (follow-ups): moved on by [forgetAdminReads]. A read that started before it does not write its
+	 * answer: an admin's read landing after a sign-out or a demotion would otherwise put it back.
 	 */
-	val sourceHistoryBadge: StateFlow<Int> = combine(_ledger, _activityAnswer) { ledger, answer ->
-		sourceHistoryBadge(ledger, answer)
+	@Volatile
+	private var adminReadsEpoch = 0
+
+	/**
+	 * Review M1 (follow-ups): drop lb-bot's admin answers (`/lb/activity`, `/lb/attention`), which name every
+	 * client's requests, when this user may no longer read them (a hub that says this user is not an admin) and on a
+	 * logout ([forgetWatches]); the desktop removes both queries (`useAdminLbRead`). The next admin reads again at
+	 * once.
+	 */
+	private fun forgetAdminReads() {
+		adminReadsEpoch++
+		_activityAnswer.value = null
+		_attention.value = AttentionState()
+		activityAskedAt = 0L
+	}
+
+	/**
+	 * Follow-up 2026-11-14 (desktop review M1): requests dismissed here (Dismiss, Add to wishlist), by identity and
+	 * when ([dismissalOf]). A dismissal is local, and lb-bot keeps its own row (a failure 24 h), which would otherwise
+	 * come back into Need you as another client's: Need you hides lb-bot's rows of it that are not newer than the
+	 * dismissal ([needYouItems]). Persisted ([decodeDismissedRequests] also reads the first format); forgotten once
+	 * lb-bot lists nothing for it ([dismissalsStillListed]), 30 days and 200 at most (the desktop's bounds, applied
+	 * at load too), and on a logout ([forgetDismissals], the desktop's `clearFills`).
+	 */
+	private val _dismissed = MutableStateFlow(boundDismissals(decodeDismissedRequests(preferenceManager.lbDismissedRequests), nowMs()))
+	val dismissedRequests: StateFlow<List<DismissedRequest>> = _dismissed.asStateFlow()
+
+	/** Review L4: one atomic change ([MutableStateFlow.update]), so a Dismiss and a read's pruning cannot lose each other. */
+	private fun updateDismissed(change: (List<DismissedRequest>) -> List<DismissedRequest>) {
+		val now = nowMs()
+		val before = _dismissed.value
+		_dismissed.update { boundDismissals(change(it), now) }
+		val after = _dismissed.value
+		if (after != before) {
+			preferenceManager.lbDismissedRequests = Json.encodeToString(serializer<List<DismissedRequest>>(), after)
+		}
+	}
+
+	/** Forget the dismissals lb-bot lists nothing for, once both its answers are in hand (review L4: after either read). */
+	private fun pruneDismissals() {
+		val activity = _activityAnswer.value?.requests
+		val albums = _attention.value.last?.albums
+		updateDismissed { dismissalsStillListed(it, activity, albums) }
+	}
+
+	/** Review M1: a logout forgets this account's dismissals. */
+	private fun forgetDismissals() {
+		updateDismissed { emptyList() }
+	}
+
+	/**
+	 * Source history's menu badge: Need you's number, every client's failures and picks (follow-up 2026-11-14, the
+	 * desktop's rule, [sourceHistoryBadge]). With [attentionBadge] it lights the avatar's dot. Not turned off with
+	 * downloading (review L3). lb-bot's half is read by [refreshActivity] and [refreshAttention], and is counted only
+	 * while this user may read it ([adminReadsAllowed], review M1 of the follow-ups).
+	 */
+	val sourceHistoryBadge: StateFlow<Int> = combine(_ledger, _activityAnswer, _attention, _dismissed, _roles) { ledger, answer, attention, dismissed, roles ->
+		if (adminReadsAllowed(roles)) sourceHistoryBadge(ledger, answer, attention, dismissed)
+		else sourceHistoryBadge(ledger, null, null, dismissed)
 	}.stateIn(scope, SharingStarted.Eagerly, 0)
 
 	/** Whether the hub carries the attention route: an older one is "older", not "nothing to fix". */
@@ -356,35 +415,120 @@ class LbBotManager(
 	val supportsActivity: Boolean
 		get() = advertisesRoute("GET /lb/activity")
 
+	/** Review M2 (follow-ups): a forced read asked while one was out, read once that one is back. */
+	@Volatile
+	private var attentionAgain = false
+
 	/**
-	 * Read `/lb/attention` if [shouldRefreshAttention] says so: never while one is out, at most
-	 * every 30 s unless [force]d. Called on a hub `welcome` or `lb` frame, on a `fill` frame (forced
-	 * when it names a failure or a pick), when the avatar menu opens and when either page appears;
-	 * never from a composable's body, and never on a timer of its own (nobody watching, no read).
+	 * Read `/lb/attention` if [shouldRefreshAttention] says so: never two at once, at most every 30 s unless
+	 * [force]d. Called on a hub `welcome` or `lb` frame, on a `fill` frame (forced when it names a failure, a pick or
+	 * one of the desktop's Need you moves, [fillFrameMovesNeedYou]), when the avatar menu opens, when either page
+	 * appears, and while the app is in the foreground ([watchNeedYouWhileShown]). A forced read asked while one is out
+	 * runs once after it (review M2): that one may have left before the change it was asked for.
 	 */
 	suspend fun refreshAttention(force: Boolean = false) {
 		if (!isConfigured) return
-		if (!shouldRefreshAttention(nowMs(), _attention.value.readAt, force, attentionInFlight, admin = _roles.value.admin)) return
+		if (!shouldRefreshAttention(nowMs(), _attention.value.readAt, force, inFlight = false, admin = _roles.value.admin)) return
 		attentionLock.withLock {
-			if (attentionInFlight) return
+			if (attentionInFlight) {
+				if (force) attentionAgain = true
+				return
+			}
 			attentionInFlight = true
 		}
+		var again = false
 		try {
+			val epoch = adminReadsEpoch
 			val read = if (!supportsAttention) AttentionRead.Older else when (
 				val raw = rawGet("/lb/attention", emptyList(), timeoutMs = ATTENTION_TIMEOUT_MS)
 			) {
 				is LbResult.Ok -> attentionRead(raw.value.status, raw.value.text)
 				is LbResult.Failed -> AttentionRead.Unavailable
 			}
-			_attention.update { nextAttentionState(it, read, nowMs()) }
+			// Review M1: an answer asked for before a sign-out or a demotion is not this user's.
+			if (epoch == adminReadsEpoch) {
+				_attention.update { nextAttentionState(it, read, nowMs()) }
+				pruneDismissals()
+			}
 		} finally {
-			attentionInFlight = false
+			withContext(NonCancellable) {
+				attentionLock.withLock {
+					attentionInFlight = false
+					again = attentionAgain
+					attentionAgain = false
+				}
+			}
 		}
+		if (again) refreshAttention(force = true)
 	}
 
 	/** [refreshAttention] from somewhere that is not a coroutine (a frame, a tap). */
 	fun requestAttentionRefresh(force: Boolean = false) {
 		scope.launch { refreshAttention(force) }
+	}
+
+	@Volatile
+	private var activityInFlight = false
+	@Volatile
+	private var activityAgain = false
+	/** When [refreshActivity] last asked (epoch ms), whatever came of it. */
+	@Volatile
+	private var activityAskedAt = 0L
+
+	/**
+	 * Follow-up 2026-11-14 (the badge lagged after a restart: nothing but Source history read `/lb/activity`, so
+	 * until the page was opened the badge was this phone's ledger alone). Read lb-bot's list for Source history's
+	 * badge ([sourceHistoryBadge]) by [shouldRefreshAttention]'s rule: an admin only (lb-bot lists the route as
+	 * admin), never two at once, at most every 30 s unless [force]d. Asked when the avatar menu opens, on a hub
+	 * advert (welcome or `lb` frame), when the hub says this user is an admin, forced on a `fill` frame of the
+	 * desktop's Need you moves ([fillFrameMovesNeedYou], review M2), from any client, and while the app is in the
+	 * foreground: on resume, then forced every [NEED_YOU_POLL_MS] ([watchNeedYouWhileShown]). A forced read asked
+	 * while one is out runs once after it.
+	 */
+	suspend fun refreshActivity(force: Boolean = false) {
+		if (!isConfigured) return
+		if (!shouldRefreshAttention(nowMs(), activityAskedAt, force, inFlight = false, admin = _roles.value.admin)) return
+		attentionLock.withLock {
+			if (activityInFlight) {
+				if (force) activityAgain = true
+				return
+			}
+			activityInFlight = true
+		}
+		var again = false
+		try {
+			activityAskedAt = nowMs()
+			activity()
+		} finally {
+			withContext(NonCancellable) {
+				attentionLock.withLock {
+					activityInFlight = false
+					again = activityAgain
+					activityAgain = false
+				}
+			}
+		}
+		if (again) refreshActivity(force = true)
+	}
+
+	/** [refreshActivity] from somewhere that is not a coroutine (a frame, a tap). */
+	fun requestActivityRefresh(force: Boolean = false) {
+		scope.launch { refreshActivity(force) }
+	}
+
+	/**
+	 * Review M2 (follow-ups): Need you's two reads while the app is in the foreground, as the desktop's
+	 * `refetchOnWindowFocus` and `refetchInterval`: on resume (within the 30 s rule), then forced every
+	 * [NEED_YOU_POLL_MS]. `App` starts it on resume and cancels it on pause. Admin only, one read of each at a time.
+	 */
+	fun watchNeedYouWhileShown(): Job = scope.launch {
+		var force = false
+		while (true) {
+			launch { refreshAttention(force) }
+			launch { refreshActivity(force) }
+			delay(NEED_YOU_POLL_MS)
+			force = true
+		}
 	}
 
 	/**
@@ -393,16 +537,21 @@ class LbBotManager(
 	 */
 	suspend fun activity(): ActivityRead {
 		if (!isConfigured) return ActivityRead.Unavailable
+		val epoch = adminReadsEpoch
 		val read = if (!supportsActivity) ActivityRead.Older
 		else when (val raw = rawGet("/lb/activity", emptyList(), timeoutMs = ATTENTION_TIMEOUT_MS)) {
 			is LbResult.Ok -> activityRead(raw.value.status, raw.value.text)
 			is LbResult.Failed -> ActivityRead.Unavailable
 		}
+		// Review M1: an answer asked for before a sign-out or a demotion is not this user's.
+		if (epoch != adminReadsEpoch) return read
 		when (read) {
 			is ActivityRead.Ok -> _activityAnswer.value = ActivityAnswer(read.requests, read.transfers, nowMs())
 			ActivityRead.Older -> _activityAnswer.value = null
 			ActivityRead.Unavailable -> Unit
 		}
+		// Forgotten once lb-bot lists nothing for them (only with both answers in hand).
+		pruneDismissals()
 		return read
 	}
 
@@ -581,8 +730,13 @@ class LbBotManager(
 		val changed = roles != _roles.value
 		val promoted = roles.admin && !_roles.value.admin
 		_roles.value = roles
+		// Review M1 (follow-ups): a user who may not read an admin's answers does not keep the last admin's.
+		if (!adminReadsAllowed(roles)) forgetAdminReads()
 		// NB3: an admin's count is read once the hub says admin (a non-admin never reads it).
-		if (promoted && fromHub) requestAttentionRefresh(force = true)
+		if (promoted && fromHub) {
+			requestAttentionRefresh(force = true)
+			requestActivityRefresh(force = true)
+		}
 		if (fromHub && changed) setAccess(LbAccess.OPEN)
 		if (changed) publishAllSupport()
 	}
@@ -1142,6 +1296,9 @@ class LbBotManager(
 		publishListeningSupport()
 		// P6: a new advert (welcome, or an `lb` frame) is when the count may have moved unseen.
 		if (available) requestAttentionRefresh(force = true)
+		// Follow-up 2026-11-14: Source history's badge counts lb-bot's list too, so it is read with the advert
+		// (once a start, then at most every 30 s), not first when the page is opened.
+		if (available) requestActivityRefresh()
 	}
 
 	/**
@@ -3395,6 +3552,8 @@ class LbBotManager(
 
 	/** Forget one finished row. Only ever offered on a settled fill. */
 	fun dismiss(key: String) {
+		// Follow-up 2026-11-14: remembered by release or group, so lb-bot's row for it stays out of Need you.
+		_ledger.value.firstOrNull { it.key == key }?.let { row -> updateDismissed { it + dismissalOf(row, nowMs()) } }
 		scope.launch {
 			watchLock.withLock { saveWatches(loadWatches() - key) }
 			// The sheet reads these; a dismissed row must not keep showing its last state.
@@ -3414,7 +3573,11 @@ class LbBotManager(
 	fun onFillFrame(frame: JsonObject) {
 		lastPushAt = nowMs()
 		// P6: a failure or a pick may have changed lb-bot's count; progress only asks within the 30 s.
-		requestAttentionRefresh(force = fillFrameForcesAttention(frame))
+		// Review M2 (follow-ups): a fill that starts or settles, from any client, may move Need you: both of its
+		// answers are read again, as the desktop's `ACTIVITY_MOVES` (`invalidateNeedYouReads`).
+		val moves = fillFrameMovesNeedYou(frame)
+		requestAttentionRefresh(force = moves || fillFrameForcesAttention(frame))
+		if (moves) requestActivityRefresh(force = true)
 		fun str(key: String): String =
 			(frame[key] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
 		val kind = str("kind")
@@ -4003,6 +4166,10 @@ class LbBotManager(
 	suspend fun forgetWatches() {
 		pollJob?.cancel()
 		pollJob = null
+		// Review M1 (follow-ups): the last account's lb-bot answers and dismissals go with its ledger (the desktop's
+		// `clearFills` and `clearLbQueries`), so the next account's badge counts none of them.
+		forgetAdminReads()
+		forgetDismissals()
 		watchLock.withLock {
 			saveWatches(emptyMap())
 			fillLedger.forgetSetAside()

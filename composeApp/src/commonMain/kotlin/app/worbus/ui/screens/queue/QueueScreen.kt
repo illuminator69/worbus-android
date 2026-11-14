@@ -2,11 +2,6 @@ package app.worbus.ui.screens.queue
 
 import app.worbus.data.database.entities.bySongId
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -177,6 +172,9 @@ import app.worbus.ui.screens.nowPlaying.viewmodels.NowPlayingViewModel
 import app.worbus.ui.util.DraggableListState
 import app.worbus.ui.util.Fold
 import app.worbus.ui.util.rememberDraggableListState
+import app.worbus.ui.util.animatedItem
+import app.worbus.ui.util.Material3Transitions
+import app.worbus.ui.util.pageMotion
 
 /** A queue slot with a stable id so reorders animate (see [QueueScreen]). */
 private data class QueueEntry(val uid: Long, val song: DomainSong)
@@ -602,20 +600,14 @@ internal fun QueueContent(layout: QueueLayout) {
 			}
 		}
 
-		// Slides toward the tab being opened (with a fade), so the two read as side by side
-		// rather than one list being swapped for another. An empty queue only has Up Next.
-		val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
-		val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+		// Slides toward the tab being opened, so the two read as side by side rather than one list being
+		// swapped for another; B-433: as pages do, the old tab out before the new one in
+		// (`Material3Transitions.inPageAxis`). An empty queue only has Up Next.
+		val tabPrefs = koinInject<PreferenceManager>()
 		AnimatedContent(
 			targetState = if (queue.isEmpty()) 0 else selectedTab,
 			modifier = Modifier.weight(1f),
-			transitionSpec = {
-				val direction = if (targetState > initialState) 1 else -1
-				(slideInHorizontally(spatialSpec) { it / 4 * direction } + fadeIn(effectsSpec))
-					.togetherWith(
-						slideOutHorizontally(spatialSpec) { -it / 4 * direction } + fadeOut(effectsSpec)
-					)
-			},
+			transitionSpec = { Material3Transitions.inPageAxis(tabPrefs.pageMotion(), forward = targetState > initialState) },
 			label = "queueTab"
 		) { shownTab ->
 			if (shownTab == 0) {
@@ -1090,16 +1082,12 @@ private fun QueueLayerBody(
 			}
 		}
 
-		val spatialSpec = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
-		val effectsSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+		// B-433: the queue's tabs move as pages do (`Material3Transitions.inPageAxis`), as in the sheet above.
+		val tabPrefs = koinInject<PreferenceManager>()
 		AnimatedContent(
 			targetState = shownTab,
 			modifier = Modifier.weight(1f),
-			transitionSpec = {
-				val direction = if (targetState > initialState) 1 else -1
-				(slideInHorizontally(spatialSpec) { it / 4 * direction } + fadeIn(effectsSpec))
-					.togetherWith(slideOutHorizontally(spatialSpec) { -it / 4 * direction } + fadeOut(effectsSpec))
-			},
+			transitionSpec = { Material3Transitions.inPageAxis(tabPrefs.pageMotion(), forward = targetState > initialState) },
 			label = "layerQueueTab"
 		) { tab ->
 			if (tab != 0) {
@@ -1225,7 +1213,7 @@ private fun RelatedTab(
 			itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
 				val download = downloadsBySong[song.id]
 				RelatedSongItem(
-					modifier = Modifier.animateItem(),
+					modifier = animatedItem(),
 					index = index,
 					count = songs.size,
 					song = song,

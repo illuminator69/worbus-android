@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -115,6 +114,7 @@ import app.worbus.ui.core.UiState
 import app.worbus.ui.util.OnPageSettled
 import app.worbus.ui.navigation.Screen
 import app.worbus.ui.screens.artist.components.ArtistActionButtons
+import app.worbus.ui.screens.artist.components.ArtistPageSkeleton
 import app.worbus.ui.components.sheets.AboutSheet
 import app.worbus.ui.util.teaserText
 import app.worbus.ui.screens.artist.components.ARTIST_TEASER_LIMIT
@@ -316,9 +316,13 @@ fun ArtistDetailScreen(
 					ErrorBox(artistState)
 				}
 
-				is UiState.Loading -> Box(Modifier.fillMaxSize()) {
-					ContainedLoadingIndicator(Modifier.size(80.dp).align(Alignment.Center))
-				}
+				// B-446 follow-up: the page's shape in its colours, not a spinner; the content cross-fades over
+				// it after the slide (FirstShowHold) and lands where its shapes are.
+				is UiState.Loading -> ArtistPageSkeleton(
+					contentPadding = contentPadding,
+					ambientColor = ambientTop,
+					coverArtId = openedCoverArtId
+				)
 
 				is UiState.Success -> {
 					val state = artistState.data

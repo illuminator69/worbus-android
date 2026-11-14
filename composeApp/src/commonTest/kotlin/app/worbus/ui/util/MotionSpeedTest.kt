@@ -61,8 +61,17 @@ class MotionSpeedTest {
 			val effects = assertIs<SpringSpec<Float>>(scheme.defaultEffectsSpec<Float>())
 			assertEquals(effects.stiffness / 4, assertIs<SpringSpec<Float>>(scheme.atSpeed(0.5f).defaultEffectsSpec<Float>()).stiffness)
 		}
-		// Quick's fold is a tween of its own, halved at 2x as the springs are.
-		assertEquals(pageMotionOf(app.worbus.domain.models.settings.AnimationStyle.Quick).foldMs!! / 2,
-			pageMotionOf(app.worbus.domain.models.settings.AnimationStyle.Quick, 2f).foldMs)
+	}
+
+	@Test
+	fun b436_aPaceStiffensASpringOffTheSlidersStops() {
+		// Quick's folds: the scheme's spring at 500 / 300, not rounded to a quarter as a speed is.
+		val base = assertIs<SpringSpec<Float>>(MotionScheme.expressive().defaultSpatialSpec<Float>())
+		val pace = 500f / 300f
+		val quick = assertIs<SpringSpec<Float>>(base.atPace(pace))
+		assertEquals(base.dampingRatio, quick.dampingRatio, "the same shape: Quick's folds overshoot as its chips' springs do")
+		assertEquals(base.stiffness * pace * pace, quick.stiffness, 0.01f)
+		assertSame(base, base.atPace(1f))
+		assertEquals(150, assertIs<TweenSpec<Float>>(tween<Float>(250).atPace(pace)).durationMillis)
 	}
 }

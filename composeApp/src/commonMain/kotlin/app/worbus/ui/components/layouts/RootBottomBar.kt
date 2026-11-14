@@ -1,5 +1,9 @@
 package app.worbus.ui.components.layouts
 
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import app.worbus.di.LocalSharedTransitionScope
+import app.worbus.ui.util.rememberCoverBoundsTransform
+import app.worbus.ui.util.atMotionSpeed
 import app.worbus.ui.util.motionMs
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -51,10 +55,11 @@ fun RootBottomBar(
 		scrolled && preferenceManager.bottomBarCollapseMode == BottomBarCollapseMode.OnScroll
 	val progress by animateFloatAsState(
 		targetValue = if (scrolled) 0f else 1f,
-		animationSpec = spring(
+		// B-435 (motion lane, 2026-11-14): at the animation speed.
+		animationSpec = spring<Float>(
 			dampingRatio = Spring.DampingRatioLowBouncy,
 			stiffness = Spring.StiffnessMediumLow
-		)
+		).atMotionSpeed()
 	)
 	// NOT `by`: this is read in the DRAW phase below, not at composition.
 	//
@@ -71,12 +76,26 @@ fun RootBottomBar(
 	val surfaceColor = scrimColor
 		?: LocalCoverAmbientBottom.current
 		?: MaterialTheme.colorScheme.surface
+	// Motion lane (2026-11-14): ONE bar on screen while the pages change. Every page's Scaffold draws its own bar
+	// (§7), so a whole-width slide (an album, Settings) carried the old page's bar off and slid a second one in
+	// beside it, while a tab's fade-through faded it out and in. As a shared element across the two pages it stays
+	// where it is, whatever the page change: drawn once, the new page's, from the change's first frame. A page with
+	// no bar takes nothing: the other page's bar then moves with its page, as before. Under the cover's flight.
+	val sharedBar = with(LocalSharedTransitionScope.current) {
+		Modifier.sharedElement(
+			sharedContentState = rememberSharedContentState(ROOT_BOTTOM_BAR_KEY),
+			animatedVisibilityScope = LocalNavAnimatedContentScope.current,
+			boundsTransform = rememberCoverBoundsTransform(),
+			zIndexInOverlay = -1f
+		)
+	}
 	Column(
 		// Frost the backdrop (the screen content marked as the app's blur source) behind the
 		// bar when Expressive blur is on — but ONLY for the docked/full-bleed style. When
 		// detached, the mini-player pill (and the floating capsule nav) frost their own shapes,
 		// so a full-width band here would defeat the floating look.
-		modifier = modifier
+		modifier = sharedBar
+			.then(modifier)
 			.then(if (detached) Modifier else Modifier.expressiveBlurEffect(expressiveBlur))
 			.then(
 				if (detached)
@@ -121,3 +140,6 @@ fun RootBottomBar(
 		)
 	}
 }
+
+/** The bottom bar's shared-element key: the same on every page, so the bar stays put while they change. */
+private const val ROOT_BOTTOM_BAR_KEY = "app.worbus.rootBottomBar"

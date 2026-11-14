@@ -186,7 +186,7 @@ fun ExternalArtistScreen(artistMbid: String, name: String) {
 				}
 				// Rows standing in for the discography while the first scan runs; they roll away
 				// as the real rows arrive.
-				Fold(visible = page == ArtistPageState.Scanning && discography.sections.isEmpty(), tall = true) {
+				Fold(visible = page == ArtistPageState.Scanning && discography.sections.isEmpty()) {
 					ScanningGhosts(artistName)
 				}
 				when (page) {

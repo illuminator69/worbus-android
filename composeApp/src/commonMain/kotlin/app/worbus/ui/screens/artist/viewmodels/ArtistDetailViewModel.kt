@@ -4,7 +4,6 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
@@ -17,7 +16,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -71,12 +69,10 @@ import app.worbus.domain.manager.LbRelease
 import app.worbus.domain.manager.NativeApiManager
 import app.worbus.domain.manager.overrideScanToFollow
 import app.worbus.util.Logger
-import app.worbus.util.albumTitleKey
 import app.worbus.shared.MediaPlayerViewModel
 import app.worbus.ui.components.sheets.aboutRefreshMessage
 import app.worbus.ui.core.UiState
 import kotlinx.coroutines.flow.StateFlow
-import app.worbus.domain.models.displayName
 
 @Immutable
 data class ArtistState(
@@ -331,6 +327,9 @@ class ArtistDetailViewModel(
 	private var scanJob: Job? = null
 	private var metaJob: Job? = null
 
+	/** B-446 follow-up: the page's Room read, shared with the album page's prefetch ([ArtistPagePrefetcher]). */
+	private val reader = ArtistPageReader(artistDao, albumDao, artistRepository, lbBotManager, lbIndexSync)
+
 	/** B-405: the page's slide has ended ([pageSettled]); a page opened on [pageMemory] reads Room after it. */
 	private val settled = CompletableDeferred<Unit>()
 
@@ -338,6 +337,9 @@ class ArtistDetailViewModel(
 	fun pageSettled() {
 		settled.complete(Unit)
 	}
+
+	/** B-446: a page opened with nothing in [pageMemory] shows its first content once its slide has ended. */
+	private val firstShow = FirstShowHold(settled, SEEDED_READ_WAIT_MS)
 
 	/**
 	 * B-405 review L2: the page's own Room read has given it the artist (the state, the mirror observed).
@@ -366,6 +368,8 @@ class ArtistDetailViewModel(
 				loadArtistData()
 			}
 		} else {
+			// B-446: nothing to open on, so the read's answer is shown once the slide has ended, not in it.
+			firstShow.hold()
 			loadArtistData()
 		}
 		viewModelScope.launch {
@@ -449,31 +453,14 @@ class ArtistDetailViewModel(
 	private fun loadArtistData() {
 		viewModelScope.launch {
 			try {
-				val artistEntity = artistDao.getArtistById(artistId)
-					?: throw Exception("Artist not found in database")
-				val domainArtist = artistEntity.toDomainModel()
+				// B-446 follow-up: the read the album page's prefetch also runs (ArtistPageReader).
+				val room = reader.readRoom(artistId)
+				val domainArtist = room.artist
+				val domainAlbums = room.albums
+				val domainSongs = room.topSongs
+				val initialSimilarArtists = room.similarArtists
 
-				var albumsWithSongs =
-					albumDao.getAlbumsByArtist(artistId).firstOrNull() ?: emptyList()
-
-				if (albumsWithSongs.isEmpty()) {
-					albumsWithSongs =
-						albumDao.getAlbumsByArtistName(domainArtist.name).firstOrNull()
-							?: emptyList()
-				}
-
-				val domainAlbums = albumsWithSongs.map { it.toDomainModel() }
-
-				val domainSongs = albumsWithSongs.flatMap { it.songs }
-					.map { it.toDomainModel() }
-					.sortedByDescending { it.playCount }
-					.take(12)
-
-				val initialSimilarArtists = domainArtist.similarArtistIds.mapNotNull { id ->
-					artistDao.getArtistById(id)?.toDomainModel()
-				}
-
-				starred.value = artistRepository.isArtistStarred(domainArtist)
+				starred.value = room.starred
 
 				// Which MusicBrainz artist this is, before the first lb-bot read keys on it.
 				resolveMbid(domainArtist)
@@ -500,6 +487,8 @@ class ArtistDetailViewModel(
 				// beyond Room (the guest albums, the similar artists the server answered) until its own reads
 				// say otherwise, instead of emptying a shelf it shows and filling it again.
 				val shown = (artistState.value as? UiState.Success)?.data
+				// B-446: a page that opened on its spinner composes all of this once it is at rest.
+				firstShow.beforeFirstShow()
 				artistState.value = UiState.Success(
 					ArtistState(
 						artist = domainArtist,
@@ -694,14 +683,9 @@ class ArtistDetailViewModel(
 	 * id — contract §1a), so both sources name the same artist. The MBID is the effective one:
 	 * after an override lb-bot files the artist under the id the user picked.
 	 */
-	private suspend fun readMirror(): LbDiscography? {
-		if (!lbBotManager.isConfigured) return null
-		return runCatching { lbIndexSync.discography(artistId, _artistMbid.value.effective) }
-			.onFailure { Logger.w("ArtistDetailViewModel", "index mirror read failed", it) }
-			.getOrNull()
-			// As [observeMirror]: not the row for the id this page has just left.
-			?.takeUnless { leftMbid.isNotBlank() && it.artistMbid == leftMbid }
-	}
+	private suspend fun readMirror(): LbDiscography? =
+		// As [observeMirror]: not the row for the id this page has just left.
+		reader.readMirror(artistId, _artistMbid.value.effective, leftMbid)
 
 	/**
 	 * Collect the mirror for this artist for the life of the page. Its first emission repeats
@@ -800,43 +784,6 @@ class ArtistDetailViewModel(
 	private suspend fun rebuildDiscography() {
 		val data = lbData ?: return
 		applyLbData(data, mirror = fromMirror)
-	}
-
-	private fun discographyUiFor(
-		data: LbDiscography,
-		sections: List<DiscographySection>,
-		previous: DiscographyUi,
-		mirror: Boolean
-	): DiscographyUi = if (!data.indexed) {
-		DiscographyUi(
-			available = true,
-			indexed = false,
-			indexing = previous.indexing,
-			scanError = previous.scanError,
-			scanShared = previous.scanShared,
-			scanDone = previous.scanDone,
-			scanTotal = previous.scanTotal,
-			ndIdScanRefused = previous.ndIdScanRefused,
-			justScanned = previous.justScanned
-		)
-	} else {
-		DiscographyUi(
-			available = true,
-			indexed = true,
-			indexing = previous.indexing,
-			scanError = previous.scanError,
-			scanShared = previous.scanShared,
-			scannedAt = (data.scannedAt * 1000).toLong(),
-			stale = data.stale,
-			sections = sections,
-			scanDone = previous.scanDone,
-			scanTotal = previous.scanTotal,
-			// lb-bot's own read says it; the mirror cannot, so a mirror row keeps what the read said
-			// for as long as it still looks like "no match" ([discographyUnresolved]).
-			unresolved = if (mirror) previous.unresolved && discographyUnresolved(data) else data.unresolved,
-			ndIdScanRefused = previous.ndIdScanRefused,
-			justScanned = previous.justScanned
-		)
 	}
 
 	/**
@@ -1014,13 +961,7 @@ class ArtistDetailViewModel(
 	 */
 	private fun resolveMbid(artist: DomainArtist): Boolean {
 		val previous = _artistMbid.value
-		val next = ArtistMbidUi(
-			effective = lbBotManager.effectiveArtistMbid(artist.id, artist.musicBrainzId),
-			tag = artist.musicBrainzId.orEmpty(),
-			overridden = lbBotManager.artistOverride(artist.id) != null,
-			// The flow is the hub's word, as of its last advert; the hub toggle is read live.
-			canOverride = lbBotManager.artistOverridesSupported.value && lbBotManager.isConfigured
-		)
+		val next = reader.mbidFor(artist)
 		_artistMbid.value = next
 		if (next.effective == previous.effective) return false
 		leftMbid = previous.effective
@@ -1171,135 +1112,17 @@ class ArtistDetailViewModel(
 	}
 
 	/**
-	 * Build the discography shelf: everything Navidrome has by this artist, plus
-	 * everything lb-bot's MusicBrainz index says exists and the library doesn't.
-	 *
-	 * Navidrome comes first and is never dropped. lb-bot's list is its own view of
-	 * the artist, and an album whose Navidrome record its matcher couldn't claim has
-	 * no row at all — so building the shelf out of lb-bot's list would silently hide
-	 * albums the user owns.
-	 *
-	 * Pure list-crunching, so it runs on [Dispatchers.Default].
-	 *
-	 * `viewModelScope` dispatches on `Main.immediate`, so without this the whole matching pass —
-	 * two maps over every lb-bot release, a pass over every owned album, then a groupBy and a sort
-	 * per section — ran on the UI thread, landing precisely as the discography painted. A prolific
-	 * artist with a large lb-bot index is where that was felt.
+	 * The shelf's sections ([buildDiscographySections], shared with the prefetch, B-446 follow-up), and
+	 * the albums filed under another artist they resolved, which [openPendingSync] accepts.
 	 */
 	private suspend fun buildSections(
 		albums: List<DomainAlbum>,
 		releases: List<LbRelease>
-	): List<DiscographySection> = withContext(Dispatchers.Default) {
-		val claimedRelease = mutableMapOf<String, LbRelease>()
-		val usedRgids = mutableSetOf<String>()
-
-		// Navidrome album ids are authoritative — lb-bot wrote them itself when it
-		// matched the release-group. Fall back to a normalised title only for the rows
-		// it couldn't attach an id to.
-		val byNdId = mutableMapOf<String, LbRelease>()
-		val byTitle = mutableMapOf<String, LbRelease>()
-		for (release in releases) {
-			release.navidromeAlbumIds.forEach { id ->
-				if (id.isNotBlank() && id !in byNdId) byNdId[id] = release
-			}
-			val key = albumTitleKey(release.title)
-			if (key.isNotEmpty() && key !in byTitle) byTitle[key] = release
-		}
-		for (album in albums) {
-			val match = byNdId[album.id] ?: byTitle[albumTitleKey(album.displayName)]
-			if (match != null && usedRgids.add(match.rgid)) claimedRelease[album.id] = match
-		}
-
-		// Now the other direction, for albums Navidrome filed under SOMEBODY ELSE.
-		//
-		// The loop above walks this artist's albums, so an id can only ever match if the album is
-		// already on this page. A collaboration record — downloaded from A's page, tagged so that
-		// Navidrome files it under B — is by definition not, and lb-bot's perfectly good album id
-		// had nothing to match against. The row fell through to `absent` with album == null, which
-		// is precisely `pendingSync`: "Added — syncing", forever, on an album the library holds.
-		//
-		// Room, not `albums`, is the right place to look those up: the album exists, it just isn't
-		// one of this artist's.
-		val knownIds = albums.mapTo(mutableSetOf()) { it.id }
-		val strayIds = releases
-			.filter { it.rgid.isNotBlank() && it.rgid !in usedRgids }
-			.flatMap { release -> release.navidromeAlbumIds.map { it to release } }
-			.filter { (id, _) -> id.isNotBlank() && id !in knownIds }
-		val strayAlbums = if (strayIds.isEmpty()) {
-			emptyList()
-		} else {
-			runCatching { albumDao.getAlbumsByIds(strayIds.map { it.first }.distinct()) }
-				.getOrDefault(emptyList())
-				.map { it.toDomainModel() }
-		}
-		val strayById = strayAlbums.associateBy { it.id }
-		resolvedStrayAlbumIds.addAll(strayById.keys)
-		val crossArtist = mutableListOf<DomainAlbum>()
-		for ((id, release) in strayIds) {
-			val album = strayById[id] ?: continue
-			// One album, one tile: two releases can name the same Navidrome album id, and the
-			// per-rgid guard below would let the second through as a duplicate row.
-			if (album.id in claimedRelease) continue
-			if (!usedRgids.add(release.rgid)) continue
-			claimedRelease[album.id] = release
-			crossArtist.add(album)
-		}
-
-		val owned = (albums + crossArtist).map { album ->
-			val release = claimedRelease[album.id]
-			DiscographyEntry(
-				key = album.id,
-				title = album.displayName,
-				year = release?.year ?: album.year?.toString().orEmpty(),
-				album = album,
-				release = release
-			)
-		}
-		// Every lb-bot row that didn't attach to a Navidrome album, whatever its
-		// status — NOT just the `missing` ones.
-		//
-		// Filtering to `missing` here is what made a filled album vanish. lb-bot
-		// flips its index row to `present` as soon as the files are placed, so a
-		// successful download turned the row non-missing while Room still had no
-		// album for it, and the tile fell out of both lists. A `missing` row that
-		// matched an owned album is still absorbed into it above rather than
-		// dropped, which is what stops the same record rendering twice.
-		// Review m1: `add`, so two lb-bot rows with one rgid make one entry (one key), not two.
-		val absent = releases
-			.filter { it.rgid.isNotBlank() && usedRgids.add(it.rgid) }
-			.map { release ->
-				DiscographyEntry(
-					key = release.rgid,
-					title = release.title,
-					year = release.year,
-					release = release
-				)
-			}
-
-		(owned + absent)
-			.groupBy { sectionType(it) }
-			.map { (type, entries) ->
-				DiscographySection(
-					type = type,
-					entries = entries.sortedWith(
-						compareByDescending<DiscographyEntry> { it.year }
-							.thenBy { it.title.lowercase() }
-					)
-				)
-			}
-			.sortedBy { TYPE_ORDER.indexOf(it.type).takeIf { i -> i >= 0 } ?: TYPE_ORDER.size }
+	): List<DiscographySection> {
+		val built = buildDiscographySections(albumDao, albums, releases)
+		resolvedStrayAlbumIds.addAll(built.strayAlbumIds)
+		return built.sections
 	}
-
-	/**
-	 * lb-bot's `effective_type`, raw and lowercase. The display name is the
-	 * composable's job — turning "ep" into a heading here produced "Ep", and a
-	 * `replaceFirstChar` can never know that this particular vocabulary contains an
-	 * initialism. An album lb-bot doesn't know about is an album.
-	 */
-	private fun sectionType(entry: DiscographyEntry): String =
-		entry.release?.effectiveType?.takeIf { it.isNotBlank() }
-			?: entry.release?.primaryType?.takeIf { it.isNotBlank() }
-			?: "album"
 
 	/**
 	 * Open a `pendingSync` tile — lb-bot has placed the files and Navidrome has not
@@ -1471,15 +1294,5 @@ class ArtistDetailViewModel(
 				flowOf(DownloadStatus.NOT_DOWNLOADED)
 			}
 		}
-	}
-
-	private companion object {
-
-		/** Shelf order, in lb-bot's own vocabulary (`_TYPE_DEFINING_SECONDARY` plus the
-		 *  primary types it browses). Anything new lands at the end rather than
-		 *  disappearing. */
-		val TYPE_ORDER = listOf(
-			"album", "ep", "single", "compilation", "soundtrack", "live", "remix", "demo"
-		)
 	}
 }

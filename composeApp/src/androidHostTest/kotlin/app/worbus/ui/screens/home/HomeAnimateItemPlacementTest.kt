@@ -14,6 +14,9 @@ class HomeAnimateItemPlacementTest {
 
 	private val text = sourceFile("src/commonMain/kotlin/app/worbus/ui/screens/home/HomeScreen.kt").readText()
 
+	/** `animateItem(` or, since the follow-up of 2026-11-14, the speed-aware `animatedItem(` (`ItemMotion.kt`). */
+	private fun animates(s: String): Boolean = Regex("""\banimated?Item\(""").containsMatchIn(s)
+
 	/** The text between the bracket at [open] and its match. */
 	private fun span(open: Int): String {
 		val (o, c) = text[open] to if (text[open] == '(') ')' else '}'
@@ -36,8 +39,8 @@ class HomeAnimateItemPlacementTest {
 			val bodyOpen = text.indexOf('{', argsOpen + args.length + 1)
 			val body = span(bodyOpen)
 			val shelf = m.groupValues[1]
-			assertTrue("animateItem(" in args, "$shelf: Fold does not take animateItem in its arguments")
-			assertTrue("animateItem(" !in body, "$shelf: animateItem inside Fold is inert")
+			assertTrue(animates(args), "$shelf: Fold does not take animateItem in its arguments")
+			assertTrue(!animates(body), "$shelf: animateItem inside Fold is inert")
 		}
 	}
 
@@ -58,8 +61,8 @@ class HomeAnimateItemPlacementTest {
 			val bodyOpen = text.indexOf('{', argsOpen + args.length + 1)
 			val body = span(bodyOpen)
 			val item = m.groupValues[1]
-			assertTrue("animateItem(" in args, "$item: its root Box does not take animateItem")
-			assertTrue("animateItem(" !in body, "$item: animateItem below the root is inert")
+			assertTrue(animates(args), "$item: its root Box does not take animateItem")
+			assertTrue(!animates(body), "$item: animateItem below the root is inert")
 		}
 	}
 

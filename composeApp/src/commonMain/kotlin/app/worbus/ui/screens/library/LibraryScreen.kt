@@ -1,11 +1,6 @@
 package app.worbus.ui.screens.library
 
-import app.worbus.ui.util.motionMs
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import app.worbus.ui.util.ContentSwap
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -129,9 +124,6 @@ import kotlin.time.Clock
  * each has a home of its own (CLAUDE.md §1).
  */
 
-/** How long the bodies cross-fade on a chip change. */
-private const val CHIP_FADE_MS = 220
-
 /** A second tap of the Library tab within this long of the first clears the chip. */
 private const val SECOND_TAP_MS = 2_500L
 
@@ -203,7 +195,10 @@ fun LibraryScreen() {
 						label = { option -> option?.let { stringResource(it.label) }.orEmpty() },
 						onSelect = { chip = if (it == chip) null else it }
 					)
-					SortRow(chip, onAddRadio = { radioAdd = true })
+					// The chip's own header line goes with its body (B-432): it swapped in one frame, ahead of it.
+					ContentSwap(chip, contentAlignment = Alignment.CenterStart, label = "librarySortRow") { shown ->
+						SortRow(shown, onAddRadio = { radioAdd = true })
+					}
 				}
 			},
 			bottomBar = {
@@ -212,13 +207,10 @@ fun LibraryScreen() {
 			}
 		) { inner ->
 			val connection = scrollBehavior.nestedScrollConnection
-			// I-075 review L4: at the animation speed.
-			val chipFadeMs = motionMs(CHIP_FADE_MS)
-			AnimatedContent(
-				targetState = chip,
-				transitionSpec = { fadeIn(tween(chipFadeMs)) togetherWith fadeOut(tween(chipFadeMs)) },
-				label = "libraryChip"
-			) { shown ->
+			// B-432 (motion lane, 2026-11-14): the old body goes, then the new one comes (ContentSwap.kt); they
+			// cross-faded over each other for 220 ms. Each body keeps its saved state across a switch, so Recents'
+			// arrival gate holds and its tiles do not arrive again on the way back (each list keeps its place, P5).
+			ContentSwap(chip, keepState = true, label = "libraryChip") { shown ->
 				when (shown) {
 					null -> RecentsBody(viewModel, recents, inner, recentsState, connection)
 					LibraryChip.Playlists -> PlaylistListBody(playlistListViewModel(false), inner, scrollConnection = connection)

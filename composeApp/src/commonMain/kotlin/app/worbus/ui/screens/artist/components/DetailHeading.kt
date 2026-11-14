@@ -73,7 +73,7 @@ fun ArtistDetailScreenHeading(
 		Box(
 			modifier = Modifier
 				.fillMaxWidth()
-				.height((400.dp / (maxWidth / 300.dp)) + innerPadding.calculateTopPadding())
+				.height(artistHeroHeight(maxWidth, innerPadding))
 				.background(MaterialTheme.colorScheme.surfaceContainer)
 		) {
 			CoverArt(

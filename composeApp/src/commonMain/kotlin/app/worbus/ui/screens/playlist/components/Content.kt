@@ -15,6 +15,7 @@ import app.worbus.ui.components.common.ContentUnavailable
 import app.worbus.ui.components.layouts.artGridPlaceholder
 import app.worbus.ui.core.UiState
 import app.worbus.ui.screens.playlist.components.PlaylistListScreenGridItem
+import app.worbus.ui.util.animatedItem
 
 fun LazyGridScope.playlistListScreenContent(
 	state: UiState<List<DomainPlaylist>>,
@@ -32,7 +33,7 @@ fun LazyGridScope.playlistListScreenContent(
 		itemsIndexed(data, { _, it -> it.id }) { index, playlist ->
 			if (selectedViewMode == ListViewMode.Grid) {
 				PlaylistListScreenGridItem(
-					modifier = Modifier.animateItem(),
+					modifier = animatedItem(),
 					tab = "playlists",
 					playlist = playlist,
 					selected = playlist == selectedPlaylist,
@@ -45,7 +46,7 @@ fun LazyGridScope.playlistListScreenContent(
 				)
 			} else {
 				PlaylistListScreenListItem(
-					modifier = Modifier.animateItem(),
+					modifier = animatedItem(),
 					index = index,
 					count = data.size,
 					playlist = playlist,

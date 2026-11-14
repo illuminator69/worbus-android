@@ -58,6 +58,7 @@ import app.worbus.ui.screens.savedqueues.trackCountLabel
 import app.worbus.ui.util.arrive
 import app.worbus.ui.util.rememberArrivalGate
 import app.worbus.ui.util.withoutTop
+import app.worbus.ui.util.animatedItem
 
 /**
  * Recents (board Library): Liked pinned, then what was used last, one row each in the app's
@@ -114,7 +115,7 @@ fun LibraryRecents(
 		if (rows.isEmpty() || rows.all { it.kind == EntryKind.Liked }) {
 			itemsIndexed(rows, key = { _, it -> it.key }) { index, entry ->
 				RecentRow(entry, segmentedShapes(index, rows.size), busy = false, onOpen, onMenu,
-					Modifier.arrive(gate, entry.key, index).animateItem())
+					Modifier.arrive(gate, entry.key, index).then(animatedItem()))
 			}
 			item(key = "empty") {
 				ContentUnavailable(
@@ -133,7 +134,7 @@ fun LibraryRecents(
 				busy = entry.key == busyKey,
 				onOpen = onOpen,
 				onMenu = onMenu,
-				modifier = Modifier.arrive(gate, entry.key, index).animateItem()
+				modifier = Modifier.arrive(gate, entry.key, index).then(animatedItem())
 			)
 		}
 	}

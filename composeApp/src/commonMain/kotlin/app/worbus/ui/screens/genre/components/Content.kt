@@ -12,6 +12,7 @@ import app.worbus.icons.Icons
 import app.worbus.icons.outlined.Genre
 import app.worbus.ui.components.common.ContentUnavailable
 import app.worbus.ui.core.UiState
+import app.worbus.ui.util.animatedItem
 
 fun LazyGridScope.genreListScreenContent(
 	state: UiState<List<DomainGenre>>
@@ -20,7 +21,7 @@ fun LazyGridScope.genreListScreenContent(
 	if (data.isNotEmpty()) {
 		items(data, { it.name }) { genre ->
 			GenreListScreenCard(
-				modifier = Modifier.animateItem(),
+				modifier = animatedItem(),
 				genre = genre
 			)
 		}

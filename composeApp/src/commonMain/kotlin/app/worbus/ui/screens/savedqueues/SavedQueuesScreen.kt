@@ -2,6 +2,9 @@
 
 package app.worbus.ui.screens.savedqueues
 
+import app.worbus.ui.util.SwapRows
+import app.worbus.ui.util.rememberRowSwap
+import app.worbus.ui.util.chipTapped
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.plus
 import androidx.compose.foundation.lazy.LazyColumn
@@ -101,6 +104,7 @@ import app.worbus.ui.screens.savedqueues.components.SavedQueuePreviewSheet
 import app.worbus.ui.screens.savedqueues.viewmodels.SavedQueueMessage
 import app.worbus.ui.screens.savedqueues.viewmodels.SavedQueuesViewModel
 import kotlinx.coroutines.isActive
+import app.worbus.ui.util.animatedItem
 
 /**
  * The Symfonium-style "select media queue" list: every queue Worbus has auto-captured (rolling cache
@@ -171,6 +175,8 @@ fun SavedQueuesScreen() {
 	// KEY in place), so every row that came in above it did so out of sight and the chip looked inert;
 	// and rows above the view flew in through the top bar (B-161).
 	val listState = rememberLazyListState()
+	// Review L7: only a chip's change fades the rows through; a hub update keeps the list's own motion.
+	val rowSwap = rememberRowSwap()
 
 	var sheetTarget by remember { mutableStateOf<SavedQueueEntity?>(null) }
 	val preferenceManager = koinInject<PreferenceManager>()
@@ -224,7 +230,7 @@ fun SavedQueuesScreen() {
 							if (kind == null) stringResource(Res.string.filter_all) else queueKindLabel(kind)
 						},
 						onSelect = {
-							listState.requestScrollToItem(0)
+							rowSwap.chipTapped(listState)
 							kindFilter = it
 						},
 						contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 8.dp)
@@ -260,7 +266,9 @@ fun SavedQueuesScreen() {
 				description = stringResource(Res.string.info_no_saved_queues_hint)
 			)
 
-			else -> LazyColumn(
+			// The chips filter one list: its rows fade through (ContentSwap.kt's SwapRows), the leaving ones out first,
+			// then the staying ones slide as the new ones fade in (I-039's motion, never both at once).
+			else -> SwapRows(rowSwap, visibleQueues) { LazyColumn(
 				state = listState,
 				modifier = Modifier
 					.padding(top = innerPadding.calculateTopPadding())
@@ -282,10 +290,10 @@ fun SavedQueuesScreen() {
 							backStack.remove(Screen.SavedQueues)
 						},
 						onMenu = { sheetTarget = queue },
-						modifier = Modifier.animateItem()
+						modifier = animatedItem()
 					)
 				}
-			}
+			} }
 		}
 	}
 

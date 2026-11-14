@@ -15,7 +15,9 @@ import com.kyant.capsule.ContinuousRoundedRectangle
 import org.koin.compose.koinInject
 import app.worbus.domain.manager.PreferenceManager
 import app.worbus.domain.models.settings.AnimationStyle
+import app.worbus.ui.util.LocalItemMotion
 import app.worbus.ui.util.atSpeed
+import app.worbus.ui.util.itemMotionOf
 
 /**
  * Built once, not per composition.
@@ -78,12 +80,18 @@ fun NavicTheme(
 		content
 	}
 
-	MaterialExpressiveTheme(
-		colorScheme = colorScheme
-			?: chosenScheme,
-		motionScheme = motionScheme,
-		typography = typography(),
-		shapes = NavicShapes,
-		content = themedContent
-	)
+	// Follow-up 2026-11-14: the lazy lists' item motion (`animateItem`, through `animatedItem`) follows the speed
+	// the same way (`ItemMotion.kt`).
+	val itemMotion = remember(preferenceManager.motionSpeed) { itemMotionOf(preferenceManager.motionSpeed) }
+
+	CompositionLocalProvider(LocalItemMotion provides itemMotion) {
+		MaterialExpressiveTheme(
+			colorScheme = colorScheme
+				?: chosenScheme,
+			motionScheme = motionScheme,
+			typography = typography(),
+			shapes = NavicShapes,
+			content = themedContent
+		)
+	}
 }

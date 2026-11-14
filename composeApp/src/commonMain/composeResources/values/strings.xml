@@ -1784,4 +1784,6 @@
 	<string name="about_credit">Worbus for Android is a fork of Navic by paige.</string>
 	<string name="about_licence">Licensed GPL-3.0, like the original.</string>
 	<string name="about_navidrome">Worbus is not affiliated with Navidrome.</string>
+	<!-- B-446 follow-up: the artist page's placeholder, read by a screen reader -->
+	<string name="info_loading_page">Loading</string>
 </resources>

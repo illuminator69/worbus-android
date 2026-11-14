@@ -230,8 +230,8 @@ internal fun avatarMenuItems(
 	 */
 	admin: Boolean = true,
 	/**
-	 * B-406 (second re-walk): Source history's badge, this phone's own failures and picks
-	 * ([app.worbus.domain.manager.sourceHistoryBadge]), as the desktop's Activity badge. [attentionCount] is
+	 * B-406 (second re-walk): Source history's badge, every client's failures and picks as Source history draws
+	 * them ([app.worbus.domain.manager.sourceHistoryBadge]; follow-up 2026-11-14). [attentionCount] is
 	 * Library Matches' (the desktop's to-fix number).
 	 */
 	sourceHistoryCount: Int = 0
@@ -378,6 +378,10 @@ fun AvatarMenuDrawer(content: @Composable () -> Unit) {
 	// 30 s). The drawer's content is composed while closed too, so it is the open state that asks.
 	LaunchedEffect(open) {
 		if (open) lbBot.refreshAttention()
+	}
+	// Follow-up 2026-11-14: and lb-bot's request list, for Source history's Need you badge (at most every 30 s).
+	LaunchedEffect(open) {
+		if (open) lbBot.refreshActivity()
 	}
 	// The other way: the scrim, a drag or Back closing the drawer says so to the controller. The
 	// TARGET, not the current value, so a drawer on its way open is not read as closed.

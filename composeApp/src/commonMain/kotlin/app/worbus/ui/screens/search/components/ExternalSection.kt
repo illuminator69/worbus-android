@@ -29,6 +29,7 @@ import app.worbus.ui.util.Fold
 import app.worbus.ui.util.arrive
 import app.worbus.ui.components.sheets.lbUnavailableRes
 import app.worbus.ui.components.sheets.rememberLbTooOld
+import app.worbus.ui.util.animatedItem
 
 /** How many ghost rows stand in while a lookup is out: the first answer usually fills them. */
 private const val GHOST_ROWS = 3
@@ -55,7 +56,7 @@ fun LazyGridScope.externalSection(
 	item(span = { GridItemSpan(maxLineSpan) }, key = "x-header", contentType = "header") {
 		SearchSectionHeader(
 			title = stringResource(Res.string.search_not_in_library),
-			modifier = Modifier.animateItem()
+			modifier = animatedItem()
 		) {
 			if (looking) SearchPill(stringResource(Res.string.search_looking), busy = true)
 		}
@@ -63,7 +64,7 @@ fun LazyGridScope.externalSection(
 	// On a line of its own: beside the title it cut "Not in your library" short (seen on the AVD).
 	if (failed && !looking) {
 		item(span = { GridItemSpan(maxLineSpan) }, key = "x-failed", contentType = "note") {
-			Box(Modifier.animateItem().fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
+			Box(animatedItem().fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
 				SearchPill(
 					// NB2: too old for this user says so (R26), not "couldn't reach".
 					stringResource(lbUnavailableRes(rememberLbTooOld(), Res.string.search_lookup_failed)),
@@ -79,7 +80,7 @@ fun LazyGridScope.externalSection(
 	for (slot in 0 until GHOST_ROWS) {
 		val row = rows.getOrNull(slot)
 		item(span = { GridItemSpan(maxLineSpan) }, key = "x-slot-$slot", contentType = "external") {
-			Fold(visible = row != null || looking, modifier = Modifier.animateItem()) {
+			Fold(visible = row != null || looking, modifier = animatedItem()) {
 				val fade = rememberFoldMotion()
 				AnimatedContent(
 					targetState = row,
@@ -101,7 +102,7 @@ fun LazyGridScope.externalSection(
 		item(span = { GridItemSpan(maxLineSpan) }, key = row.key, contentType = "external") {
 			ExternalRowView(
 				row, index, count, onOpenArtist, onOpenAlbum,
-				modifier = Modifier.animateItem().arrive(gate, row.key, i)
+				modifier = animatedItem().arrive(gate, row.key, i)
 			)
 		}
 	}

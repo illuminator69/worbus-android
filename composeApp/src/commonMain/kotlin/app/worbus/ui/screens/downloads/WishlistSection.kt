@@ -54,6 +54,7 @@ import app.worbus.ui.components.common.SongRowDefaults
 import app.worbus.ui.components.common.SwipeToDismissBox
 import app.worbus.ui.screens.downloads.viewmodels.WishlistUi
 import app.worbus.ui.components.sheets.lbUnavailableRes
+import app.worbus.ui.util.animatedItem
 
 /**
  * The wishlist: what you asked for and nobody had.
@@ -115,7 +116,7 @@ internal fun LazyListScope.wishlistSection(
 				onClick = { onOpen(item) },
 				onRemove = { onRemove(item) },
 				downloadsOn = downloadsOn,
-				modifier = Modifier.animateItem()
+				modifier = animatedItem()
 			)
 		}
 	}

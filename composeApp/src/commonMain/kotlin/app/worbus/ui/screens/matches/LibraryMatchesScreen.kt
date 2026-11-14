@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import app.worbus.ui.util.ContentSwap
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -264,7 +265,19 @@ fun LibraryMatchesScreen(
 			},
 			modifier = Modifier.padding(top = innerPadding.calculateTopPadding())
 		) {
-		LazyColumn(
+		// B-431 (motion lane, 2026-11-14): a chip swaps the whole list, old out then new in (ContentSwap.kt). It was
+		// one list whose rows were swapped: To fix's rows (the only ones with item motion) faded out over the next
+		// section's, drawn at once, and the list kept its scroll. Each section is a list of its own now, composed
+		// fresh, so it opens at its top and no row animates across sections.
+		// Review L6: the page's own first choice is no chip tap. Opened with no section, it answers Artists while
+		// the To check rows and the To fix number are still loading, then To check or To fix when they land, and the
+		// swap faded Artists out and the chosen section in, right after the page's push: a change nobody made. So
+		// nothing is shown until that choice is made on known numbers (`matchesFirstChoiceFinal`, the rule that
+		// then keeps it for the visit) or the user picks a chip, and the first section shown comes in at once.
+		// Only a change from one section to another fades through.
+		val sectionShown = section.takeIf { chosen != null || firstChoiceFinal }
+		ContentSwap(sectionShown, Modifier.fillMaxSize(), animate = { from, _ -> from != null }, label = "matchesSection") { section ->
+		if (section != null) LazyColumn(
 			modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
 			contentPadding = innerPadding.withoutTop() + PaddingValues(top = 8.dp, bottom = 24.dp)
 		) {
@@ -401,6 +414,7 @@ fun LibraryMatchesScreen(
 					}
 				}
 			}
+		}
 		}
 		}
 	}

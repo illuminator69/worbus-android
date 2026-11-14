@@ -1,5 +1,8 @@
 package app.worbus.ui.screens.artist.viewmodels
 
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.withTimeoutOrNull
+
 /**
  * B-405 (the owner's re-walk, 2026-11-13): what an artist's page last showed, so the next page of the
  * same artist opens on it.
@@ -10,7 +13,8 @@ package app.worbus.ui.screens.artist.viewmodels
  * were composed mid-slide when the read landed, one 70-90 ms frame on the VM AVD and a second stage the
  * owner saw. The new page now starts from this, and reads Room again only once its slide has ended.
  *
- * Process memory only, a few artists. Main-thread only (view models write and read it there).
+ * Process memory only, a few artists (8 shown, and 4 read ahead by the album page, B-446 follow-up).
+ * Main-thread only (view models and the prefetcher write and read it there).
  */
 class ArtistPageMemory(
 	/**
@@ -22,30 +26,62 @@ class ArtistPageMemory(
 	private val session: () -> Long = { 0L }
 ) {
 	private val pages = LinkedHashMap<String, ArtistPageSnapshot>()
+
+	/**
+	 * B-446 follow-up: pages read ahead by [ArtistPagePrefetcher] (the album page's artist), in a lane of
+	 * their own beside the pages shown, so a prefetch never pushes out an artist the user has visited: a
+	 * visited page's state is the richer one (the server's similar artists, "Appears on", the network
+	 * discography), and its next open is the user's own revisit. A page opened on a prefetch writes what it
+	 * shows through [put], which moves the artist to the shown lane.
+	 */
+	private val prefetched = LinkedHashMap<String, ArtistPageSnapshot>()
 	private var keptFor: Long? = null
 
 	operator fun get(artistId: String): ArtistPageSnapshot? {
 		forgetAnotherSession()
-		return pages[artistId]
+		return pages[artistId] ?: prefetched[artistId]
 	}
 
 	fun put(artistId: String, snapshot: ArtistPageSnapshot) {
 		forgetAnotherSession()
+		prefetched.remove(artistId)
 		pages.remove(artistId)
 		pages[artistId] = snapshot
 		while (pages.size > KEPT) pages.remove(pages.keys.first())
+	}
+
+	/** The session a read starts in: [putPrefetched] drops a read that finished in another one. */
+	val currentSession: Long get() = session()
+
+	/** True when a page of [artistId] can open on what is kept (shown or read ahead). */
+	fun holds(artistId: String): Boolean = get(artistId) != null
+
+	/**
+	 * B-446 follow-up: a page read ahead, [readIn] the session its read started in. Kept unless that
+	 * session has ended (a logout or a switch during the read: it is the old one's data) or a shown page of
+	 * the artist is kept (it is newer and richer). At most [KEPT_PREFETCHED], the oldest going first.
+	 */
+	fun putPrefetched(artistId: String, snapshot: ArtistPageSnapshot, readIn: Long): Boolean {
+		forgetAnotherSession()
+		if (readIn != keptFor || artistId in pages) return false
+		prefetched.remove(artistId)
+		prefetched[artistId] = snapshot
+		while (prefetched.size > KEPT_PREFETCHED) prefetched.remove(prefetched.keys.first())
+		return true
 	}
 
 	private fun forgetAnotherSession() {
 		val now = session()
 		if (keptFor != now) {
 			pages.clear()
+			prefetched.clear()
 			keptFor = now
 		}
 	}
 
 	private companion object {
 		const val KEPT = 8
+		const val KEPT_PREFETCHED = 4
 	}
 }
 
@@ -81,3 +117,32 @@ fun DiscographyUi.seeded(): DiscographyUi = DiscographyUi(
 	sections = sections,
 	unresolved = unresolved
 )
+
+/**
+ * B-446 (the owner, 2026-11-14: "the stutter ... now happens when opening ... an artist page for the first
+ * time. it's gone after the pages are cached"): an artist page with nothing in [ArtistPageMemory] slid in on
+ * its spinner, and its Room read landed during the slide, so the whole page (hero, top songs, the shelf, the
+ * artist photo's scheme) was composed and measured in one frame of the transition, beside the shared
+ * transition's lookahead pass: one 60-250 ms frame mid-slide on the VM AVD. A page opened on the memory
+ * composes in its first frame, before anything moves, and slides smoothly; that is the cached open.
+ *
+ * So a page that opened on nothing ([hold]) shows its first content only once its slide has ended
+ * ([settled], the page's `OnPageSettled`), at most [waitMs] after the read: the spinner slides in as before
+ * and the page fades in at rest. Once only: everything after the first show (the server's similar artists, a
+ * star) is shown as it comes.
+ */
+class FirstShowHold(private val settled: Deferred<Unit>, private val waitMs: Long) {
+	private var holding = false
+
+	/** The page opened with nothing to show: its first content waits for the slide. */
+	fun hold() {
+		holding = true
+	}
+
+	/** Before the page's first content: waits for the slide to end (at most [waitMs]) when held, once. */
+	suspend fun beforeFirstShow() {
+		if (!holding) return
+		holding = false
+		withTimeoutOrNull(waitMs) { settled.await() }
+	}
+}

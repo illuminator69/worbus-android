@@ -49,17 +49,18 @@ class SourceHistoryTest {
 	@Test
 	fun aRetriedRequestIsRunningAgainstAStaleFailedRow() {
 		// B2 (audit L4b-01): Retry starts the fill again on this device; lb-bot's row still says failed
-		// until the next read. The ledger is newer for the rows it names, as on Needs attention.
+		// until the next read. The ledger is newer for the rows it names, as on Needs attention. Follow-ups
+		// review L2: "newer" by the rows' own times (the retry started after lb-bot's failure, at 20 s).
 		val rows = mergeHistory(
 			listOf(req("rel-1", "failed", 10.0)),
-			listOf(entry("rg-a", settled = false, state = "searching", releaseMbid = "rel-1"))
+			listOf(entry("rg-a", settled = false, state = "searching", releaseMbid = "rel-1", startedAt = 20_000L))
 		)
 		assertEquals(1, rows.size)
 		assertTrue(rows[0].running)
 		assertEquals("searching", rows[0].state)
 		assertEquals(listOf("rg-a"), historyGroups(rows).running.map { it.key })
 		for (terminal in listOf("placed", "verified", "cancelled")) {
-			val r = mergeHistory(listOf(req("rel-1", terminal, 10.0)), listOf(entry("rg-a", settled = false, state = "queued", releaseMbid = "rel-1")))
+			val r = mergeHistory(listOf(req("rel-1", terminal, 10.0)), listOf(entry("rg-a", settled = false, state = "queued", releaseMbid = "rel-1", startedAt = 20_000L)))
 			assertTrue(r[0].running, "against a $terminal row")
 		}
 	}
@@ -192,7 +193,7 @@ class SourceHistoryTest {
 		// B2: the 10 s re-read is what replaces lb-bot's stale failed row; a running row lb-bot lists
 		// drives it, whoever else holds the row. A device-only running row needs no read.
 		val retried = historyGroups(mergeHistory(listOf(req("rel-1", "failed", 10.0)),
-			listOf(entry("rg-a", settled = false, state = "searching", releaseMbid = "rel-1"))))
+			listOf(entry("rg-a", settled = false, state = "searching", releaseMbid = "rel-1", startedAt = 20_000L))))
 		assertTrue(historyRereadWanted(retried))
 		val deviceOnly = historyGroups(mergeHistory(emptyList(), listOf(entry("rg-b", settled = false))))
 		assertFalse(historyRereadWanted(deviceOnly))
