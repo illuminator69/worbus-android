@@ -4,6 +4,7 @@ import app.worbus.ui.util.motionMs
 import app.worbus.data.database.entities.bySongId
 import app.worbus.ui.util.WASH_MS
 import app.worbus.ui.screens.collection.components.GapBox
+import app.worbus.ui.screens.artist.PrefetchArtistPage
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalUriHandler
@@ -136,6 +137,12 @@ fun CollectionDetailScreen(
 	val selectedAlbum by viewModel.selectedAlbum.collectAsState()
 	val isOnline by viewModel.isOnline.collectAsState()
 	val starred by viewModel.starred.collectAsState()
+	// B-446 follow-up: the album's artist link opens a page read ahead once this one has slid in and shows
+	// its album, so that page is complete in its first frame (the cached open), never a placeholder.
+	PrefetchArtistPage(
+		artistId = (collection as? DomainAlbum)?.artistId,
+		contentShown = collection != null
+	)
 
 	var shareId by remember { mutableStateOf<String?>(null) }
 	var shareExpiry by remember { mutableStateOf<Duration?>(null) }

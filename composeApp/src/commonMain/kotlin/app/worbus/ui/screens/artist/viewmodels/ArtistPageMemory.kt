@@ -13,7 +13,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  * were composed mid-slide when the read landed, one 70-90 ms frame on the VM AVD and a second stage the
  * owner saw. The new page now starts from this, and reads Room again only once its slide has ended.
  *
- * Process memory only, a few artists. Main-thread only (view models write and read it there).
+ * Process memory only, a few artists (8 shown, and 4 read ahead by the album page, B-446 follow-up).
+ * Main-thread only (view models and the prefetcher write and read it there).
  */
 class ArtistPageMemory(
 	/**
@@ -25,30 +26,62 @@ class ArtistPageMemory(
 	private val session: () -> Long = { 0L }
 ) {
 	private val pages = LinkedHashMap<String, ArtistPageSnapshot>()
+
+	/**
+	 * B-446 follow-up: pages read ahead by [ArtistPagePrefetcher] (the album page's artist), in a lane of
+	 * their own beside the pages shown, so a prefetch never pushes out an artist the user has visited: a
+	 * visited page's state is the richer one (the server's similar artists, "Appears on", the network
+	 * discography), and its next open is the user's own revisit. A page opened on a prefetch writes what it
+	 * shows through [put], which moves the artist to the shown lane.
+	 */
+	private val prefetched = LinkedHashMap<String, ArtistPageSnapshot>()
 	private var keptFor: Long? = null
 
 	operator fun get(artistId: String): ArtistPageSnapshot? {
 		forgetAnotherSession()
-		return pages[artistId]
+		return pages[artistId] ?: prefetched[artistId]
 	}
 
 	fun put(artistId: String, snapshot: ArtistPageSnapshot) {
 		forgetAnotherSession()
+		prefetched.remove(artistId)
 		pages.remove(artistId)
 		pages[artistId] = snapshot
 		while (pages.size > KEPT) pages.remove(pages.keys.first())
+	}
+
+	/** The session a read starts in: [putPrefetched] drops a read that finished in another one. */
+	val currentSession: Long get() = session()
+
+	/** True when a page of [artistId] can open on what is kept (shown or read ahead). */
+	fun holds(artistId: String): Boolean = get(artistId) != null
+
+	/**
+	 * B-446 follow-up: a page read ahead, [readIn] the session its read started in. Kept unless that
+	 * session has ended (a logout or a switch during the read: it is the old one's data) or a shown page of
+	 * the artist is kept (it is newer and richer). At most [KEPT_PREFETCHED], the oldest going first.
+	 */
+	fun putPrefetched(artistId: String, snapshot: ArtistPageSnapshot, readIn: Long): Boolean {
+		forgetAnotherSession()
+		if (readIn != keptFor || artistId in pages) return false
+		prefetched.remove(artistId)
+		prefetched[artistId] = snapshot
+		while (prefetched.size > KEPT_PREFETCHED) prefetched.remove(prefetched.keys.first())
+		return true
 	}
 
 	private fun forgetAnotherSession() {
 		val now = session()
 		if (keptFor != now) {
 			pages.clear()
+			prefetched.clear()
 			keptFor = now
 		}
 	}
 
 	private companion object {
 		const val KEPT = 8
+		const val KEPT_PREFETCHED = 4
 	}
 }
 
