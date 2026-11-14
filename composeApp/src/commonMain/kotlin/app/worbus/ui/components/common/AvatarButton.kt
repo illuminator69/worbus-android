@@ -31,6 +31,7 @@ import app.worbus.domain.manager.PreferenceManager
 import app.worbus.domain.manager.ShellController
 import app.worbus.domain.manager.attentionBadge
 import app.worbus.domain.manager.attentionDotShown
+import app.worbus.domain.manager.sourceHistoryMenuBadge
 import app.worbus.ui.theme.warning
 
 /**
@@ -52,12 +53,17 @@ fun AvatarButton(modifier: Modifier = Modifier) {
 	val lbBot = koinInject<LbBotManager>()
 	val badge by lbBot.attentionBadge.collectAsState()
 	// B-406 (second re-walk): the dot stands for the menu's two badges, Library Matches' to-fix number and
-	// Source history's (this phone's own failures and picks), as the desktop's sidebar has both.
+	// Source history's (this phone's own failures and picks), as the desktop's sidebar has both. B-457: Source
+	// history's only while its row is in the menu (not while lb-bot's downloads are off).
 	val sourceHistory by lbBot.sourceHistoryBadge.collectAsState()
+	val downloads by lbBot.downloads.collectAsState()
 
 	// Worbus P2: Needs attention is an admin page, so its dot is an admin's too.
 	val roles by lbBot.roles.collectAsState()
-	val attention = attentionDotShown(badge + sourceHistory, preferenceManager.showAttentionDot, lbBot.isConfigured, roles.admin)
+	val attention = attentionDotShown(
+		badge + sourceHistoryMenuBadge(sourceHistory, lbBot.isConfigured, downloads),
+		preferenceManager.showAttentionDot, lbBot.isConfigured, roles.admin
+	)
 	val label = stringResource(
 		if (attention) Res.string.info_open_menu_attention else Res.string.action_open_menu
 	)

@@ -398,8 +398,8 @@ class LbBotManager(
 
 	/**
 	 * Source history's menu badge: Need you's number, every client's failures and picks (follow-up 2026-11-14, the
-	 * desktop's rule, [sourceHistoryBadge]). With [attentionBadge] it lights the avatar's dot. Not turned off with
-	 * downloading (review L3). lb-bot's half is read by [refreshActivity] and [refreshAttention], and is counted only
+	 * desktop's rule, [sourceHistoryBadge]). With [attentionBadge] it lights the avatar's dot. The menu and the dot
+	 * drop it while downloading is off ([sourceHistoryMenuBadge], B-457), as the menu has no Source history row then. lb-bot's half is read by [refreshActivity] and [refreshAttention], and is counted only
 	 * while this user may read it ([adminReadsAllowed], review M1 of the follow-ups).
 	 */
 	val sourceHistoryBadge: StateFlow<Int> = combine(_ledger, _activityAnswer, _attention, _dismissed, _roles) { ledger, answer, attention, dismissed, roles ->

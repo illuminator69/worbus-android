@@ -1,5 +1,9 @@
 package app.worbus.ui.components.sheets
 
+import app.worbus.domain.manager.LbDownloads
+import app.worbus.domain.manager.attentionDotShown
+import app.worbus.domain.manager.sourceHistoryMenuBadge
+import app.worbus.ui.screens.wishlist.sourceHistoryShowsWishlist
 import app.worbus.ui.navigation.Screen
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -144,12 +148,24 @@ class AvatarMenuItemsTest {
 		val items = avatarMenuItems(lbConfigured = true, canShare = true, attentionCount = 41, sourceHistoryCount = 3)
 		assertEquals(41, items.link(AvatarMenuIds.LIBRARY_MATCHES).badge)
 		assertEquals(3, items.link(AvatarMenuIds.SOURCE_HISTORY).badge)
-		val off = avatarMenuItems(lbConfigured = true, canShare = true, attentionCount = 0, downloadsOn = false, sourceHistoryCount = 3)
-		// Review L3 (second re-walk): off, the row stays while this phone's own failures are badged, as the
-		// desktop keeps Activity; with none, it goes.
-		assertEquals(3, off.link(AvatarMenuIds.SOURCE_HISTORY).badge)
-		val offNone = avatarMenuItems(lbConfigured = true, canShare = true, attentionCount = 0, downloadsOn = false, sourceHistoryCount = 0)
-		assertFalse(AvatarMenuIds.SOURCE_HISTORY in offNone.flat().ids(), "off and nothing badged: no Source history row")
+		// B-457 (the owner's ruling, 2026-11-14): off, Source history's page is the Wishlist (B-450 moved the failed
+		// albums to Need you, which it does not show), so the row and its badge go, badged or not. Review L3 had kept it.
+		for (count in listOf(0, 3)) {
+			val off = avatarMenuItems(lbConfigured = true, canShare = true, attentionCount = 0, downloadsOn = false, sourceHistoryCount = count)
+			assertFalse(AvatarMenuIds.SOURCE_HISTORY in off.flat().ids(), "off with $count badged: no Source history row")
+		}
+	}
+
+	/** B-457: the avatar's dot stands for the menu's badges, so a Source history row that is not drawn lights nothing. */
+	@Test
+	fun b457_theDotDoesNotCountAHiddenSourceHistory() {
+		assertEquals(3, sourceHistoryMenuBadge(3, configured = true, downloads = LbDownloads.ON))
+		assertEquals(3, sourceHistoryMenuBadge(3, configured = true, downloads = LbDownloads.UNKNOWN))
+		assertEquals(0, sourceHistoryMenuBadge(3, configured = true, downloads = LbDownloads.OFF))
+		assertEquals(0, sourceHistoryMenuBadge(3, configured = false, downloads = LbDownloads.ON))
+		assertFalse(attentionDotShown(0 + sourceHistoryMenuBadge(2, true, LbDownloads.OFF), preference = true, configured = true))
+		// The rule the menu's row follows is the page's: hidden exactly while Source history would be the Wishlist.
+		for (d in LbDownloads.entries) assertEquals(sourceHistoryShowsWishlist(d), sourceHistoryMenuBadge(1, true, d) == 0, "$d")
 	}
 
 	@Test

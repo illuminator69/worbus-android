@@ -109,12 +109,13 @@ class SecondRewalkReviewTest {
 	// ---- L3 ------------------------------------------------------------------------------------- //
 
 	@Test
-	fun l3_downloadsOffKeepsThisPhonesFailuresBadgedAndReachable() {
+	fun l3_b457_downloadsOffHidesSourceHistoryEvenBadged() {
 		val ledger = listOf(entry("x", "rel-x"), entry("y", "rel-y"))
 		assertEquals(2, sourceHistoryBadge(ledger))
 		fun ids(count: Int) = avatarMenuItems(lbConfigured = true, canShare = false, attentionCount = 0, downloadsOn = false, sourceHistoryCount = count)
 			.flatMap { if (it is AvatarMenuEntry.Group) it.entries else listOf(it) }.map { it.id }
-		assertTrue(AvatarMenuIds.SOURCE_HISTORY in ids(2))
+		// B-457 (the owner's ruling, 2026-11-14) replaces L3: off, the row goes even while badged (its page is the Wishlist).
+		assertFalse(AvatarMenuIds.SOURCE_HISTORY in ids(2))
 		assertFalse(AvatarMenuIds.SOURCE_HISTORY in ids(0))
 		// Not an admin's: Library tools is the wishlist alone, badge or not.
 		val user = avatarMenuItems(lbConfigured = true, canShare = false, attentionCount = 0, downloadsOn = false, admin = false, sourceHistoryCount = 2)

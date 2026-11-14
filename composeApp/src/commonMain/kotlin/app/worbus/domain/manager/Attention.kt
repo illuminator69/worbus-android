@@ -239,6 +239,14 @@ fun attentionDotShown(badge: Int, preference: Boolean, configured: Boolean, admi
 fun menuAttentionBadge(badge: Int, configured: Boolean): Int = if (configured) badge else 0
 
 /**
+ * B-457 (the owner's ruling, 2026-11-14): Source history's menu badge, and its share of the avatar's dot. None while
+ * lb-bot's downloads are off: the menu has no Source history row then (its page would be the Wishlist,
+ * `sourceHistoryShowsWishlist`, which does not list Need you), so a number would point at nothing.
+ */
+fun sourceHistoryMenuBadge(badge: Int, configured: Boolean, downloads: LbDownloads): Int =
+	if (downloads.isOn) menuAttentionBadge(badge, configured) else 0
+
+/**
  * A folder in one line: "Artist — Album · 11 files", or "Unidentified folder · 11 files". Built from
  * what lb-bot identified and the count alone; a folder's name never reaches this side.
  */
