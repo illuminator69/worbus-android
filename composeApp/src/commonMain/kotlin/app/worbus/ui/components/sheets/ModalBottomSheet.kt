@@ -61,6 +61,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
+import androidx.compose.ui.Alignment
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -164,7 +165,11 @@ fun ModalBottomSheet(
 		contentColor = ambient?.onAmbient ?: contentColor,
 		tonalElevation = tonalElevation,
 		scrimColor = scrimColor,
-		dragHandle = dragHandle?.let { handle -> @Composable { Box(Modifier.watchTouch { touched = it }) { handle() } } },
+		// B-121's watch over the handle's whole row, not only the pill: Material lays the handle row out full width (M3
+		// 1.5's `DragHandleWithTooltip`), and a finger beside the pill drags the sheet too.
+		dragHandle = dragHandle?.let { handle ->
+			@Composable { Box(Modifier.fillMaxWidth().watchTouch { touched = it }, contentAlignment = Alignment.Center) { handle() } }
+		},
 		// For the ambient wash, M3 insets only the TOP: the drag handle then sits below the
 		// status bar, as on every Material sheet. With no inset at all (as before B-121) a sheet
 		// tall enough to reach the top drew its handle inside the status-bar band, where a pull

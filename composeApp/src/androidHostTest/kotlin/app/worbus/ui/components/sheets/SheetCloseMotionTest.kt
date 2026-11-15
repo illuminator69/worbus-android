@@ -114,9 +114,24 @@ class SheetCloseMotionTest {
 		val src = sourceFile("src/commonMain/kotlin/app/worbus/ui/components/sheets/ModalBottomSheet.kt").readText()
 		val call = src.substringAfter("androidx.compose.material3.ModalBottomSheet(")
 		val outer = call.substringAfter("modifier = ").substringBefore("sheetState = sheetState")
-		assertFalse("pointerInput" in outer, "the sheet's outer modifier covers the space above it: $outer")
-		// B-121 still holds: the finger is watched on the sheet itself, its handle and its content.
-		assertTrue(Regex("watchTouch").findAll(src).count() >= 3, "the handle and the content are watched")
+		assertFalse("pointerInput" in outer || "watchTouch" in outer, "the sheet's outer modifier covers the space above it: $outer")
+	}
+
+	/*
+	 * B-121 still holds where the finger can be: the handle's whole row (Material lays it out full width; a watch round
+	 * the 32 dp pill alone missed a finger beside it, review nit 2026-11-15) and the content in both eased branches.
+	 */
+	@Test
+	fun theHandleRowAndTheContentAreWatched() {
+		val src = sourceFile("src/commonMain/kotlin/app/worbus/ui/components/sheets/ModalBottomSheet.kt").readText()
+		val call = src.substringAfter("androidx.compose.material3.ModalBottomSheet(")
+		val handle = call.substringAfter("dragHandle = ").substringBefore("handle() }")
+		assertTrue(Regex("""Box\(Modifier\.fillMaxWidth\(\)\.watchTouch \{ touched = it \}""").containsMatchIn(handle), "the handle's row is watched, full width: $handle")
+		assertTrue("val watched = Modifier.watchTouch { touched = it }" in call, "the content's watch")
+		val ambient = call.substringAfter("if (ambient != null) {").substringBefore("} else if (animateContentHeight)")
+		val plain = call.substringAfter("} else if (animateContentHeight)").substringBefore("} else {")
+		for ((name, branch) in listOf("ambient" to ambient, "plain" to plain))
+			assertTrue(Regex("""\.then\(watched\)\s*\.then\(eased\)""").containsMatchIn(branch), "the $name content is watched where it is eased")
 	}
 
 	@Test
