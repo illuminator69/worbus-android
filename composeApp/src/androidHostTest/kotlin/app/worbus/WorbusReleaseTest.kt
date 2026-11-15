@@ -85,19 +85,21 @@ class WorbusReleaseTest {
 	}
 
 	/**
-	 * P7 N3: F-Droid-style changelog for versionCode 63, three lines: the queue under shuffle, the sign-in
-	 * step, and small fixes; no word the launch keeps off its pages (the plan's banned-words regex).
+	 * 0.8.0: F-Droid-style changelog for versionCode 64, three lines: the shared session, new albums and
+	 * covers without a full sync, and the motion and fixes; no word the launch keeps off its pages (the
+	 * plan's banned-words regex).
 	 */
 	@Test
 	fun changelogForThisVersion() {
-		val changelog = sourceFile("../fastlane/metadata/android/en-US/changelogs/63.txt").readText()
+		val changelog = sourceFile("../fastlane/metadata/android/en-US/changelogs/64.txt").readText()
 		val lines = changelog.lines().filter { it.isNotBlank() }
-		assertEquals(3, lines.size, "63.txt is three lines: the queue under shuffle, the sign-in step, small fixes")
-		assertTrue("shuffle" in lines[0].lowercase(), "63.txt's first line is the queue under shuffle: ${lines[0]}")
-		assertTrue("Worbus Server" in lines[1], "63.txt's second line is the sign-in step: ${lines[1]}")
-		assertTrue("small fixes" in lines[2].lowercase(), "63.txt's last line is the small fixes: ${lines[2]}")
+		assertEquals(3, lines.size, "64.txt is three lines: the session, new albums and covers, motion and fixes")
+		assertTrue("session" in lines[0].lowercase(), "64.txt's first line is the shared session: ${lines[0]}")
+		assertTrue("cover" in lines[1].lowercase(), "64.txt's second line is new albums and covers: ${lines[1]}")
+		assertTrue("fixes" in lines[2].lowercase(), "64.txt's last line is the motion and fixes: ${lines[2]}")
+		assertTrue(changelog.length <= 500, "64.txt fits F-Droid's 500 characters")
 		val banned = Regex("""soulseek|slskd|torrent|acquir|\bfills?\b|download(s|ed|ing)? (the |an? )?(album|music|song|track)""", RegexOption.IGNORE_CASE)
-		assertEquals(null, banned.find(changelog)?.value, "63.txt says a word the launch keeps off its pages")
+		assertEquals(null, banned.find(changelog)?.value, "64.txt says a word the launch keeps off its pages")
 	}
 
 	/** P7 N3: the pull request template sends a patch to the one tracker, in the plan's words. */

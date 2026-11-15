@@ -1,0 +1,3 @@
+Playback stays with the one shared session: the queue, the playing song and its position agree on every device.
+New artists, albums and changed covers show up on their own, without a full library sync.
+Sheets and pages move as one, with an animation-speed setting, and many fixes.
