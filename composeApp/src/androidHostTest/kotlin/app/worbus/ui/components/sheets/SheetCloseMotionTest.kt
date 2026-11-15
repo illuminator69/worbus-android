@@ -33,6 +33,25 @@ class SheetCloseMotionTest {
 	}
 
 	/*
+	 * Review Minor 1 (2026-11-15): the close reaches Material only through the scheme the wrapper puts round Material's
+	 * sheet; the pure [sheetMotionScheme] above proves nothing if the wrapper installs another one (a mutation to
+	 * `motionScheme = outerMotion` there passed every motion test). And nothing writes the sheet state's specs:
+	 * Material's SideEffect overwrites them (the first B-442 finding).
+	 */
+	@Test
+	fun theWrapperGivesTheHideThroughTheSchemeNotTheState() {
+		val src = sourceFile("src/commonMain/kotlin/app/worbus/ui/components/sheets/ModalBottomSheet.kt").readText()
+		assertTrue("val sheetMotion = remember(outerMotion) { sheetMotionScheme(outerMotion) }" in src, "the sheet's scheme is built from the page's")
+		val aroundMaterial = src.substringBefore("androidx.compose.material3.ModalBottomSheet(").substringAfterLast("MaterialExpressiveTheme(")
+		assertTrue("motionScheme = sheetMotion," in aroundMaterial, "Material's sheet runs under the sheet's scheme: $aroundMaterial")
+		val pageMotion = src.substringAfter("val withPageMotion").substringBefore("}")
+		assertTrue("motionScheme = outerMotion" in pageMotion, "the content gets the page's scheme back: $pageMotion")
+		assertTrue("content = { withPageMotion {" in src, "the content runs under withPageMotion")
+		val writers = sourceFile("src/commonMain/kotlin").walkTopDown().filter { it.extension == "kt" && "hideMotionSpec =" in it.readText() }.toList()
+		assertTrue(writers.isEmpty(), "nothing writes a sheet state's hide spec: $writers")
+	}
+
+	/*
 	 * Review Major 1 (2026-11-15): Sort, Sleep timer and Lyrics share imported Material's `ModalBottomSheet` by name; an
 	 * explicit import beats a declaration in the same package, so they ran Material's sheet (bytecode:
 	 * `androidx/compose/material3/ModalBottomSheetKt`) and closed on the theme's fast effects spring. Only the wrapper may
