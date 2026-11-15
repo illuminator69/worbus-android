@@ -51,7 +51,12 @@ import org.koin.compose.koinInject
 import app.worbus.domain.manager.PreferenceManager
 import app.worbus.ui.theme.NavicTheme
 import app.worbus.ui.util.CoverAmbient
+import androidx.compose.animation.core.AnimationVector
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.TwoWayConverter
+import androidx.compose.animation.core.VectorizedFiniteAnimationSpec
+import androidx.compose.animation.core.VectorizedSpringSpec
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
@@ -237,11 +242,39 @@ fun ModalBottomSheet(
  * released drag on. So Back, the player's chevron and a tap above the sheet close it as a drag does: the opening's
  * motion the other way, at the animation speed ([base] is the theme's, already at the speed). Read by the sheet alone:
  * its content gets [base] back.
+ *
+ * The same spring (damping and stiffness, so the same curve), but done once it is within [SHEET_SETTLED_PX] of the
+ * hidden place ([settledAtAPixel]). With Compose's default 0.01 px the spring settled ~860 ms after a Back (VM AVD)
+ * though the sheet was off screen by ~300: until then Material's window stayed up over the whole screen and took every
+ * tap (the scrim takes none once the target is Hidden), and whatever waits for `hide()` (a New sheet row's action, the
+ * player's chevron) waited as long (B-442 review, Major 2).
  */
 internal fun sheetMotionScheme(base: MotionScheme): MotionScheme = SheetMotionScheme(base)
 
 private class SheetMotionScheme(private val base: MotionScheme) : MotionScheme by base {
-	override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = base.defaultSpatialSpec()
+	override fun <T> fastEffectsSpec(): FiniteAnimationSpec<T> = settledAtAPixel(base.defaultSpatialSpec())
+}
+
+/** How close to its hidden place the sheet's close counts as done, in px (the sheet's offset is in px). */
+internal const val SHEET_SETTLED_PX = 1f
+
+/**
+ * [open] with a [SHEET_SETTLED_PX] visibility threshold when it is a spring animating a Float (the sheet's offset) and
+ * names none of its own; anything else as it is. Only the threshold changes: a spring's path does not depend on it, only
+ * when the animation stops (and snaps to its target).
+ */
+internal fun <T> settledAtAPixel(open: FiniteAnimationSpec<T>): FiniteAnimationSpec<T> =
+	if (open is SpringSpec<T> && open.visibilityThreshold == null) PixelSettledSpring(open) else open
+
+private class PixelSettledSpring<T>(private val open: SpringSpec<T>) : FiniteAnimationSpec<T> {
+	@Suppress("UNCHECKED_CAST")
+	override fun <V : AnimationVector> vectorize(converter: TwoWayConverter<T, V>): VectorizedFiniteAnimationSpec<V> =
+		if (converter === Float.VectorConverter)
+			VectorizedSpringSpec(open.dampingRatio, open.stiffness, AnimationVector1D(SHEET_SETTLED_PX) as V)
+		else open.vectorize(converter)
+
+	override fun equals(other: Any?): Boolean = other is PixelSettledSpring<*> && other.open == open
+	override fun hashCode(): Int = open.hashCode() * 31 + 1
 }
 
 /**

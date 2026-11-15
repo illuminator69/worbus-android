@@ -1,5 +1,9 @@
 package app.worbus.ui.components.sheets
 
+import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MotionScheme
 import app.worbus.sourceFile
@@ -7,6 +11,7 @@ import app.worbus.ui.util.atSpeed
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /*
@@ -21,16 +26,46 @@ import kotlin.test.assertTrue
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 class SheetCloseMotionTest {
+	/*
+	 * The hide runs on the opening's spring: the same offset at every frame, played over the album sheet's travel on the
+	 * VM AVD (1881 px). Review Major 2 (2026-11-15): with Compose's default 0.01 px threshold that spring only settled
+	 * ~860 ms after a Back, ~560 ms after the sheet was off screen, and Material's window took every tap until then. The
+	 * hide must end once the sheet is within a pixel of its hidden place, and no later.
+	 */
 	@Test
 	fun aSheetClosesOnTheSpringItOpensOn() {
+		val travel = 1881f
 		for ((name, scheme) in listOf("expressive" to MotionScheme.expressive(), "standard" to MotionScheme.standard()))
 			for (speed in listOf(0.5f, 1f, 2f)) {
 				val base = scheme.atSpeed(speed)
 				val sheet = sheetMotionScheme(base)
-				assertEquals(base.defaultSpatialSpec<Float>(), sheet.fastEffectsSpec<Float>(), "$name at $speed: hide = open")
 				assertEquals(base.defaultSpatialSpec<Float>(), sheet.defaultSpatialSpec<Float>(), "$name at $speed: open and drag settle stay Material's")
+				val open = offsets(base.defaultSpatialSpec(), travel)
+				val hide = offsets(sheet.fastEffectsSpec(), travel)
+				val doneMs = hide.durationMs
+				for (ms in 0 until doneMs step 4)
+					assertEquals(open.at(ms), hide.at(ms), 1e-3f, "$name at $speed: the hide is the opening's curve at $ms ms")
+				assertTrue(doneMs < open.durationMs, "$name at $speed: the hide ends at ${doneMs} ms, the spring settles at ${open.durationMs}")
+				// Cut there, the opening's spring never again strays more than about a pixel from the hidden place (the end is
+				// Compose's analytic estimate from the spring's envelope, so a hair over at the stiffest): nothing visible is
+				// left out, only the settle no one can see.
+				for (ms in doneMs..open.durationMs)
+					assertTrue(kotlin.math.abs(open.at(ms) - travel) <= SHEET_SETTLED_PX + 0.5f, "$name at $speed: ${open.at(ms)} px at $ms ms, after the hide ended")
+				val reached = (0..doneMs).first { open.at(it) >= travel - SHEET_SETTLED_PX }
+				println("SheetCloseMotionTest $name at $speed: within a pixel of hidden at $reached ms, hide ends at $doneMs ms, the 0.01 px settle at ${open.durationMs} ms")
 			}
+		// A spring of anything else, or a tween, is left as it is.
+		val tween = tween<Float>(300)
+		assertSame(tween, settledAtAPixel(tween))
 	}
+
+	private class Offsets(val anim: TargetBasedAnimation<Float, *>) {
+		val durationMs = (anim.durationNanos / 1_000_000L).toInt()
+		fun at(ms: Int): Float = anim.getValueFromNanos(ms * 1_000_000L)
+	}
+
+	private fun offsets(spec: FiniteAnimationSpec<Float>, travel: Float) =
+		Offsets(TargetBasedAnimation(spec, Float.VectorConverter, 0f, travel))
 
 	/*
 	 * Review Minor 1 (2026-11-15): the close reaches Material only through the scheme the wrapper puts round Material's
