@@ -49,10 +49,35 @@ class CoverShadowTest {
 	@Test
 	fun theShadowStaysAtTheCardsPlaceAndSize() {
 		val src = sourceFile("src/commonMain/kotlin/app/worbus/ui/screens/collection/components/HeadingRow.kt").readText()
-		val shadow = src.indexOf(".dropShadow(")
-		val flight = src.indexOf(".sharedElement(")
-		assertTrue(shadow in 0 until flight, "the shadow is outside the shared element, so it is never drawn at the flight's size")
+		// A Box of its own, the card's size, beside the card (a sibling, not a modifier of the card's chain).
+		val shadowBox = src.substringBefore(".dropShadow(").substringAfterLast("Box(")
+		assertTrue(".size(212.dp)" in shadowBox && "sharedElement" !in shadowBox, "the shadow is in a box of its own: $shadowBox")
+		val card = src.substringAfter("CoverArt(").substringBefore("crossfadeMs")
+		assertTrue(".size(212.dp)" in card && ".sharedElement(" in card && "dropShadow" !in card, "the card flies, the shadow does not: $card")
 		assertTrue("rememberCoverShadowFade(" in src, "the shadow's alpha follows the page's transition")
+		// Review Minor 2: the fade knows whether the cover really flies, from the same shared content state as the card.
+		assertTrue(Regex("""rememberCoverShadowFade\([^\n]*\{ coverState\.isMatchFound \}""").containsMatchIn(src), "the fade reads the cover's match")
+		assertTrue("sharedContentState = coverState," in src, "the card flies on that same state")
+	}
+
+	/*
+	 * Review Minor 2 (2026-11-15): only a flight holds the shadow back. At `6c324d92` any page change did: an album page
+	 * popped back to from its artist (no tile to fly from) slid its card in bare and faded the shadow in after.
+	 */
+	@Test
+	fun withNoFlightTheShadowStays() {
+		val pre = EnterExitState.PreEnter; val vis = EnterExitState.Visible; val post = EnterExitState.PostExit
+		// Entering.
+		assertEquals(0f, coverShadowFactor(pre, vis, matchFound = true, flown = false, landed = 0f, flight = 0f), "the first frame of a flight in, before the effect has run")
+		assertEquals(0f, coverShadowFactor(pre, vis, matchFound = true, flown = true, landed = 0f, flight = 0f), "flying in")
+		assertEquals(1f, coverShadowFactor(pre, vis, matchFound = false, flown = false, landed = 0f, flight = 0f), "sliding in with no flight")
+		// At rest.
+		assertEquals(0.4f, coverShadowFactor(vis, vis, matchFound = false, flown = true, landed = 0.4f, flight = 0f), "landing fade after a flight")
+		assertEquals(1f, coverShadowFactor(vis, vis, matchFound = false, flown = false, landed = 0f, flight = 0f), "settled with no flight")
+		// Leaving.
+		assertEquals(coverShadowLeaving(0.05f), coverShadowFactor(vis, post, matchFound = true, flown = false, landed = 1f, flight = 0.05f), "flying back")
+		assertEquals(0f, coverShadowFactor(vis, post, matchFound = true, flown = true, landed = 1f, flight = 0.5f), "gone early in the flight back")
+		assertEquals(1f, coverShadowFactor(vis, post, matchFound = false, flown = true, landed = 1f, flight = 0.5f), "sliding out with no flight")
 	}
 
 	/*

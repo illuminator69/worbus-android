@@ -64,13 +64,15 @@ fun CollectionDetailScreenHeadingRow(
 			// on a dark page, a grey box on a light one. Half as dark there.
 			val shadowAlpha = if (LocalContentColor.current.luminance() < 0.5f) 0.25f else 0.5f
 			val pageScope = LocalNavAnimatedContentScope.current
-			val shadowFade = rememberCoverShadowFade(pageScope.transition, koinInject<PreferenceManager>().pageMotion())
+			val coverState = this@with.rememberSharedContentState("${tab}-${collection.id}-cover")
+			// Review Minor 2: held back only while the cover really flies (its shared element has a match).
+			val shadowFade = rememberCoverShadowFade(pageScope.transition, koinInject<PreferenceManager>().pageMotion()) { coverState.isMatchFound }
 			// Soft drop shadow so the card reads as floating above the wash, in a box of its own behind the
 			// card: `alpha()` on the card draws what follows it into a layer the size of the square cover, which
 			// cut the shadow off at the square and left only its corners showing round the rounded cover.
 			// B-447: outside the shared element, so it stays at the card's place and size and is never drawn at
 			// the flight's (its blur was made again in software every flight frame); none while the cover flies
-			// in, faded in when it lands, gone as the cover flies back (`CoverShadow.kt`). Its own alpha never
+			// in, faded in when it lands, gone as the cover flies back; with no flight it stays (`CoverShadow.kt`). Its own alpha never
 			// moves: Compose caches a shadow's bitmap by its alpha too, so a moving alpha (this fade, the scroll's
 			// `titleAlpha`) blurred it again every frame. The fades are on this box's layer, which recomposites.
 			Box(
@@ -91,7 +93,7 @@ fun CollectionDetailScreenHeadingRow(
 				modifier = Modifier
 					.size(212.dp)
 					.sharedElement(
-						sharedContentState = this@with.rememberSharedContentState("${tab}-${collection.id}-cover"),
+						sharedContentState = coverState,
 						boundsTransform = rememberCoverBoundsTransform(),
 						animatedVisibilityScope = pageScope
 					)
