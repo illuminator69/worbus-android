@@ -54,4 +54,20 @@ class CoverShadowTest {
 		assertTrue(shadow in 0 until flight, "the shadow is outside the shared element, so it is never drawn at the flight's size")
 		assertTrue("rememberCoverShadowFade(" in src, "the shadow's alpha follows the page's transition")
 	}
+
+	/*
+	 * Compose caches a drop shadow's bitmap by its Shadow, alpha included (`AndroidShadowContext.ShadowKey`, ui-graphics
+	 * 1.13.0-alpha02), so a shadow whose own alpha moves is blurred again in software on the main thread for every value:
+	 * each frame of the landing fade, and of the scroll fade (`titleAlpha`) it always had. Measured on the VM AVD
+	 * (profileable release, simpleperf): the blur still ran at the landing. Its alpha stays fixed; the fades go on a
+	 * graphics layer holding the shadow alone, which only recomposites.
+	 */
+	@Test
+	fun theShadowsOwnAlphaNeverMoves() {
+		val src = sourceFile("src/commonMain/kotlin/app/worbus/ui/screens/collection/components/HeadingRow.kt").readText()
+		val block = src.substringAfter(".dropShadow(").substringBefore("}")
+		assertFalse("titleAlpha" in block || "shadowFade" in block, "the shadow's own alpha moves: $block")
+		val layer = src.substringBefore(".dropShadow(").substringAfterLast("graphicsLayer")
+		assertTrue("shadowFade()" in layer && "titleAlpha" in layer, "the fades are on the shadow's own layer")
+	}
 }

@@ -14,6 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextAlign
@@ -63,25 +65,31 @@ fun CollectionDetailScreenHeadingRow(
 			val shadowAlpha = if (LocalContentColor.current.luminance() < 0.5f) 0.25f else 0.5f
 			val pageScope = LocalNavAnimatedContentScope.current
 			val shadowFade = rememberCoverShadowFade(pageScope.transition, koinInject<PreferenceManager>().pageMotion())
+			// Soft drop shadow so the card reads as floating above the wash, in a box of its own behind the
+			// card: `alpha()` on the card draws what follows it into a layer the size of the square cover, which
+			// cut the shadow off at the square and left only its corners showing round the rounded cover.
+			// B-447: outside the shared element, so it stays at the card's place and size and is never drawn at
+			// the flight's (its blur was made again in software every flight frame); none while the cover flies
+			// in, faded in when it lands, gone as the cover flies back (`CoverShadow.kt`). Its own alpha never
+			// moves: Compose caches a shadow's bitmap by its alpha too, so a moving alpha (this fade, the scroll's
+			// `titleAlpha`) blurred it again every frame. The fades are on this box's layer, which recomposites.
+			Box(
+				Modifier
+					.size(212.dp)
+					// ModulateAlpha: no offscreen buffer the size of the box, which would cut the blur off at it.
+					.graphicsLayer { alpha = titleAlpha * shadowFade(); compositingStrategy = CompositingStrategy.ModulateAlpha }
+					.dropShadow(coverCardShape) {
+						radius = 30.dp.toPx()
+						color = Color.Black
+						alpha = shadowAlpha
+					}
+			)
 			CoverArt(
 				coverArtId = collection.coverArtId,
 				contentDescription = collection.name,
 				shape = coverCardShape,
 				modifier = Modifier
 					.size(212.dp)
-					// Soft drop shadow so the card reads as floating above the wash. BEFORE the fade,
-					// and faded by its own alpha: `alpha()` draws what follows it into a layer the size
-					// of the square cover, which cut the shadow off at the square and left only its
-					// corners showing round the rounded cover while the page scrolled.
-					// B-447: and BEFORE the shared element, so it stays at the card's place and size and is
-					// never redrawn at the flight's (its blur was made again in software every flight frame);
-					// none while the cover flies in, faded in when it lands, faded out as the page leaves
-					// (`CoverShadow.kt`).
-					.dropShadow(coverCardShape) {
-						radius = 30.dp.toPx()
-						color = Color.Black
-						alpha = shadowAlpha * titleAlpha * shadowFade()
-					}
 					.sharedElement(
 						sharedContentState = this@with.rememberSharedContentState("${tab}-${collection.id}-cover"),
 						boundsTransform = rememberCoverBoundsTransform(),
