@@ -1993,7 +1993,7 @@ true of invented *album art*, and not of an icon naming the kind.
   resting place and every answer threw the sheet at a new one. The easing is INSIDE the window
   insets, so the keyboard is still followed at once. The two navigation scenes that host whole
   pages (`NowPlayingScene`, `BottomSheetScene`) pass `false`. A new fork sheet gets this by
-  using the wrapper; don't reach for Material's `ModalBottomSheet` directly.
+  using the wrapper; don't reach for Material's `ModalBottomSheet` directly (`SheetCloseMotionTest` fails on it).
   **Never while a finger is on the sheet** (B-121, 2026-10-15). Near the top of the screen
   Material gives the content more room as the sheet is dragged down (the status bar's share
   of the top inset shrinks), so a drag changes the content's height every frame. Eased, that
@@ -2002,7 +2002,7 @@ true of invented *album art*, and not of an icon naming the kind.
   and "stuttered up and down". Measured on the VM emulator with the sheet's offset logged: with
   easing the offset bounced between 3 and 124 px over a 1200 px swipe; with it off during the
   touch the offset followed the finger and the sheet dismissed. The wrapper watches the pointer
-  on the Initial pass (never consuming), on the drag handle and the content (never on the sheet's outer
+  on the Initial pass (never consuming), on the drag handle's whole row and the content (never on the sheet's outer
   modifier, which covers the space above the sheet, B-442), and, while one is down, reports the measured height and
   resets the easing to it. **One node for the sheet's life** (`easedHeight` in the wrapper), told
   whether to ease: swapping `animateContentSize()` in and out with the finger created a fresh
@@ -2368,9 +2368,16 @@ true of invented *album art*, and not of an icon naming the kind.
   `fastEffectsSpec` (an effects spring) runs `hide()`, which is what Back, the player's chevron and a tap on the scrim
   call, so they closed in ~100 ms while a drag closed on the opening's spring. A spec written into the state is
   overwritten. `ModalBottomSheet.kt` runs Material's sheet under `sheetMotionScheme(theme's scheme)`, whose
-  `fastEffectsSpec` is that scheme's `defaultSpatialSpec`, and gives the content the page's scheme back. Sheets have no
+  `fastEffectsSpec` is that scheme's `defaultSpatialSpec`, and gives the content the page's scheme back. The hide is
+  that spring with a 1 px visibility threshold (`settledAtAPixel`; same damping and stiffness, so the same path): with
+  Compose's default 0.01 px it settled ~860 ms after a Back on the VM AVD though the sheet was gone by ~300, and until
+  `hide()` returns Material's window stays over the whole screen and takes every tap, and whatever awaits `hide()` (a New
+  sheet row's action, the player's chevron) waits (review M2, 2026-11-15). Sheets have no
   times in `PageMotion` (`sheetShowMs`/`sheetHideMs` and their tweens are gone; `c5d2c36d`'s 300 ms tween close was the
-  walk's "different easing"). `SheetCloseMotionTest`.
+  walk's "different easing"). `SheetCloseMotionTest` pins the curve, the wiring (the scheme round Material's sheet, the
+  page's round the content) and that **no file but the wrapper names Material's `ModalBottomSheet`**: an explicit
+  `import androidx.compose.material3.ModalBottomSheet` beats the wrapper even in its own package, so Sort, Sleep timer and
+  Lyrics share ran Material's sheet and its fast close until review M1.
   **Nothing that takes touches goes on the sheet's outer `modifier`** (B-442, same walk: "you should be able to close
   the sheet by tapping the space above"). M3 1.5 applies it BEFORE `draggableAnchors` moves the sheet down, so it lies
   over [0, sheet height] from the top of the window, above the scrim in hit testing: the B-121 touch watch there took
@@ -2379,10 +2386,14 @@ true of invented *album art*, and not of an icon naming the kind.
   `BottomSheetScene`'s (Queue in landscape, Playback speed) included; the player has no space above it.
   **Nothing expensive rides a shared element's flight** (B-447, 2026-11-14). A modifier AFTER `sharedElement` is drawn
   by the flying element at a new size every frame: the album cover card's `dropShadow` (30 dp blur) was rasterised in
-  software on the main thread each flight frame (~110-130 ms per open on the VM AVD). The shadow is before
-  `sharedElement` (at the card's place and size) and its alpha follows the page's transition (`CoverShadow.kt`, owner's
-  option c): none in flight, a fade in on landing; leaving, it is gone by 12 % of the cover's flight back (on the
-  flight's own time and curve), which a predictive Back seeks with the finger and a cancel restores. It stays at the
+  software on the main thread each flight frame (~110-130 ms per open on the VM AVD). The shadow is a sibling `Box`
+  behind the card, the card's size, outside the card's `sharedElement` (at the card's place and size, never flying), and
+  its alpha follows the page's transition (`CoverShadow.kt`, owner's option c): none in flight, a fade in on landing;
+  leaving, it is gone by 12 % of the cover's flight back (on the flight's own time and curve, `sharedFlightTiming`, a
+  bar tap's included, so it never holds the page's transition open), which a predictive Back seeks with the finger and a
+  cancel restores. **Only a flight holds it back**: the fade reads the cover's `SharedContentState.isMatchFound`, and a
+  page change with no match (a pop back to an album page from its artist, no tile to fly from) keeps the shadow from
+  the first frame to the last (review m2, 2026-11-15). It stays at the
   card's place, so a slower fade left a smudge there while the cover flew off. A Back's flight draws the TARGET's
   content (the tile), so anything only the page's element draws pops off. **Never animate a `dropShadow`'s own
   `alpha`**: Compose caches the shadow's bitmap by its `Shadow`, alpha included (`AndroidShadowContext.ShadowKey`), so
