@@ -13,9 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import app.worbus.di.LocalNavStack
+import app.worbus.ui.navigation.LocalTabTapMotion
 import app.worbus.ui.util.PageMotion
-import app.worbus.ui.util.coverSlideTiming
 import app.worbus.ui.util.curve
+import app.worbus.ui.util.sharedFlightTiming
 import kotlinx.coroutines.flow.first
 
 /*
@@ -81,7 +83,8 @@ internal fun coverShadowFactor(
  * - **Entering on a flight**: 0 while the cover flies, then a [coverShadowFadeMs] fade once the page has settled. Kept
  *   outside [transition], so the page's transition does not last any longer for it.
  * - **Leaving on a flight**: the cover's flight progress as a [transition] animation on the flight's own time and curve
- *   ([coverSlideTiming]), through [coverShadowLeaving]: gone by [COVER_SHADOW_GONE_AT] of the flight. A
+ *   ([sharedFlightTiming]: a bar tap's flight is the tap's shorter fade-through, and this child animation must not hold
+ *   the page's transition open past it), through [coverShadowLeaving]: gone by [COVER_SHADOW_GONE_AT] of the flight. A
  *   predictive Back seeks this transition with the gesture, so the shadow fades with the finger as the cover starts to
  *   move and returns when the gesture is cancelled (the transition seeks back to Visible).
  * - **No flight** (no match): the shadow stays.
@@ -104,9 +107,14 @@ internal fun rememberCoverShadowFade(transition: Transition<EnterExitState>, mot
 		snapshotFlow { coverShadowAtRest(transition.currentState, transition.targetState) }.first { it }
 		landed.animateTo(1f, tween(fadeMs, easing = LinearEasing))
 	}
-	val flightTiming = coverSlideTiming(motion)
+	val tabTaps = LocalTabTapMotion.current
+	val stack = LocalNavStack.current
 	val flight = transition.animateFloat(
-		transitionSpec = { tween(flightTiming.durationMs, easing = flightTiming.easing.curve()) },
+		transitionSpec = {
+			// Read when the page starts to leave, as the cover's own flight reads it (`rememberCoverBoundsTransform`).
+			val timing = sharedFlightTiming(motion, tabTap = tabTaps.isTabTap(stack))
+			tween(timing.durationMs, easing = timing.easing.curve())
+		},
 		label = "coverShadowFlight"
 	) { state -> if (state == EnterExitState.PostExit) 1f else 0f }
 	return remember(landed, flight, flown) {

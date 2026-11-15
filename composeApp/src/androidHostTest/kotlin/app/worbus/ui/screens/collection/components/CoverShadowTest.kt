@@ -81,6 +81,19 @@ class CoverShadowTest {
 	}
 
 	/*
+	 * Review nit (2026-11-15): the leaving fade is a child animation of the page's transition; on the album slide's 500 ms
+	 * it kept a bar tap's 330 ms page change running ~170 ms longer. It takes the cover's own flight timing, tab tap
+	 * included.
+	 */
+	@Test
+	fun theLeavingFadeTakesTheFlightsOwnTime() {
+		val src = sourceFile("src/commonMain/kotlin/app/worbus/ui/screens/collection/components/CoverShadow.kt").readText()
+		val spec = src.substringAfter("transition.animateFloat(").substringBefore("label =")
+		assertTrue("sharedFlightTiming(motion, tabTap = tabTaps.isTabTap(stack))" in spec, "the flight's own timing: $spec")
+		assertFalse("coverSlideTiming" in src, "not the album slide's fixed time")
+	}
+
+	/*
 	 * Compose caches a drop shadow's bitmap by its Shadow, alpha included (`AndroidShadowContext.ShadowKey`, ui-graphics
 	 * 1.13.0-alpha02), so a shadow whose own alpha moves is blurred again in software on the main thread for every value:
 	 * each frame of the landing fade, and of the scroll fade (`titleAlpha`) it always had. Measured on the VM AVD
