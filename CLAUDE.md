@@ -2384,7 +2384,10 @@ true of invented *album art*, and not of an icon naming the kind.
   option c): none in flight, a fade in on landing; leaving, it is gone by 12 % of the cover's flight back (on the
   flight's own time and curve), which a predictive Back seeks with the finger and a cancel restores. It stays at the
   card's place, so a slower fade left a smudge there while the cover flew off. A Back's flight draws the TARGET's
-  content (the tile), so anything only the page's element draws pops off.
+  content (the tile), so anything only the page's element draws pops off. **Never animate a `dropShadow`'s own
+  `alpha`**: Compose caches the shadow's bitmap by its `Shadow`, alpha included (`AndroidShadowContext.ShadowKey`), so
+  every new value is a new software blur on the main thread. Fade it with a `graphicsLayer` holding the shadow alone,
+  `CompositingStrategy.ModulateAlpha` (an offscreen buffer would cut the blur off at the layer's bounds).
   Page pushes and pops: `NavDisplay`'s `transitionSpec` / `popTransitionSpec` in `App.kt` read
   the style inside the lambda and build `Material3Transitions.enter` / `exit` / `popEnter` /
   `popExit(motion)` (the old fixed-timing `SharedXAxis*` vals were unused and are gone).
