@@ -33,6 +33,22 @@ class SheetCloseMotionTest {
 	}
 
 	/*
+	 * Review Major 1 (2026-11-15): Sort, Sleep timer and Lyrics share imported Material's `ModalBottomSheet` by name; an
+	 * explicit import beats a declaration in the same package, so they ran Material's sheet (bytecode:
+	 * `androidx/compose/material3/ModalBottomSheetKt`) and closed on the theme's fast effects spring. Only the wrapper may
+	 * name Material's sheet.
+	 */
+	@Test
+	fun onlyTheWrapperUsesMaterialsSheet() {
+		val wrapper = sourceFile("src/commonMain/kotlin/app/worbus/ui/components/sheets/ModalBottomSheet.kt").canonicalFile
+		val material = Regex("""^import androidx\.compose\.material3\.(ModalBottomSheet|\*)\s*$|androidx\.compose\.material3\.ModalBottomSheet\(""", RegexOption.MULTILINE)
+		val offenders = sourceFile("src").walkTopDown()
+			.filter { it.isFile && it.extension == "kt" && it.canonicalFile != wrapper && "androidHostTest" !in it.path && material.containsMatchIn(it.readText()) }
+			.map { it.path }.toList()
+		assertTrue(offenders.isEmpty(), "these call Material's sheet, not the wrapper: $offenders")
+	}
+
+	/*
 	 * The tap above a sheet: Material's scrim fills the window under the sheet and closes it on a tap, but M3 1.5's
 	 * BottomSheet applies its `modifier` BEFORE `draggableAnchors` moves the sheet down, so a pointer input there covers
 	 * [0, sheet height] from the TOP of the window, above the scrim in hit testing. The wrapper's B-121 touch watch was
